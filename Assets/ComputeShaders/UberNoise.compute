@@ -1,0 +1,23 @@
+#pragma kernel UberNoiseTerrainGenerator
+
+uniform int dispatchDimension;
+
+// GLSL	                    HLSL
+// gl_GlobalInvocationID	SV_DispatchThreadID
+// gl_LocalInvocationID	    SV_GroupThreadID
+// gl_WorkGroupID	        SV_GroupID
+// gl_NumWorkGroups	        passed manually / constant buffer
+
+// uvec3	gl_NumWorkGroups	    number of work groups that have been dispatched set by glDispatchCompute()
+// uvec3	gl_WorkGroupSize	    size of the work group (local size) operated on defined with layout
+// uvec3	gl_WorkGroupID	        index of the work group currently being operated on
+// uvec3	gl_LocalInvocationID	index of the current work item in the work group
+// uvec3	gl_GlobalInvocationID	global index of the current work item (gl_WorkGroupID * gl_WorkGroupSize + gl_LocalInvocationID)
+// uint	    gl_LocalInvocationIndex	1d index representation of gl_LocalInvocationID (gl_LocalInvocationID.z * gl_WorkGroupSize.x * gl_WorkGroupSize.y + gl_LocalInvocationID.y * gl_WorkGroupSize.x + gl_LocalInvocationID.x)
+
+RWTexture2D<float4> Result;
+
+[numthreads(1, 1, 1)] void UberNoiseTerrainGenerator(uint3 id : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+{
+    Result[id.xy] = float4(0.0, float(id.x) / dispatchDimension, float(id.y) / dispatchDimension, 1.0);
+}
