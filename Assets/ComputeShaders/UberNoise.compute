@@ -19,5 +19,6 @@ RWTexture2D<float4> Result;
 
 [numthreads(1, 1, 1)] void UberNoiseTerrainGenerator(uint3 id : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
-    Result[id.xy] = float4(0.0, float(id.x) / dispatchDimension, float(id.y) / dispatchDimension, 1.0);
+    float elevation = max(float(id.x) / dispatchDimension , float(id.y) / dispatchDimension);
+    Result[id.xy] = float4(elevation, elevation, elevation, 1.0);
 }

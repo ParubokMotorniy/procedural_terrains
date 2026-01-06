@@ -33,7 +33,9 @@ public class GenerationControllerr : MonoBehaviour
         shaderToDispatch.SetInt("dispatchDimension", dispatchDimension);
         shaderToDispatch.Dispatch(kernelIdx, dispatchDimension, dispatchDimension, 1);
 
-        GetComponent<Renderer>().material.mainTexture = noiseRenderTexture;
+        // GetComponent<Renderer>().material.mainTexture = noiseRenderTexture;
+        GetComponent<Renderer>().material.SetTexture("_HeightMap", noiseRenderTexture);
+        GetComponent<Renderer>().material.SetFloat("_HeightScale", 5.0f);
     }
 
     void Update()
