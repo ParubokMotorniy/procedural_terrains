@@ -1,11 +1,26 @@
 using Unity.Mathematics;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.Assertions;
 
 [RequireComponent(typeof(Renderer))]
 [RequireComponent(typeof(MeshFilter))]
+[ExecuteAlways]
 public class GenerationControllerr : MonoBehaviour
 {
+    [ContextMenu("Regenerate terrain")]
+    void RegenerateTerrain()
+    {
+        int kernelIdx = shaderToDispatch.FindKernel("UberNoiseTerrainGenerator");
+        shaderToDispatch.SetTexture(kernelIdx, Shader.PropertyToID("Result"), noiseRenderTexture);
+        shaderToDispatch.SetInt("dispatchDimension", dispatchDimension);
+        shaderToDispatch.Dispatch(kernelIdx, dispatchDimension, dispatchDimension, 1);   
+
+        EditorUtility.SetDirty(this);
+
+        Debug.Log("Terrain has been regenerated!");
+    }
+
     [SerializeField]
     private ComputeShader shaderToDispatch;
 
@@ -31,13 +46,8 @@ public class GenerationControllerr : MonoBehaviour
 
         Assert.IsTrue(noiseRenderTexture.IsCreated());
 
-        int kernelIdx = shaderToDispatch.FindKernel("UberNoiseTerrainGenerator");
-        shaderToDispatch.SetTexture(kernelIdx, Shader.PropertyToID("Result"), noiseRenderTexture);
-        shaderToDispatch.SetInt("dispatchDimension", dispatchDimension);
-        shaderToDispatch.Dispatch(kernelIdx, dispatchDimension, dispatchDimension, 1);
-
-        GetComponent<Renderer>().material.SetTexture("_HeightMap", noiseRenderTexture);
-        GetComponent<Renderer>().material.SetFloat("_HeightScale", terrainScale);
+        GetComponent<Renderer>().sharedMaterial.SetTexture("_HeightMap", noiseRenderTexture);
+        GetComponent<Renderer>().sharedMaterial.SetFloat("_HeightScale", terrainScale);
     }
 
     void OnDrawGizmos()
