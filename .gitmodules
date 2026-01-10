@@ -1,0 +1,3 @@
+[submodule "3rdparty/hlsl_noise"]
+	path = 3rdparty/hlsl_noise
+	url = https://github.com/ParubokMotorniy/hlsl-noise.git

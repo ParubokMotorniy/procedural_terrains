@@ -1,6 +1,9 @@
+#include "../../3rdparty/hlsl_noise/ashima/psrdnoise2D.hlsl"
+
 #pragma kernel UberNoiseTerrainGenerator
 
 uniform int dispatchDimension;
+uniform float noiseFrequency;
 
 // GLSL	                    HLSL
 // gl_GlobalInvocationID	SV_DispatchThreadID
@@ -15,14 +18,26 @@ uniform int dispatchDimension;
 // uvec3	gl_GlobalInvocationID	global index of the current work item (gl_WorkGroupID * gl_WorkGroupSize + gl_LocalInvocationID)
 // uint	    gl_LocalInvocationIndex	1d index representation of gl_LocalInvocationID (gl_LocalInvocationID.z * gl_WorkGroupSize.x * gl_WorkGroupSize.y + gl_LocalInvocationID.y * gl_WorkGroupSize.x + gl_LocalInvocationID.x)
 
-RWTexture2D<float4> Result;
+RWTexture2D<float> Result;
+//TODO: when possible, I should use analytical derivatives of the resulting terrain
+
+const float2x2 m = float2x2(0.8,-0.6,0.6,0.8);
 
 #define PI 3.141592654
 
 [numthreads(1, 1, 1)] void UberNoiseTerrainGenerator(uint3 id : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
-    float elevation = float(id.x) / dispatchDimension * float(id.y) / dispatchDimension;
-    elevation = (sin(elevation * 4 * PI) / 2.0) + 0.5;
-
-    Result[id.xy] = float4(elevation, elevation, elevation, 1.0);
+    float2 p = id.xy * noiseFrequency; 
+    float a = 0.0;
+    float b = 1.0;
+    float2  d = float2(0.0,0.0);
+    for( int i=0; i<15; i++ )
+    {
+        float3 n = sdnoise(p);
+        d += n.yz;
+        a += (b * n.x) / (1.0+dot(d,d));
+        b *= 0.5;
+        p = mul(m, p) * 2.0;
+    }
+    Result[id.xy] = (a + 1.0) / 2.0;
 }

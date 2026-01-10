@@ -2,25 +2,33 @@ Shader "Custom/TerrainShader"
 {
     Properties
     {
-        [MainColor] _BaseColor("Base Color", Color) = (1, 1, 1, 1)
-
         _HeightMap("Height Map", 2D) = "black"
         _HeightScale("Height Scale", Float) = 1.0
+        _Specular("Specular strength", Float) = 0.05
+        _Smoothness("Smoothness", Float) = 0.05
     }
     SubShader
     {
-        Tags { "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" }
-        ///TODO: add runtime wiremesh rendering. Probably with geometry shaders for I don't want to waste bandwidht of GPU passing extra vertex attributes around.
+        Tags { "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" "Queue" = "Geometry" }
+        //TODO: add runtime wiremesh rendering. Probably with geometry shaders for I don't want to waste bandwidht of GPU passing extra vertex attributes around.
+
         Pass
         {
+            Name "Terrain shading"
+            Tags {"LightMode" = "UniversalForward" "PassFlags" = "OnlyDirectional" "UniversalMaterialType" = "SimpleLit"}
+            
             Cull Off
-
+            
             HLSLPROGRAM
-
+            
             #pragma vertex vert
             #pragma fragment frag
+            #define _SPECULAR_COLOR
+            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
 
             struct Attributes
             {
@@ -33,6 +41,8 @@ Shader "Custom/TerrainShader"
                 float4 positionHCS : SV_POSITION;
                 float2 uv          : TEXCOORD0;
                 float vertexHeight : TEXCOORD1;
+                float3 positionWS  : TEXCOORD2; 
+                float3 normal      : TEXCOORD3;
             };
 
             static const float3 levelColoring[6] = {
@@ -44,14 +54,16 @@ Shader "Custom/TerrainShader"
                 float3(1.0, 1.0, 1.0)
             };
             static const float isoColorStep = 0.2;
-
+            
             TEXTURE2D(_HeightMap);
             SAMPLER(sampler_HeightMap);
-
+            
             CBUFFER_START(UnityPerMaterial)
-                half4 _BaseColor;
-                float4 _HeightMap_ST;
-                float  _HeightScale;
+            float4 _HeightMap_ST;
+            float  _HeightScale;
+            float4 _HeightMap_TexelSize; 
+            float _Specular;
+            float _Smoothness;
             CBUFFER_END
 
             float colorInterpolationRemap(float linearCoeff)
@@ -75,7 +87,35 @@ Shader "Custom/TerrainShader"
                 float3 positionOS = IN.positionOS.xyz;
                 positionOS.y = height * _HeightScale;
 
+                float dx = SAMPLE_TEXTURE2D_LOD(
+                        _HeightMap,
+                        sampler_HeightMap,
+                        IN.uv + float2(_HeightMap_TexelSize.x, 0.0),
+                        0
+                    ).r - SAMPLE_TEXTURE2D_LOD(
+                        _HeightMap,
+                        sampler_HeightMap,
+                        IN.uv - float2(_HeightMap_TexelSize.x, 0.0),
+                        0
+                    ).r;
+                dx /= 2.0 * _HeightMap_TexelSize.x;
+
+                float dy = SAMPLE_TEXTURE2D_LOD(
+                        _HeightMap,
+                        sampler_HeightMap,
+                        IN.uv + float2(0.0, _HeightMap_TexelSize.y),
+                        0
+                    ).r - SAMPLE_TEXTURE2D_LOD(
+                        _HeightMap,
+                        sampler_HeightMap,
+                        IN.uv - float2(0.0, _HeightMap_TexelSize.y),
+                        0
+                    ).r;
+                dy /= 2.0 * _HeightMap_TexelSize.y;
+
+                OUT.normal = TransformObjectToWorldNormal(float3(-dx, -dy, 1.0));
                 OUT.positionHCS = TransformObjectToHClip(positionOS);
+                OUT.positionWS = TransformObjectToWorld(positionOS);
                 OUT.uv = TRANSFORM_TEX(IN.uv, _HeightMap);
                 OUT.vertexHeight = height;
                 return OUT;
@@ -86,10 +126,151 @@ Shader "Custom/TerrainShader"
                 float isoColorLevel = IN.vertexHeight / isoColorStep;
                 float3 bottomColor = levelColoring[(int)floor(isoColorLevel)]; 
                 float3 topColor = levelColoring[(int)ceil(isoColorLevel)];
-
                 float3 vertexColorAtLevel = lerp(bottomColor, topColor, colorInterpolationRemap(frac(isoColorLevel)));
 
-                return float4(vertexColorAtLevel, 1.0);
+                float4 shadowCoord = TransformWorldToShadowCoord(IN.positionWS);
+
+                InputData lightData;
+                ZERO_INITIALIZE(InputData, lightData);
+                lightData.positionWS = IN.positionWS;
+                lightData.normalWS = normalize(IN.normal);
+                lightData.viewDirectionWS = GetWorldSpaceNormalizeViewDir(IN.positionWS);
+                lightData.shadowCoord = TransformWorldToShadowCoord(IN.positionWS);
+
+                SurfaceData terrainSurfaceData;
+                ZERO_INITIALIZE(SurfaceData, terrainSurfaceData);
+                terrainSurfaceData.albedo = vertexColorAtLevel;
+                terrainSurfaceData.alpha = 1.0;
+                terrainSurfaceData.specular = _Specular;
+                terrainSurfaceData.smoothness = _Smoothness;
+
+                return UniversalFragmentBlinnPhong(lightData, terrainSurfaceData);
+
+                // half shadowValue = MainLightRealtimeShadow(shadowCoord);
+                // return half4(shadowValue,shadowValue,shadowValue,1.0);
+            }
+
+            ENDHLSL
+        }
+
+        Pass 
+        {
+            Name "Terrain shadow casting"
+            Tags {"LightMode" = "ShadowCaster" "PassFlags" = "OnlyDirectional"}
+
+            HLSLPROGRAM
+
+            #pragma vertex vert
+            #pragma fragment frag
+
+            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
+
+            struct Attributes
+            {
+                float4 positionOS   : POSITION;
+                float2 uv           : TEXCOORD0;
+                float3 normalOS     : NORMAL;
+            };
+
+            struct Varyings
+            {
+                float2 uv           : TEXCOORD0;
+                float4 positionCS   : SV_POSITION;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+            };
+
+            float4 GetShadowPositionHClip(Attributes input)
+            {
+                float3 positionWS = TransformObjectToWorld(input.positionOS.xyz);
+                float3 normalWS = TransformObjectToWorldNormal(input.normalOS);
+            
+                float3 lightDirectionWS = GetMainLight().direction;
+            
+                float4 positionCS = TransformWorldToHClip(ApplyShadowBias(positionWS, normalWS, lightDirectionWS));
+                positionCS = ApplyShadowClamping(positionCS);
+                return positionCS;
+            }
+
+            TEXTURE2D(_HeightMap);
+            SAMPLER(sampler_HeightMap);
+            
+            CBUFFER_START(UnityPerMaterial)
+            float4 _HeightMap_ST;
+            float  _HeightScale;
+            float4 _HeightMap_TexelSize;
+            CBUFFER_END
+
+            Varyings vert(Attributes IN)
+            {
+                Varyings OUT;
+                ZERO_INITIALIZE(Varyings, OUT);
+
+                UNITY_SETUP_INSTANCE_ID(IN);
+                UNITY_TRANSFER_INSTANCE_ID(IN, OUT);
+
+                Attributes inCopy = IN;
+
+                float dx = SAMPLE_TEXTURE2D_LOD(
+                        _HeightMap,
+                        sampler_HeightMap,
+                        IN.uv + float2(_HeightMap_TexelSize.x,0.0),
+                        0
+                    ).r - SAMPLE_TEXTURE2D_LOD(
+                        _HeightMap,
+                        sampler_HeightMap,
+                        IN.uv - float2(_HeightMap_TexelSize.x,0.0),
+                        0
+                    ).r;
+                dx /= 2.0 * _HeightMap_TexelSize.x;
+
+                float dy = SAMPLE_TEXTURE2D_LOD(
+                        _HeightMap,
+                        sampler_HeightMap,
+                        IN.uv + float2(0.0, _HeightMap_TexelSize.y),
+                        0
+                    ).r - SAMPLE_TEXTURE2D_LOD(
+                        _HeightMap,
+                        sampler_HeightMap,
+                        IN.uv - float2(0.0, _HeightMap_TexelSize.y),
+                        0
+                    ).r;
+                dy /= 2.0 * _HeightMap_TexelSize.y;
+
+                inCopy.normalOS = normalize(float3(-dx, -dy, 1.0));
+
+                float height =
+                    SAMPLE_TEXTURE2D_LOD(
+                        _HeightMap,
+                        sampler_HeightMap,
+                        IN.uv,
+                        0
+                    ).r;
+                float3 positionOS = IN.positionOS.xyz;
+                positionOS.y = height * _HeightScale;
+                inCopy.positionOS = float4(positionOS, 1.0);
+
+                OUT.uv = TRANSFORM_TEX(IN.uv, _HeightMap);
+                OUT.positionCS = GetShadowPositionHClip(inCopy);
+                return OUT;
+            }
+
+            half4 frag(Varyings input) : SV_TARGET
+            {
+                UNITY_SETUP_INSTANCE_ID(input);
+
+                #if defined(_ALPHATEST_ON)
+                    Alpha(SampleAlbedoAlpha(input.uv, TEXTURE2D_ARGS(_BaseMap, sampler_BaseMap)).a, _BaseColor, _Cutoff);
+                #endif
+
+                #if defined(LOD_FADE_CROSSFADE)
+                    LODFadeCrossFade(input.positionCS);
+                #endif
+
+                return 0;
             }
 
             ENDHLSL
