@@ -11,6 +11,7 @@ Shader "Custom/TerrainShader"
     {
         Tags { "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" "Queue" = "Geometry" }
         //TODO: add runtime wiremesh rendering. Probably with geometry shaders for I don't want to waste bandwidht of GPU passing extra vertex attributes around.
+        //TODO: mix the terrain color with light color. May want to further debug the blinn-phong.
 
         Pass
         {
@@ -42,7 +43,7 @@ Shader "Custom/TerrainShader"
                 float2 uv          : TEXCOORD0;
                 float vertexHeight : TEXCOORD1;
                 float3 positionWS  : TEXCOORD2; 
-                float3 normal      : TEXCOORD3;
+                // float3 normal      : TEXCOORD3;
             };
 
             static const float3 levelColoring[6] = {
@@ -87,33 +88,33 @@ Shader "Custom/TerrainShader"
                 float3 positionOS = IN.positionOS.xyz;
                 positionOS.y = height * _HeightScale;
 
-                float dx = SAMPLE_TEXTURE2D_LOD(
-                        _HeightMap,
-                        sampler_HeightMap,
-                        IN.uv + float2(_HeightMap_TexelSize.x, 0.0),
-                        0
-                    ).r - SAMPLE_TEXTURE2D_LOD(
-                        _HeightMap,
-                        sampler_HeightMap,
-                        IN.uv - float2(_HeightMap_TexelSize.x, 0.0),
-                        0
-                    ).r;
-                dx /= 2.0 * _HeightMap_TexelSize.x;
+                // float dx = SAMPLE_TEXTURE2D_LOD(
+                //         _HeightMap,
+                //         sampler_HeightMap,
+                //         IN.uv + float2(_HeightMap_TexelSize.x, 0.0),
+                //         0
+                //     ).r - SAMPLE_TEXTURE2D_LOD(
+                //         _HeightMap,
+                //         sampler_HeightMap,
+                //         IN.uv - float2(_HeightMap_TexelSize.x, 0.0),
+                //         0
+                //     ).r;
+                // dx /= 2.0 * _HeightMap_TexelSize.x;
 
-                float dy = SAMPLE_TEXTURE2D_LOD(
-                        _HeightMap,
-                        sampler_HeightMap,
-                        IN.uv + float2(0.0, _HeightMap_TexelSize.y),
-                        0
-                    ).r - SAMPLE_TEXTURE2D_LOD(
-                        _HeightMap,
-                        sampler_HeightMap,
-                        IN.uv - float2(0.0, _HeightMap_TexelSize.y),
-                        0
-                    ).r;
-                dy /= 2.0 * _HeightMap_TexelSize.y;
+                // float dy = SAMPLE_TEXTURE2D_LOD(
+                //         _HeightMap,
+                //         sampler_HeightMap,
+                //         IN.uv + float2(0.0, _HeightMap_TexelSize.y),
+                //         0
+                //     ).r - SAMPLE_TEXTURE2D_LOD(
+                //         _HeightMap,
+                //         sampler_HeightMap,
+                //         IN.uv - float2(0.0, _HeightMap_TexelSize.y),
+                //         0
+                //     ).r;
+                // dy /= 2.0 * _HeightMap_TexelSize.y;
 
-                OUT.normal = TransformObjectToWorldNormal(float3(-dx, -dy, 1.0));
+                // OUT.normal = TransformObjectToWorldNormal(float3(-dx, -dy, 1.0));
                 OUT.positionHCS = TransformObjectToHClip(positionOS);
                 OUT.positionWS = TransformObjectToWorld(positionOS);
                 OUT.uv = TRANSFORM_TEX(IN.uv, _HeightMap);
@@ -130,24 +131,25 @@ Shader "Custom/TerrainShader"
 
                 float4 shadowCoord = TransformWorldToShadowCoord(IN.positionWS);
 
-                InputData lightData;
-                ZERO_INITIALIZE(InputData, lightData);
-                lightData.positionWS = IN.positionWS;
-                lightData.normalWS = normalize(IN.normal);
-                lightData.viewDirectionWS = GetWorldSpaceNormalizeViewDir(IN.positionWS);
-                lightData.shadowCoord = TransformWorldToShadowCoord(IN.positionWS);
+                // InputData lightData;
+                // ZERO_INITIALIZE(InputData, lightData);
+                // lightData.positionWS = IN.positionWS;
+                // lightData.normalWS = normalize(IN.normal);
+                // lightData.viewDirectionWS = GetWorldSpaceNormalizeViewDir(IN.positionWS);
+                // lightData.shadowCoord = TransformWorldToShadowCoord(IN.positionWS);
 
-                SurfaceData terrainSurfaceData;
-                ZERO_INITIALIZE(SurfaceData, terrainSurfaceData);
-                terrainSurfaceData.albedo = vertexColorAtLevel;
-                terrainSurfaceData.alpha = 1.0;
-                terrainSurfaceData.specular = _Specular;
-                terrainSurfaceData.smoothness = _Smoothness;
+                // SurfaceData terrainSurfaceData;
+                // ZERO_INITIALIZE(SurfaceData, terrainSurfaceData);
+                // terrainSurfaceData.albedo = vertexColorAtLevel;
+                // terrainSurfaceData.alpha = 1.0;
+                // terrainSurfaceData.specular = _Specular;
+                // terrainSurfaceData.smoothness = _Smoothness;
 
-                return UniversalFragmentBlinnPhong(lightData, terrainSurfaceData);
+                // return UniversalFragmentBlinnPhong(lightData, terrainSurfaceData);
 
-                // half shadowValue = MainLightRealtimeShadow(shadowCoord);
-                // return half4(shadowValue,shadowValue,shadowValue,1.0);
+                half shadowValue = MainLightRealtimeShadow(shadowCoord);
+                // return half4(shadowValue, shadowValue, shadowValue, 1.0);
+                return half4(shadowValue * vertexColorAtLevel, 1.0);
             }
 
             ENDHLSL
@@ -186,11 +188,12 @@ Shader "Custom/TerrainShader"
             float4 GetShadowPositionHClip(Attributes input)
             {
                 float3 positionWS = TransformObjectToWorld(input.positionOS.xyz);
+                
                 float3 normalWS = TransformObjectToWorldNormal(input.normalOS);
-            
                 float3 lightDirectionWS = GetMainLight().direction;
+                float3 biasedPosition = ApplyShadowBias(positionWS, normalWS, lightDirectionWS);
             
-                float4 positionCS = TransformWorldToHClip(ApplyShadowBias(positionWS, normalWS, lightDirectionWS));
+                float4 positionCS = TransformWorldToHClip(biasedPosition);
                 positionCS = ApplyShadowClamping(positionCS);
                 return positionCS;
             }
@@ -213,6 +216,7 @@ Shader "Custom/TerrainShader"
                 UNITY_TRANSFER_INSTANCE_ID(IN, OUT);
 
                 Attributes inCopy = IN;
+                UNITY_TRANSFER_INSTANCE_ID(IN, inCopy);
 
                 float dx = SAMPLE_TEXTURE2D_LOD(
                         _HeightMap,
@@ -275,5 +279,6 @@ Shader "Custom/TerrainShader"
 
             ENDHLSL
         }
+        
     }
 }
