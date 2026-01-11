@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Unity.Mathematics;
 using UnityEditor;
 using UnityEngine;
@@ -14,7 +15,7 @@ public class GenerationControllerr : MonoBehaviour
         if (noiseRenderTexture && noiseRenderTexture.IsCreated())
         { noiseRenderTexture.Release(); }
 
-        noiseRenderTexture = new RenderTexture(dispatchDimension, dispatchDimension, 0)
+        noiseRenderTexture = new RenderTexture(groupSize * groupScaleFactor, groupSize * groupScaleFactor, 0)
         {
             graphicsFormat = UnityEngine.Experimental.Rendering.GraphicsFormat.R32_SFloat,
             useMipMap = false,
@@ -31,7 +32,7 @@ public class GenerationControllerr : MonoBehaviour
 
         int kernelIdx = shaderToDispatch.FindKernel("UberNoiseTerrainGenerator");
         shaderToDispatch.SetTexture(kernelIdx, Shader.PropertyToID("Result"), noiseRenderTexture);
-        shaderToDispatch.SetInt("dispatchDimension", dispatchDimension);
+        shaderToDispatch.SetInt("groupScaleFactor", groupScaleFactor);
         shaderToDispatch.SetFloat("noiseFrequency", noiseFrequency);
 
         shaderToDispatch.SetFloat("sharpness", sharpness);
@@ -39,7 +40,7 @@ public class GenerationControllerr : MonoBehaviour
         shaderToDispatch.SetFloat("perturbationStrength", perturbationStrength);
         shaderToDispatch.SetInt("numOctaves", numOctaves);
 
-        shaderToDispatch.Dispatch(kernelIdx, dispatchDimension, dispatchDimension, 1);
+        shaderToDispatch.Dispatch(kernelIdx, 1, 1, 1);
 
         // EditorUtility.SetDirty(this);
 
@@ -49,8 +50,8 @@ public class GenerationControllerr : MonoBehaviour
     [SerializeField]
     private ComputeShader shaderToDispatch;
 
-    [Range(8, 2048)]
-    public int dispatchDimension;
+    [Range(1, 8)]
+    public int groupScaleFactor;
 
     [Range(0.01f, 10.0f)]
     public float noiseFrequency;
@@ -71,6 +72,7 @@ public class GenerationControllerr : MonoBehaviour
     public float terrainScale;
 
     private RenderTexture noiseRenderTexture;
+    private const int groupSize = 32;
 
     void Start()
     {

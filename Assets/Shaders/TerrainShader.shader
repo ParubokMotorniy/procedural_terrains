@@ -122,8 +122,13 @@ Shader "Custom/TerrainShader"
                 return OUT;
             }
 
-            half4 frag(Varyings IN) : SV_Target
+            half4 frag(Varyings IN, bool isFront : SV_IsFrontFace) : SV_Target
             {
+                if(!isFront)
+                {
+                    return float4(0.8,0.8,0.8,1.0);
+                }
+
                 float isoColorLevel = IN.vertexHeight / isoColorStep;
                 float3 bottomColor = levelColoring[(int)floor(isoColorLevel)]; 
                 float3 topColor = levelColoring[(int)ceil(isoColorLevel)];
