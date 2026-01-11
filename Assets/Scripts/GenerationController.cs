@@ -51,25 +51,25 @@ public class GenerationControllerr : MonoBehaviour
     private ComputeShader shaderToDispatch;
 
     [Range(1, 8)]
-    public int groupScaleFactor;
+    public int groupScaleFactor = 1;
 
     [Range(0.01f, 10.0f)]
-    public float noiseFrequency;
+    public float noiseFrequency = 0.01f;
 
     [Range(-10.0f, 10.0f)]
-    public float sharpness;
+    public float sharpness = 0.0f;
 
     [Range(0.01f, 10.0f)]
-    public float slopeErosion;
+    public float slopeErosion = 0.01f;
 
     [Range(1, 20)]
-    public int numOctaves;
+    public int numOctaves = 5;
 
     [Range(0.01f, 10.0f)]
-    public float perturbationStrength;
+    public float perturbationStrength = 0.01f;
 
     [Range(1.0f, 32.0f)]
-    public float terrainScale;
+    public float terrainScale = 1.0f;
 
     private RenderTexture noiseRenderTexture;
     private const int groupSize = 32;

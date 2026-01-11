@@ -11,7 +11,6 @@ Shader "Custom/TerrainShader"
     {
         Tags { "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" "Queue" = "Geometry" }
         //TODO: add runtime wiremesh rendering. Probably with geometry shaders for I don't want to waste bandwidht of GPU passing extra vertex attributes around.
-        //TODO: mix the terrain color with light color. May want to further debug the blinn-phong.
 
         Pass
         {
@@ -31,6 +30,7 @@ Shader "Custom/TerrainShader"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
 
+
             struct Attributes
             {
                 float4 positionOS : POSITION;
@@ -43,7 +43,7 @@ Shader "Custom/TerrainShader"
                 float2 uv          : TEXCOORD0;
                 float vertexHeight : TEXCOORD1;
                 float3 positionWS  : TEXCOORD2; 
-                // float3 normal      : TEXCOORD3;
+                float3 normal      : TEXCOORD3;
             };
 
             static const float3 levelColoring[6] = {
@@ -55,6 +55,7 @@ Shader "Custom/TerrainShader"
                 float3(1.0, 1.0, 1.0)
             };
             static const float isoColorStep = 0.2;
+            static const half3 ambientLight = half3(0.243, 0.388, 0.227);
             
             TEXTURE2D(_HeightMap);
             SAMPLER(sampler_HeightMap);
@@ -88,33 +89,33 @@ Shader "Custom/TerrainShader"
                 float3 positionOS = IN.positionOS.xyz;
                 positionOS.y = height * _HeightScale;
 
-                // float dx = SAMPLE_TEXTURE2D_LOD(
-                //         _HeightMap,
-                //         sampler_HeightMap,
-                //         IN.uv + float2(_HeightMap_TexelSize.x, 0.0),
-                //         0
-                //     ).r - SAMPLE_TEXTURE2D_LOD(
-                //         _HeightMap,
-                //         sampler_HeightMap,
-                //         IN.uv - float2(_HeightMap_TexelSize.x, 0.0),
-                //         0
-                //     ).r;
-                // dx /= 2.0 * _HeightMap_TexelSize.x;
+                float du = SAMPLE_TEXTURE2D_LOD(
+                        _HeightMap,
+                        sampler_HeightMap,
+                        IN.uv + float2(_HeightMap_TexelSize.x, 0.0),
+                        0
+                    ).r - SAMPLE_TEXTURE2D_LOD(
+                        _HeightMap,
+                        sampler_HeightMap,
+                        IN.uv - float2(_HeightMap_TexelSize.x, 0.0),
+                        0
+                    ).r;
+                du /= 2.0 * _HeightMap_TexelSize.x;
 
-                // float dy = SAMPLE_TEXTURE2D_LOD(
-                //         _HeightMap,
-                //         sampler_HeightMap,
-                //         IN.uv + float2(0.0, _HeightMap_TexelSize.y),
-                //         0
-                //     ).r - SAMPLE_TEXTURE2D_LOD(
-                //         _HeightMap,
-                //         sampler_HeightMap,
-                //         IN.uv - float2(0.0, _HeightMap_TexelSize.y),
-                //         0
-                //     ).r;
-                // dy /= 2.0 * _HeightMap_TexelSize.y;
+                float dv = SAMPLE_TEXTURE2D_LOD(
+                        _HeightMap,
+                        sampler_HeightMap,
+                        IN.uv + float2(0.0, _HeightMap_TexelSize.y),
+                        0
+                    ).r - SAMPLE_TEXTURE2D_LOD(
+                        _HeightMap,
+                        sampler_HeightMap,
+                        IN.uv - float2(0.0, _HeightMap_TexelSize.y),
+                        0
+                    ).r;
+                dv /= 2.0 * _HeightMap_TexelSize.y;
 
-                // OUT.normal = TransformObjectToWorldNormal(float3(-dx, -dy, 1.0));
+                OUT.normal = TransformObjectToWorldNormal(float3(-du, 1.0, -dv));
                 OUT.positionHCS = TransformObjectToHClip(positionOS);
                 OUT.positionWS = TransformObjectToWorld(positionOS);
                 OUT.uv = TRANSFORM_TEX(IN.uv, _HeightMap);
@@ -133,27 +134,18 @@ Shader "Custom/TerrainShader"
                 float3 bottomColor = levelColoring[(int)floor(isoColorLevel)]; 
                 float3 topColor = levelColoring[(int)ceil(isoColorLevel)];
                 float3 vertexColorAtLevel = lerp(bottomColor, topColor, colorInterpolationRemap(frac(isoColorLevel)));
-
+                
                 float4 shadowCoord = TransformWorldToShadowCoord(IN.positionWS);
-
-                // InputData lightData;
-                // ZERO_INITIALIZE(InputData, lightData);
-                // lightData.positionWS = IN.positionWS;
-                // lightData.normalWS = normalize(IN.normal);
-                // lightData.viewDirectionWS = GetWorldSpaceNormalizeViewDir(IN.positionWS);
-                // lightData.shadowCoord = TransformWorldToShadowCoord(IN.positionWS);
-
-                // SurfaceData terrainSurfaceData;
-                // ZERO_INITIALIZE(SurfaceData, terrainSurfaceData);
-                // terrainSurfaceData.albedo = vertexColorAtLevel;
-                // terrainSurfaceData.alpha = 1.0;
-                // terrainSurfaceData.specular = _Specular;
-                // terrainSurfaceData.smoothness = _Smoothness;
-
-                // return UniversalFragmentBlinnPhong(lightData, terrainSurfaceData);
-
                 half shadowValue = MainLightRealtimeShadow(shadowCoord);
-                return half4(shadowValue * vertexColorAtLevel, 1.0);
+                
+                float3 lightDirection = -GetMainLight().direction;
+                half3 lightColor = GetMainLight().color;
+                float3 actualNormal = normalize(IN.normal);
+
+                half3 diffuseComponent = LightingLambert(lightColor, lightDirection, actualNormal);
+                half3 specularComponent = LightingSpecular(lightColor, lightDirection, actualNormal, GetWorldSpaceNormalizeViewDir(IN.positionWS), _Specular.xxxx, _Smoothness.xxxx); 
+
+                return half4( ambientLight * vertexColorAtLevel + (diffuseComponent + specularComponent) * vertexColorAtLevel * shadowValue, 1.0);
             }
 
             ENDHLSL
@@ -163,6 +155,8 @@ Shader "Custom/TerrainShader"
         {
             Name "Terrain shadow casting"
             Tags {"LightMode" = "ShadowCaster" "PassFlags" = "OnlyDirectional"}
+
+            Cull Off
 
             HLSLPROGRAM
 
@@ -222,7 +216,7 @@ Shader "Custom/TerrainShader"
                 Attributes inCopy = IN;
                 UNITY_TRANSFER_INSTANCE_ID(IN, inCopy);
 
-                float dx = SAMPLE_TEXTURE2D_LOD(
+                float du = SAMPLE_TEXTURE2D_LOD(
                         _HeightMap,
                         sampler_HeightMap,
                         IN.uv + float2(_HeightMap_TexelSize.x,0.0),
@@ -233,9 +227,9 @@ Shader "Custom/TerrainShader"
                         IN.uv - float2(_HeightMap_TexelSize.x,0.0),
                         0
                     ).r;
-                dx /= 2.0 * _HeightMap_TexelSize.x;
+                du /= 2.0 * _HeightMap_TexelSize.x;
 
-                float dy = SAMPLE_TEXTURE2D_LOD(
+                float dv = SAMPLE_TEXTURE2D_LOD(
                         _HeightMap,
                         sampler_HeightMap,
                         IN.uv + float2(0.0, _HeightMap_TexelSize.y),
@@ -246,9 +240,9 @@ Shader "Custom/TerrainShader"
                         IN.uv - float2(0.0, _HeightMap_TexelSize.y),
                         0
                     ).r;
-                dy /= 2.0 * _HeightMap_TexelSize.y;
+                dv /= 2.0 * _HeightMap_TexelSize.y;
 
-                inCopy.normalOS = normalize(float3(-dx, -dy, 1.0));
+                inCopy.normalOS = normalize(float3(-du, 1.0, -dv));
 
                 float height =
                     SAMPLE_TEXTURE2D_LOD(
