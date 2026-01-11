@@ -33,6 +33,12 @@ public class GenerationControllerr : MonoBehaviour
         shaderToDispatch.SetTexture(kernelIdx, Shader.PropertyToID("Result"), noiseRenderTexture);
         shaderToDispatch.SetInt("dispatchDimension", dispatchDimension);
         shaderToDispatch.SetFloat("noiseFrequency", noiseFrequency);
+
+        shaderToDispatch.SetFloat("sharpness", sharpness);
+        shaderToDispatch.SetFloat("slopeErosion", slopeErosion);
+        shaderToDispatch.SetFloat("perturbationStrength", perturbationStrength);
+        shaderToDispatch.SetInt("numOctaves", numOctaves);
+
         shaderToDispatch.Dispatch(kernelIdx, dispatchDimension, dispatchDimension, 1);
 
         // EditorUtility.SetDirty(this);
@@ -46,8 +52,20 @@ public class GenerationControllerr : MonoBehaviour
     [Range(8, 2048)]
     public int dispatchDimension;
 
-    [Range(0.05f, 10.0f)]
+    [Range(0.01f, 10.0f)]
     public float noiseFrequency;
+
+    [Range(-10.0f, 10.0f)]
+    public float sharpness;
+
+    [Range(0.01f, 10.0f)]
+    public float slopeErosion;
+
+    [Range(1, 20)]
+    public int numOctaves;
+
+    [Range(0.01f, 10.0f)]
+    public float perturbationStrength;
 
     [Range(1.0f, 32.0f)]
     public float terrainScale;

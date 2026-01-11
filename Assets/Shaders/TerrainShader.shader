@@ -148,7 +148,6 @@ Shader "Custom/TerrainShader"
                 // return UniversalFragmentBlinnPhong(lightData, terrainSurfaceData);
 
                 half shadowValue = MainLightRealtimeShadow(shadowCoord);
-                // return half4(shadowValue, shadowValue, shadowValue, 1.0);
                 return half4(shadowValue * vertexColorAtLevel, 1.0);
             }
 

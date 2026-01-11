@@ -5,6 +5,11 @@
 uniform int dispatchDimension;
 uniform float noiseFrequency;
 
+uniform float sharpness;
+uniform float slopeErosion;
+uniform float perturbationStrength;
+uniform int numOctaves;
+
 // GLSL	                    HLSL
 // gl_GlobalInvocationID	SV_DispatchThreadID
 // gl_LocalInvocationID	    SV_GroupThreadID
@@ -26,18 +31,39 @@ const float2x2 m = float2x2(0.8,-0.6,0.6,0.8);
 #define PI 3.141592654
 
 [numthreads(1, 1, 1)] void UberNoiseTerrainGenerator(uint3 id : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
-{
-    float2 p = id.xy * noiseFrequency; 
-    float a = 0.0;
-    float b = 1.0;
-    float2  d = float2(0.0,0.0);
-    for( int i=0; i<15; i++ )
+{    
+    float2 slopeErosionDerivativeSum = float2(0.0, 0.0);
+    float2 perturbDerivativeSum = float2(0.0, 0.0);
+    float noiseResult = 0.0;
+
+    float octaveAmplitude = 1.0;
+    float octaveFrequency = noiseFrequency;
+    float2 samplePosition = float2(0.0, 0.0);
+
+    float2 floatIdx = (float2)id.xy;
+
+    for(int o = 0; o < numOctaves; ++o)
     {
-        float3 n = sdnoise(p);
-        d += n.yz;
-        a += (b * n.x) / (1.0+dot(d,d));
-        b *= 0.5;
-        p = mul(m, p) * 2.0;
-    }
-    Result[id.xy] = (a + 1.0) / 2.0;
+        samplePosition = (floatIdx * octaveFrequency) + perturbDerivativeSum;
+
+        float3 startNoiseValue = sdnoise(samplePosition);
+        float featureNoise = startNoiseValue.x;
+        float2 featureDerivative = startNoiseValue.yz;
+
+        float ridgedNoise = 1.0 - abs(featureNoise);
+        float billowNoise = ridgedNoise * ridgedNoise;
+        featureNoise = lerp(featureNoise, billowNoise, max(0.0, sharpness));
+        featureNoise = lerp(featureNoise, ridgedNoise, abs(min(0.0, sharpness)));
+
+        //TODO: rework to use amplitude damping technique. Generally, define the usage of amplitude(s).
+        //TODO: add feature amplification
+        slopeErosionDerivativeSum += featureDerivative * slopeErosion;
+        perturbDerivativeSum += featureDerivative * perturbationStrength;
+        noiseResult += octaveAmplitude * featureNoise * (1.0 / (1.0 + dot(slopeErosionDerivativeSum, slopeErosionDerivativeSum)));
+
+        octaveAmplitude /= 2.0;
+        octaveFrequency *= 2.0;
+    } 
+
+    Result[id.xy] = noiseResult;
 }
