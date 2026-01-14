@@ -10,32 +10,33 @@ uniform uint threadSubdomainsY;
 
 uniform float octaveAmplitude;
 uniform float noiseFrequency;
+uniform float4 noiseDisplacement;
 
 // TODO: try to add real gaussian sampling
+// TODO: ensure neighboring noise values are independent
 // TODO: try intializing the grid with worley instead of plain perlin
 // TODO: consider wrapping the domain to avoid tons of if statements
 
 #pragma kernel IntializeTexture
-[numthreads(32, 32, 1)] void IntializeTexture(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+[numthreads(16, 16, 1)] void IntializeTexture(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
-    uint2 topLeftCellIdx = globalId.xy * threadCellTexelWidth;
-    Result[topLeftCellIdx.xy] = cnoise(topLeftCellIdx + localId.xy);
-
     uint width;
     uint height;
     Result.GetDimensions(width, height);
 
+    uint2 topLeftCellIdx = globalId.xy * threadCellTexelWidth;
+    Result[topLeftCellIdx.xy] = cnoise(topLeftCellIdx * noiseDisplacement.xy * noiseFrequency ) * octaveAmplitude;
     // TODO: two border points remain uninitialized
     //  the heightmaps are always square, but hey
     if (globalId.x == (threadSubdomainsX - 1) || globalId.y == (threadSubdomainsY - 1))
     {
         uint2 bottomRightCellIdx = topLeftCellIdx + threadCellTexelWidth.xx;
-        Result[bottomRightCellIdx] = cnoise((bottomRightCellIdx + localId.xy) * noiseFrequency);
+        Result[bottomRightCellIdx] = cnoise(bottomRightCellIdx * noiseDisplacement.xy * noiseFrequency) * octaveAmplitude;
     }
 }
 
 #pragma kernel Transition12
-    [numthreads(32, 32, 1)] void Transition12(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+    [numthreads(16, 16, 1)] void Transition12(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     // TODO: add optional displacement of existing points;
 
@@ -54,16 +55,16 @@ uniform float noiseFrequency;
                  Result[subdivisionIdx + uint2(-texelWidthDivided, -texelWidthDivided)]) /
                 4.0;
 
-            Result[subdivisionIdx] = averageNeighbors + octaveAmplitude * cnoise((subdivisionIdx + groupId.xy) * noiseFrequency);
+            Result[subdivisionIdx] = averageNeighbors + cnoise(subdivisionIdx * noiseDisplacement.xy * noiseFrequency) * octaveAmplitude;
         }
     }
 }
 
 #pragma kernel Transition21
-[numthreads(32, 32, 1)] void Transition21(uint3 localID : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+[numthreads(16, 16, 1)] void Transition21(uint3 localID : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     // TODO: add optional displacement of existing points;
-    
+
     uint2 topLeftCellIdx = globalId.xy * threadCellTexelWidth;
     uint width;
     uint height;
@@ -76,23 +77,48 @@ uniform float noiseFrequency;
 
     for (uint y = 0; y < numYPasses; ++y)
     {
-        uint xShiftAmount = (1 - y % 2) * texelWidthDivided;
+        uint xShiftAmount = (1 - (y % 2)) * texelWidthDivided;
         uint numXIterations = numXPasses + xOnBoundary * (xShiftAmount == 0); // only considers boundary X if the row is not shifted
         for (uint x = 0; x < numXIterations; ++x)
         {
             uint2 diamondIdx = topLeftCellIdx.xy + uint2(x * 2 * texelWidthDivided + xShiftAmount, y * texelWidthDivided);
 
+            float neighborLeft = 0.0;
+            float neighborRight = 0.0;
+            float neighborTop = 0.0;
+            float neighborBottom = 0.0;
+
             int numberValid = 0;
 
-            float neighborLeft =   diamondIdx.x == 0 ? 0.0 : (numberValid++, Result[diamondIdx + uint2(-texelWidthDivided, 0)]);
-            float neighborRight =  diamondIdx.x == (width - 1) ? 0.0 : (numberValid++, Result[diamondIdx + uint2(+texelWidthDivided, 0)]);
-            float neighborTop =    diamondIdx.y == 0 ? 0.0 : (numberValid++, Result[diamondIdx + uint2(0, -texelWidthDivided)]);
-            float neighborBottom = diamondIdx.y == (height - 1) ? 0.0 : (numberValid++, Result[diamondIdx + uint2(0, +texelWidthDivided)]);
+            if (diamondIdx.x != 0)
+            {
+                neighborLeft = Result[diamondIdx + uint2(-texelWidthDivided, 0)];
+                numberValid++;
+            }
 
-            Result[diamondIdx] = octaveAmplitude * cnoise((diamondIdx + groupId.xy) * noiseFrequency) + (neighborLeft +
-                                 neighborRight +
-                                 neighborTop +
-                                 neighborBottom) / numberValid;
+            if (diamondIdx.x != width - 1)
+            {
+                neighborRight = Result[diamondIdx + uint2(+texelWidthDivided, 0)];
+                numberValid++;
+            }
+
+            if (diamondIdx.y != 0)
+            {
+                neighborTop = Result[diamondIdx + uint2(0, -texelWidthDivided)];
+                numberValid++;
+            }
+
+            if (diamondIdx.y != height - 1)
+            {
+                neighborBottom = Result[diamondIdx + uint2(0, +texelWidthDivided)];
+                numberValid++;
+            }
+
+            Result[diamondIdx] = ((neighborLeft +
+                                  neighborRight +
+                                  neighborTop +
+                                  neighborBottom) /
+                                 numberValid) + cnoise(diamondIdx * noiseDisplacement.xy * noiseFrequency) * octaveAmplitude;
         }
     }
 }

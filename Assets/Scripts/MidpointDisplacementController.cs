@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.Assertions;
 using UnityEngine.Rendering;
 using System.IO;
+using System;
 
 [RequireComponent(typeof(Renderer))]
 [RequireComponent(typeof(MeshFilter))]
@@ -17,7 +18,11 @@ public class MidpointDisplacementController : MonoBehaviour
         if (noiseRenderTexture && noiseRenderTexture.IsCreated())
         { noiseRenderTexture.Release(); }
 
-        noiseRenderTexture = new RenderTexture(groupSize * groupScaleFactor, groupSize * groupScaleFactor, 0)
+        //TODO: add texture scaling (texels per division)
+        int texelsPerThreadDomain = (int)math.pow(2, numSubdivisions);
+        int textureSize = (groupSize * texelsPerThreadDomain * groupScaleFactor) + 1; //1 closes off the last row
+
+        noiseRenderTexture = new RenderTexture(textureSize, textureSize, 0)
         {
             graphicsFormat = UnityEngine.Experimental.Rendering.GraphicsFormat.R32_SFloat,
             useMipMap = false,
@@ -33,14 +38,35 @@ public class MidpointDisplacementController : MonoBehaviour
         GetComponent<Renderer>().sharedMaterial.SetTexture("_HeightMap", noiseRenderTexture);
         GetComponent<Renderer>().sharedMaterial.SetFloat("_HeightScale", terrainScale);
 
-        //TODO: properly compute the texture dimension + set the uniforms + dispatch kernels in order
+        int initializationKernelIdx = shaderToDispatch.FindKernel("IntializeTexture");
+        int transition12KernelIdx = shaderToDispatch.FindKernel("Transition12");
+        int transition21KernelIdx = shaderToDispatch.FindKernel("Transition21");
 
-        int kernelIdx = shaderToDispatch.FindKernel("UberNoiseTerrainGenerator");
-        shaderToDispatch.SetTexture(kernelIdx, Shader.PropertyToID("Result"), noiseRenderTexture);
-        shaderToDispatch.SetInt("groupScaleFactor", groupScaleFactor);
+        shaderToDispatch.SetInt("threadCellTexelWidth", texelsPerThreadDomain);
         shaderToDispatch.SetFloat("noiseFrequency", noiseFrequency);
+        shaderToDispatch.SetInt("threadSubdomainsX", groupSize * groupScaleFactor);
+        shaderToDispatch.SetInt("threadSubdomainsY", groupSize * groupScaleFactor);
 
-        shaderToDispatch.Dispatch(kernelIdx, 1, 1, 1);
+        shaderToDispatch.SetTexture(initializationKernelIdx, "Result", noiseRenderTexture);
+        shaderToDispatch.SetTexture(transition12KernelIdx, "Result", noiseRenderTexture);
+        shaderToDispatch.SetTexture(transition21KernelIdx, "Result", noiseRenderTexture);
+
+        System.Random rng = new System.Random();
+        shaderToDispatch.SetVector("noiseDisplacement", new Vector4((float)rng.NextDouble(), (float)rng.NextDouble(), 0.0f, 0.0f));
+
+        shaderToDispatch.Dispatch(initializationKernelIdx, groupScaleFactor, groupScaleFactor, 1);
+        float octaveAmplitude = 1.0f;
+        for (int sub = 1; sub <= numSubdivisions; ++sub, octaveAmplitude *= 0.5f)
+        {
+            shaderToDispatch.SetInt("texelWidthDivisionFactor", sub);
+            shaderToDispatch.SetInt("texelWidthDivided", texelsPerThreadDomain / (int)math.pow(2, sub));
+            shaderToDispatch.SetFloat("octaveAmplitude", octaveAmplitude);
+
+            shaderToDispatch.SetVector("noiseDisplacement", new Vector4((float)rng.NextDouble(), (float)rng.NextDouble(), 0.0f, 0.0f));
+
+            shaderToDispatch.Dispatch(transition12KernelIdx, groupScaleFactor, groupScaleFactor, 1);
+            shaderToDispatch.Dispatch(transition21KernelIdx, groupScaleFactor, groupScaleFactor, 1);
+        }
 
         // EditorUtility.SetDirty(this);
 
@@ -60,10 +86,10 @@ public class MidpointDisplacementController : MonoBehaviour
     public float terrainScale = 1.0f;
 
     [Range(1, 16)]
-    public int numSubdivisions = 2;
+    public uint numSubdivisions = 2;
 
     private RenderTexture noiseRenderTexture;
-    private const int groupSize = 32;
+    private const int groupSize = 16;
 
     void Start()
     {
