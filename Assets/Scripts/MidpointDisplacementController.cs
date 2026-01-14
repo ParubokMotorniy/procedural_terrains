@@ -9,7 +9,7 @@ using System.IO;
 [RequireComponent(typeof(Renderer))]
 [RequireComponent(typeof(MeshFilter))]
 [ExecuteAlways]
-public class GenerationControllerr : MonoBehaviour
+public class MidpointDisplacementController : MonoBehaviour
 {
     [ContextMenu("Regenerate terrain")]
     void RegenerateTerrain()
@@ -33,15 +33,12 @@ public class GenerationControllerr : MonoBehaviour
         GetComponent<Renderer>().sharedMaterial.SetTexture("_HeightMap", noiseRenderTexture);
         GetComponent<Renderer>().sharedMaterial.SetFloat("_HeightScale", terrainScale);
 
+        //TODO: properly compute the texture dimension + set the uniforms + dispatch kernels in order
+
         int kernelIdx = shaderToDispatch.FindKernel("UberNoiseTerrainGenerator");
         shaderToDispatch.SetTexture(kernelIdx, Shader.PropertyToID("Result"), noiseRenderTexture);
         shaderToDispatch.SetInt("groupScaleFactor", groupScaleFactor);
         shaderToDispatch.SetFloat("noiseFrequency", noiseFrequency);
-
-        shaderToDispatch.SetFloat("sharpness", sharpness);
-        shaderToDispatch.SetFloat("slopeErosion", slopeErosion);
-        shaderToDispatch.SetFloat("perturbationStrength", perturbationStrength);
-        shaderToDispatch.SetInt("numOctaves", numOctaves);
 
         shaderToDispatch.Dispatch(kernelIdx, 1, 1, 1);
 
@@ -59,20 +56,11 @@ public class GenerationControllerr : MonoBehaviour
     [Range(0.01f, 2.0f)]
     public float noiseFrequency = 0.01f;
 
-    [Range(-10.0f, 10.0f)]
-    public float sharpness = 0.0f;
-
-    [Range(0.01f, 10.0f)]
-    public float slopeErosion = 0.01f;
-
-    [Range(1, 20)]
-    public int numOctaves = 5;
-
-    [Range(0.01f, 10.0f)]
-    public float perturbationStrength = 0.01f;
-
     [Range(0.001f, 32.0f)]
     public float terrainScale = 1.0f;
+
+    [Range(1, 16)]
+    public int numSubdivisions = 2;
 
     private RenderTexture noiseRenderTexture;
     private const int groupSize = 32;

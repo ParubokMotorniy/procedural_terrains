@@ -23,14 +23,14 @@ uniform int numOctaves;
 // uvec3	gl_GlobalInvocationID	global index of the current work item (gl_WorkGroupID * gl_WorkGroupSize + gl_LocalInvocationID)
 // uint	    gl_LocalInvocationIndex	1d index representation of gl_LocalInvocationID (gl_LocalInvocationID.z * gl_WorkGroupSize.x * gl_WorkGroupSize.y + gl_LocalInvocationID.y * gl_WorkGroupSize.x + gl_LocalInvocationID.x)
 
-RWTexture2D<float> Result;
 // TODO: when possible, I should use analytical derivatives of the resulting terrain
+//TODO: return my heightmap normalization technique, debugged
 
+RWTexture2D<float> Result;
 const float2x2 m = float2x2(0.8, -0.6, 0.6, 0.8);
 
 #define PI 3.141592654
 
-//TODO: return my heightmap normalization technique
 [numthreads(32, 32, 1)] void UberNoiseTerrainGenerator(uint3 id : SV_GroupThreadID)
 {
     for (int i = 0; i < groupScaleFactor; ++i)
@@ -38,16 +38,16 @@ const float2x2 m = float2x2(0.8, -0.6, 0.6, 0.8);
         for (int j = 0; j < groupScaleFactor; ++j)
         {
             int2 actualTextureIdx = id.xy * groupScaleFactor + int2(i, j);
+            float2 floatIdx = (float2)actualTextureIdx;
 
-            float2 slopeErosionDerivativeSum = float2(0.0, 0.0);
+            float2 slopeErosionDerivativeSum = clamp(sdnoise(floatIdx).x, -0.15, 0.15).xx;
             float2 perturbDerivativeSum = float2(0.0, 0.0);
             float noiseResult = 0.0;
+            float lfSum = 0;
 
             float octaveAmplitude = 1.0;
             float octaveFrequency = noiseFrequency;
             float2 samplePosition = float2(0.0, 0.0);
-
-            float2 floatIdx = (float2)actualTextureIdx;
 
             for (int o = 0; o < numOctaves; ++o)
             {
@@ -61,12 +61,15 @@ const float2x2 m = float2x2(0.8, -0.6, 0.6, 0.8);
                 float billowNoise = ridgedNoise * ridgedNoise;
                 featureNoise = lerp(featureNoise, billowNoise, max(0.0, sharpness));
                 featureNoise = lerp(featureNoise, ridgedNoise, abs(min(0.0, sharpness)));
+                // featureNoise *= exp(-dot(featureDerivative, featureDerivative)) * sharpness;
 
                 // TODO: rework to use amplitude damping technique. Generally, define the usage of amplitude(s).
-                // TODO: add feature amplification
+                // TODO: add feature amplification 
+
                 slopeErosionDerivativeSum += featureDerivative * slopeErosion;
                 perturbDerivativeSum += featureDerivative * perturbationStrength;
-                noiseResult += octaveAmplitude * featureNoise * (1.0 / (1.0 + dot(slopeErosionDerivativeSum, slopeErosionDerivativeSum)));
+                float derivativeNorm = dot(slopeErosionDerivativeSum, slopeErosionDerivativeSum);
+                noiseResult += octaveAmplitude  * featureNoise * (1.0 / (1.0 + derivativeNorm));
 
                 octaveAmplitude /= 2.0;
                 octaveFrequency *= 2.0;

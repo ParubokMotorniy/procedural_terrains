@@ -1,0 +1,98 @@
+#include "../../3rdparty/hlsl_noise/ashima/classicnoise2D.hlsl"
+
+RWTexture2D<float> Result;
+uniform uint threadCellTexelWidth;
+uniform uint texelWidthDivisionFactor; // 1,2,4,8...
+uniform uint texelWidthDivided;
+
+uniform uint threadSubdomainsX;
+uniform uint threadSubdomainsY;
+
+uniform float octaveAmplitude;
+uniform float noiseFrequency;
+
+// TODO: try to add real gaussian sampling
+// TODO: try intializing the grid with worley instead of plain perlin
+// TODO: consider wrapping the domain to avoid tons of if statements
+
+#pragma kernel IntializeTexture
+[numthreads(32, 32, 1)] void IntializeTexture(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+{
+    uint2 topLeftCellIdx = globalId.xy * threadCellTexelWidth;
+    Result[topLeftCellIdx.xy] = cnoise(topLeftCellIdx + localId.xy);
+
+    uint width;
+    uint height;
+    Result.GetDimensions(width, height);
+
+    // TODO: two border points remain uninitialized
+    //  the heightmaps are always square, but hey
+    if (globalId.x == (threadSubdomainsX - 1) || globalId.y == (threadSubdomainsY - 1))
+    {
+        uint2 bottomRightCellIdx = topLeftCellIdx + threadCellTexelWidth.xx;
+        Result[bottomRightCellIdx] = cnoise((bottomRightCellIdx + localId.xy) * noiseFrequency);
+    }
+}
+
+#pragma kernel Transition12
+    [numthreads(32, 32, 1)] void Transition12(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+{
+    // TODO: add optional displacement of existing points;
+
+    uint2 topLeftCellIdx = globalId.xy * threadCellTexelWidth;
+
+    for (uint x = 0; x < texelWidthDivisionFactor; ++x)
+    {
+        for (uint y = 0; y < texelWidthDivisionFactor; ++y)
+        {
+            uint2 subdivisionIdx = topLeftCellIdx.xy + uint2(texelWidthDivided + 2 * texelWidthDivided * x, texelWidthDivided + 2 * texelWidthDivided * y);
+
+            float averageNeighbors =
+                (Result[subdivisionIdx + uint2(texelWidthDivided, texelWidthDivided)] +
+                 Result[subdivisionIdx + uint2(texelWidthDivided, -texelWidthDivided)] +
+                 Result[subdivisionIdx + uint2(-texelWidthDivided, texelWidthDivided)] +
+                 Result[subdivisionIdx + uint2(-texelWidthDivided, -texelWidthDivided)]) /
+                4.0;
+
+            Result[subdivisionIdx] = averageNeighbors + octaveAmplitude * cnoise((subdivisionIdx + groupId.xy) * noiseFrequency);
+        }
+    }
+}
+
+#pragma kernel Transition21
+[numthreads(32, 32, 1)] void Transition21(uint3 localID : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+{
+    // TODO: add optional displacement of existing points;
+    
+    uint2 topLeftCellIdx = globalId.xy * threadCellTexelWidth;
+    uint width;
+    uint height;
+    Result.GetDimensions(width, height);
+
+    uint numYPasses = pow(2, texelWidthDivisionFactor) + (uint)(globalId.y == (threadSubdomainsY - 1));
+
+    uint numXPasses = texelWidthDivisionFactor;
+    uint xOnBoundary = (uint)(globalId.x == (threadSubdomainsX - 1));
+
+    for (uint y = 0; y < numYPasses; ++y)
+    {
+        uint xShiftAmount = (1 - y % 2) * texelWidthDivided;
+        uint numXIterations = numXPasses + xOnBoundary * (xShiftAmount == 0); // only considers boundary X if the row is not shifted
+        for (uint x = 0; x < numXIterations; ++x)
+        {
+            uint2 diamondIdx = topLeftCellIdx.xy + uint2(x * 2 * texelWidthDivided + xShiftAmount, y * texelWidthDivided);
+
+            int numberValid = 0;
+
+            float neighborLeft =   diamondIdx.x == 0 ? 0.0 : (numberValid++, Result[diamondIdx + uint2(-texelWidthDivided, 0)]);
+            float neighborRight =  diamondIdx.x == (width - 1) ? 0.0 : (numberValid++, Result[diamondIdx + uint2(+texelWidthDivided, 0)]);
+            float neighborTop =    diamondIdx.y == 0 ? 0.0 : (numberValid++, Result[diamondIdx + uint2(0, -texelWidthDivided)]);
+            float neighborBottom = diamondIdx.y == (height - 1) ? 0.0 : (numberValid++, Result[diamondIdx + uint2(0, +texelWidthDivided)]);
+
+            Result[diamondIdx] = octaveAmplitude * cnoise((diamondIdx + groupId.xy) * noiseFrequency) + (neighborLeft +
+                                 neighborRight +
+                                 neighborTop +
+                                 neighborBottom) / numberValid;
+        }
+    }
+}
