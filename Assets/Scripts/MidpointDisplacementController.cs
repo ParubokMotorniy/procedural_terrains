@@ -18,7 +18,6 @@ public class MidpointDisplacementController : MonoBehaviour
         if (noiseRenderTexture && noiseRenderTexture.IsCreated())
         { noiseRenderTexture.Release(); }
 
-        //TODO: add texture scaling (texels per division)
         int texelsPerThreadDomain = (int)math.pow(2, numSubdivisions);
         int textureSize = (groupSize * texelsPerThreadDomain * groupScaleFactor) + 1; //1 closes off the last row
 
@@ -51,20 +50,27 @@ public class MidpointDisplacementController : MonoBehaviour
         shaderToDispatch.SetTexture(transition12KernelIdx, "Result", noiseRenderTexture);
         shaderToDispatch.SetTexture(transition21KernelIdx, "Result", noiseRenderTexture);
 
+        shaderToDispatch.SetTexture(initializationKernelIdx, "NoiseSource", whiteNoiseTexture);
+        shaderToDispatch.SetTexture(transition12KernelIdx,   "NoiseSource", whiteNoiseTexture);
+        shaderToDispatch.SetTexture(transition21KernelIdx,   "NoiseSource", whiteNoiseTexture);
+
         System.Random rng = new System.Random();
         shaderToDispatch.SetVector("noiseDisplacement", new Vector4((float)rng.NextDouble(), (float)rng.NextDouble(), 0.0f, 0.0f));
 
         shaderToDispatch.Dispatch(initializationKernelIdx, groupScaleFactor, groupScaleFactor, 1);
         float octaveAmplitude = 1.0f;
-        for (int sub = 1; sub <= numSubdivisions; ++sub, octaveAmplitude *= 0.5f)
+        for (int sub = 1; sub <= numSubdivisions; ++sub)
         {
             shaderToDispatch.SetInt("texelWidthDivisionFactor", sub);
             shaderToDispatch.SetInt("texelWidthDivided", texelsPerThreadDomain / (int)math.pow(2, sub));
-            shaderToDispatch.SetFloat("octaveAmplitude", octaveAmplitude);
-
             shaderToDispatch.SetVector("noiseDisplacement", new Vector4((float)rng.NextDouble(), (float)rng.NextDouble(), 0.0f, 0.0f));
 
+            shaderToDispatch.SetFloat("octaveAmplitude", octaveAmplitude);
+            octaveAmplitude *= H;
             shaderToDispatch.Dispatch(transition12KernelIdx, groupScaleFactor, groupScaleFactor, 1);
+            
+            shaderToDispatch.SetFloat("octaveAmplitude", octaveAmplitude);
+            octaveAmplitude *= H;
             shaderToDispatch.Dispatch(transition21KernelIdx, groupScaleFactor, groupScaleFactor, 1);
         }
 
@@ -87,6 +93,12 @@ public class MidpointDisplacementController : MonoBehaviour
 
     [Range(1, 16)]
     public uint numSubdivisions = 2;
+
+    [Range(0.01f, 1.0f)]
+    public float H = 0.85f;
+
+    [SerializeField]
+    public Texture2D whiteNoiseTexture;
 
     private RenderTexture noiseRenderTexture;
     private const int groupSize = 16;
