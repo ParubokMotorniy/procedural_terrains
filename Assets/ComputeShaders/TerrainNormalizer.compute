@@ -1,63 +1,70 @@
 RWTexture2D<float> Result;
 
-uniform int texelsPerThread; //how many a single thread processes
+#define GROUP_SIZE 32
+
+uniform int texelsPerThread; // how many texels a single thread processes
 
 const float heightUnitSize = 0.01;
 
-groupshared int maxUnitsPositive;
-groupshared int maxUnitsNegative;
+groupshared float domainMin[GROUP_SIZE][GROUP_SIZE];
+groupshared float domainMax[GROUP_SIZE][GROUP_SIZE];
+
+groupshared float globalMin = 0;
+groupshared float globalMax = 0;
+groupshared float heightSpan = 0;
 
 #pragma kernel Normalizer
-[numthreads(32, 32, 1)] void Normalizer(uint3 localId : SV_GroupThreadID)
+[numthreads(GROUP_SIZE, GROUP_SIZE, 1)] void Normalizer(uint3 localId : SV_GroupThreadID)
 {
-    if (localId.x == 0 && localId.y == 0)
-    {
-        maxUnitsPositive = 0;
-        maxUnitsNegative = 0;
-    }
-
     int2 threadCorner = localId.xy * texelsPerThread;
 
-    GroupMemoryBarrierWithGroupSync();
+    float localMin = 0.0;
+    float localMax = 0.0;
 
-    float localMaxUnitsPositive = 0;
-    float localMaxUnitsNegative = 0;
+    // uint w, h;
+    // Result.GetDimensions(w, h);
 
     for (int x = 0; x < texelsPerThread; ++x)
     {
         for (int y = 0; y < texelsPerThread; ++y)
         {
-            float heightValue = Result[threadCorner + int2(x, y)];
-            int numberOfUnits = (int)ceil(clamp(abs(heightValue), 0.0, 7.0) / heightUnitSize); //clamp ro get rid of outliers
+            uint2 idx = (uint2)threadCorner + uint2(x, y);
+            float heightValue = Result[idx];
 
-            if (heightValue >= 0.0)
-            {
-                localMaxUnitsPositive = max(localMaxUnitsPositive, heightValue);
-            }
-            else
-            {
-                localMaxUnitsNegative = max(localMaxUnitsNegative, heightValue);
-            }
+            localMax = max(localMax, heightValue);
+            localMin = min(localMin, heightValue);
         }
     }
 
-    InterlockedMax(maxUnitsPositive, localMaxUnitsPositive);
-    InterlockedMax(maxUnitsNegative, localMaxUnitsNegative);
+    domainMin[localId.x][localId.y] = localMin;
+    domainMax[localId.x][localId.y] = localMax;
 
     GroupMemoryBarrierWithGroupSync();
 
-    float minHeight = maxUnitsNegative * heightUnitSize;
-    float maxHeight = maxUnitsPositive * heightUnitSize;
-    float heightSpan = max(minHeight + maxHeight, 1.0); // span of height values
+    if (localId.x == 0 && localId.y == 0)
+    {
+        globalMin = 0.0;
+        globalMax = 0.0;
+
+        for (int h = 0; h < GROUP_SIZE; ++h)
+        {
+            for (int q = 0; q < GROUP_SIZE; ++q)
+            {
+                globalMin = min(globalMin, domainMin[h][q]);
+                globalMax = max(globalMax, domainMax[h][q]);
+            }
+        }
+        heightSpan = globalMax - globalMin;
+    }
+
+    GroupMemoryBarrierWithGroupSync();
 
     for (int x = 0; x < texelsPerThread; ++x)
     {
         for (int y = 0; y < texelsPerThread; ++y)
         {
-            uint2 targetIdx = threadCorner + int2(x, y);
-
-            // Result[targetIdx] = (Result[targetIdx] + minHeight) / heightSpan;
-            Result[targetIdx] = Result[targetIdx] >= 0 ? localMaxUnitsPositive : localMaxUnitsNegative ;
+            uint2 idx = (uint2)threadCorner + uint2(x, y);
+            Result[idx] = (Result[idx] - globalMin) / heightSpan;
         }
     }
 }
