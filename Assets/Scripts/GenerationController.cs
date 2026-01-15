@@ -17,7 +17,8 @@ public class GenerationControllerr : MonoBehaviour
         if (noiseRenderTexture && noiseRenderTexture.IsCreated())
         { noiseRenderTexture.Release(); }
 
-        noiseRenderTexture = new RenderTexture(groupSize * groupScaleFactor, groupSize * groupScaleFactor, 0)
+        int textureSize = groupSize * groupScaleFactor;
+        noiseRenderTexture = new RenderTexture(textureSize, textureSize, 0)
         {
             graphicsFormat = UnityEngine.Experimental.Rendering.GraphicsFormat.R32_SFloat,
             useMipMap = false,
@@ -46,11 +47,23 @@ public class GenerationControllerr : MonoBehaviour
 
         // EditorUtility.SetDirty(this);
 
+        Assert.IsTrue(textureSize >= 8); //normalization groups are at least 8 threads wide 
+
+        int largestGroupSize = (int)math.pow(2, math.ceil(math.log2(math.clamp(textureSize, 8, 32))));
+
+        int normalizationKernel = normalizationShader.FindKernel("Normalizer" + largestGroupSize);
+        normalizationShader.SetTexture(normalizationKernel, "Result", noiseRenderTexture);
+        normalizationShader.SetInt("texelsPerThread", (int)math.ceil((float)textureSize / largestGroupSize));
+        normalizationShader.Dispatch(normalizationKernel, 1, 1, 1);
+
         Debug.Log("Terrain has been regenerated!");
     }
 
     [SerializeField]
     private ComputeShader shaderToDispatch;
+
+    [SerializeField]
+    private ComputeShader normalizationShader;
 
     [Range(1, 8)]
     public int groupScaleFactor = 1;

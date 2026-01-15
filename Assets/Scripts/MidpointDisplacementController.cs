@@ -7,39 +7,6 @@ using UnityEngine.Rendering;
 using System.IO;
 using System;
 
-using UnityEngine.Experimental.Rendering;
-
-public static class RenderTextureDumper
-{
-    public static void SaveRFloatToExr(RenderTexture rt, string filePath)
-    {
-        if (rt == null) { Debug.LogError("RT is null"); return; }
-        if (!rt.IsCreated()) { Debug.LogError("RT not created"); return; }
-
-        // Request a float readback (works for R32_SFloat / RFloat RTs)
-        AsyncGPUReadback.Request(rt, 0, TextureFormat.RFloat, req =>
-        {
-            if (req.hasError)
-            {
-                Debug.LogError("AsyncGPUReadback error.");
-                return;
-            }
-
-            // Build a CPU texture that stores a single float channel.
-            var tex = new Texture2D(rt.width, rt.height, TextureFormat.RFloat, false, true);
-            tex.SetPixelData(req.GetData<float>(), 0);
-            tex.Apply(false, false);
-
-            // Encode to EXR in float mode (preserves real values)
-            byte[] bytes = tex.EncodeToEXR(Texture2D.EXRFlags.OutputAsFloat);
-            File.WriteAllBytes(filePath, bytes);
-
-            UnityEngine.Object.DestroyImmediate(tex);
-            Debug.Log($"Saved EXR: {filePath}");
-        });
-    }
-}
-
 
 [RequireComponent(typeof(Renderer))]
 [RequireComponent(typeof(MeshFilter))]
@@ -76,7 +43,6 @@ public class MidpointDisplacementController : MonoBehaviour
         int extraNoiseKernel = shaderToDispatch.FindKernel("AddExtraNoise");
 
         shaderToDispatch.SetInt("threadDomainTexelWidth", texelsPerThreadDomain);
-        shaderToDispatch.SetFloat("noiseFrequency", noiseFrequency);
         shaderToDispatch.SetInt("threadSubdomainsX", groupSize * groupScaleFactor);
         shaderToDispatch.SetInt("threadSubdomainsY", groupSize * groupScaleFactor);
 
@@ -124,12 +90,14 @@ public class MidpointDisplacementController : MonoBehaviour
             }
         }
 
-        int normalizationKernel = normalizationShader.FindKernel("Normalizer");
-        normalizationShader.SetTexture(normalizationKernel, "Result", noiseRenderTexture);
-        normalizationShader.SetInt("texelsPerThread", textureSize / 32);
-        normalizationShader.Dispatch(normalizationKernel, 1, 1, 1);
+        Assert.IsTrue(textureSize >= 8); //normalization groups are at least 8 threads wide 
 
-        RenderTextureDumper.SaveRFloatToExr(noiseRenderTexture, "./debug_dump.exr");
+        int largestGroupSize = (int)math.pow(2, math.ceil(math.log2(math.clamp(textureSize, 8, 32))));
+
+        int normalizationKernel = normalizationShader.FindKernel("Normalizer" + largestGroupSize);
+        normalizationShader.SetTexture(normalizationKernel, "Result", noiseRenderTexture);
+        normalizationShader.SetInt("texelsPerThread", (int)math.ceil((float)textureSize / largestGroupSize));
+        normalizationShader.Dispatch(normalizationKernel, 1, 1, 1);
 
         // EditorUtility.SetDirty(this);
 
@@ -144,9 +112,6 @@ public class MidpointDisplacementController : MonoBehaviour
 
     [Range(1, 8)]
     public int groupScaleFactor = 1;
-
-    [Range(0.01f, 2.0f)]
-    public float noiseFrequency = 0.01f;
 
     [Range(0.001f, 32.0f)]
     public float terrainScale = 1.0f;

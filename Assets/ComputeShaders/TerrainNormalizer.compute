@@ -1,70 +1,115 @@
 RWTexture2D<float> Result;
 
-#define GROUP_SIZE 32
-
 uniform int texelsPerThread; // how many texels a single thread processes
 
 const float heightUnitSize = 0.01;
-
-groupshared float domainMin[GROUP_SIZE][GROUP_SIZE];
-groupshared float domainMax[GROUP_SIZE][GROUP_SIZE];
 
 groupshared float globalMin = 0;
 groupshared float globalMax = 0;
 groupshared float heightSpan = 0;
 
-#pragma kernel Normalizer
-[numthreads(GROUP_SIZE, GROUP_SIZE, 1)] void Normalizer(uint3 localId : SV_GroupThreadID)
+#define NORMALIZATION_KERNEL_BODY(GROUP_SIZE) \
+int2 threadCorner = localId.xy * texelsPerThread;\
+\
+float localMin = 0.0;\
+float localMax = 0.0;\
+\
+uint2 resultDimensions;\
+Result.GetDimensions(resultDimensions.x, resultDimensions.y);\
+\
+for (int x = 0; x < texelsPerThread; ++x)\
+{\
+    if(x + threadCorner.x >= resultDimensions.x)\
+    {\
+        break;\
+    }\
+    for (int y = 0; y < texelsPerThread; ++y)\
+    {\
+        uint2 idx = (uint2)threadCorner + uint2(x, y);\
+\
+        if(idx.y >= resultDimensions.y)\
+        {\
+            break;\
+        }\
+\
+        float heightValue = Result[idx];\
+\
+        localMax = max(localMax, heightValue);\
+        localMin = min(localMin, heightValue);\
+    }\
+}\
+\
+domainMin[localId.x][localId.y] = localMin;\
+domainMax[localId.x][localId.y] = localMax;\
+\
+GroupMemoryBarrierWithGroupSync();\
+\
+if (localId.x == 0 && localId.y == 0)\
+{\
+    globalMin = 0.0;\
+    globalMax = 0.0;\
+\
+    for (int h = 0; h < GROUP_SIZE; ++h)\
+    {\
+        for (int q = 0; q < GROUP_SIZE; ++q)\
+        {\
+            globalMin = min(globalMin, domainMin[h][q]);\
+            globalMax = max(globalMax, domainMax[h][q]);\
+        }\
+    }\
+    heightSpan = globalMax - globalMin;\
+}\
+\
+GroupMemoryBarrierWithGroupSync();\
+\
+for (int x = 0; x < texelsPerThread; ++x)\
+{\
+    for (int y = 0; y < texelsPerThread; ++y)\
+    {\
+        uint2 idx = (uint2)threadCorner + uint2(x, y);\
+        Result[idx] = (Result[idx] - globalMin) / heightSpan;\
+    }\
+}\
+
+groupshared float domainMin32[32][32];
+groupshared float domainMax32[32][32];
+
+#pragma kernel Normalizer32
+[numthreads(32,32,1)]
+void Normalizer32(uint3 localId : SV_GroupThreadID)
 {
-    int2 threadCorner = localId.xy * texelsPerThread;
-
-    float localMin = 0.0;
-    float localMax = 0.0;
-
-    // uint w, h;
-    // Result.GetDimensions(w, h);
-
-    for (int x = 0; x < texelsPerThread; ++x)
-    {
-        for (int y = 0; y < texelsPerThread; ++y)
-        {
-            uint2 idx = (uint2)threadCorner + uint2(x, y);
-            float heightValue = Result[idx];
-
-            localMax = max(localMax, heightValue);
-            localMin = min(localMin, heightValue);
-        }
-    }
-
-    domainMin[localId.x][localId.y] = localMin;
-    domainMax[localId.x][localId.y] = localMax;
-
-    GroupMemoryBarrierWithGroupSync();
-
-    if (localId.x == 0 && localId.y == 0)
-    {
-        globalMin = 0.0;
-        globalMax = 0.0;
-
-        for (int h = 0; h < GROUP_SIZE; ++h)
-        {
-            for (int q = 0; q < GROUP_SIZE; ++q)
-            {
-                globalMin = min(globalMin, domainMin[h][q]);
-                globalMax = max(globalMax, domainMax[h][q]);
-            }
-        }
-        heightSpan = globalMax - globalMin;
-    }
-
-    GroupMemoryBarrierWithGroupSync();
-
-    for (int x = 0; x < texelsPerThread; ++x)
-    {
-        for (int y = 0; y < texelsPerThread; ++y)
-        {
-            uint2 idx = (uint2)threadCorner + uint2(x, y);
-            Result[idx] = (Result[idx] - globalMin) / heightSpan;
-        }
-    }
+    #define domainMin domainMin32
+    #define domainMax domainMax32
+    NORMALIZATION_KERNEL_BODY(32)
+    #undef domainMin
+    #undef domainMax
 }
+
+groupshared float domainMin16[16][16];
+groupshared float domainMax16[16][16];
+
+#pragma kernel Normalizer16
+[numthreads(16,16,1)]
+void Normalizer16(uint3 localId : SV_GroupThreadID)
+{
+    #define domainMin domainMin16
+    #define domainMax domainMax16
+    NORMALIZATION_KERNEL_BODY(16)
+    #undef domainMin
+    #undef domainMax
+}
+
+groupshared float domainMin8[8][8];
+groupshared float domainMax8[8][8];
+
+#pragma kernel Normalizer8
+[numthreads(8,8,1)]
+void Normalizer8(uint3 localId : SV_GroupThreadID)
+{
+    #define domainMin domainMin8
+    #define domainMax domainMax8
+    NORMALIZATION_KERNEL_BODY(8)
+    #undef domainMin
+    #undef domainMax
+}
+
