@@ -19,7 +19,7 @@ public class MidpointDisplacementController : MonoBehaviour
         { noiseRenderTexture.Release(); }
 
         int texelsPerThreadDomain = (int)math.pow(2, numSubdivisions);
-        int textureSize = (groupSize * texelsPerThreadDomain * groupScaleFactor) + 1; //1 closes off the last row
+        int textureSize = groupSize * texelsPerThreadDomain * groupScaleFactor;
 
         noiseRenderTexture = new RenderTexture(textureSize, textureSize, 0)
         {
@@ -35,7 +35,6 @@ public class MidpointDisplacementController : MonoBehaviour
         Assert.IsTrue(noiseRenderTexture.IsCreated());
 
         GetComponent<Renderer>().sharedMaterial.SetTexture("_HeightMap", noiseRenderTexture);
-        GetComponent<Renderer>().sharedMaterial.SetFloat("_HeightScale", terrainScale);
 
         int initializationKernelIdx = shaderToDispatch.FindKernel("IntializeTexture");
         int transition12KernelIdx = shaderToDispatch.FindKernel("Transition12");
@@ -91,6 +90,11 @@ public class MidpointDisplacementController : MonoBehaviour
             }
         }
 
+        int normalizationKernel = normalizationShader.FindKernel("Normalizer");
+        normalizationShader.SetTexture(normalizationKernel, "Result", noiseRenderTexture);
+        normalizationShader.SetInt("texelsPerThread", textureSize / 32);
+        normalizationShader.Dispatch(normalizationKernel, 1, 1, 1);
+
         // EditorUtility.SetDirty(this);
 
         Debug.Log("Terrain has been regenerated!");
@@ -98,6 +102,9 @@ public class MidpointDisplacementController : MonoBehaviour
 
     [SerializeField]
     private ComputeShader shaderToDispatch;
+
+    [SerializeField]
+    private ComputeShader normalizationShader;
 
     [Range(1, 8)]
     public int groupScaleFactor = 1;
@@ -126,6 +133,11 @@ public class MidpointDisplacementController : MonoBehaviour
     void Start()
     {
         RegenerateTerrain();
+    }
+
+    void OnValidate()
+    {
+        GetComponent<Renderer>().sharedMaterial.SetFloat("_HeightScale", terrainScale);
     }
 
     void OnDrawGizmos()

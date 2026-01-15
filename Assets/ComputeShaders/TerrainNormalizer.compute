@@ -1,0 +1,63 @@
+RWTexture2D<float> Result;
+
+uniform int texelsPerThread; //how many a single thread processes
+
+const float heightUnitSize = 0.01;
+
+groupshared int maxUnitsPositive;
+groupshared int maxUnitsNegative;
+
+#pragma kernel Normalizer
+[numthreads(32, 32, 1)] void Normalizer(uint3 localId : SV_GroupThreadID)
+{
+    if (localId.x == 0 && localId.y == 0)
+    {
+        maxUnitsPositive = 0;
+        maxUnitsNegative = 0;
+    }
+
+    int2 threadCorner = localId.xy * texelsPerThread;
+
+    GroupMemoryBarrierWithGroupSync();
+
+    float localMaxUnitsPositive = 0;
+    float localMaxUnitsNegative = 0;
+
+    for (int x = 0; x < texelsPerThread; ++x)
+    {
+        for (int y = 0; y < texelsPerThread; ++y)
+        {
+            float heightValue = Result[threadCorner + int2(x, y)];
+            int numberOfUnits = (int)ceil(clamp(abs(heightValue), 0.0, 7.0) / heightUnitSize); //clamp ro get rid of outliers
+
+            if (heightValue >= 0.0)
+            {
+                localMaxUnitsPositive = max(localMaxUnitsPositive, heightValue);
+            }
+            else
+            {
+                localMaxUnitsNegative = max(localMaxUnitsNegative, heightValue);
+            }
+        }
+    }
+
+    InterlockedMax(maxUnitsPositive, localMaxUnitsPositive);
+    InterlockedMax(maxUnitsNegative, localMaxUnitsNegative);
+
+    GroupMemoryBarrierWithGroupSync();
+
+    float minHeight = maxUnitsNegative * heightUnitSize;
+    float maxHeight = maxUnitsPositive * heightUnitSize;
+    float heightSpan = max(minHeight + maxHeight, 1.0); // span of height values
+
+    for (int x = 0; x < texelsPerThread; ++x)
+    {
+        for (int y = 0; y < texelsPerThread; ++y)
+        {
+            uint2 targetIdx = threadCorner + int2(x, y);
+
+            // Result[targetIdx] = (Result[targetIdx] + minHeight) / heightSpan;
+            Result[targetIdx] = Result[targetIdx] >= 0 ? localMaxUnitsPositive : localMaxUnitsNegative ;
+        }
+    }
+}

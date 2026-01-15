@@ -31,7 +31,6 @@ public class GenerationControllerr : MonoBehaviour
         Assert.IsTrue(noiseRenderTexture.IsCreated());
 
         GetComponent<Renderer>().sharedMaterial.SetTexture("_HeightMap", noiseRenderTexture);
-        GetComponent<Renderer>().sharedMaterial.SetFloat("_HeightScale", terrainScale);
 
         int kernelIdx = shaderToDispatch.FindKernel("UberNoiseTerrainGenerator");
         shaderToDispatch.SetTexture(kernelIdx, Shader.PropertyToID("Result"), noiseRenderTexture);
@@ -80,6 +79,11 @@ public class GenerationControllerr : MonoBehaviour
     void Start()
     {
         RegenerateTerrain();
+    }
+
+    void OnValidate()
+    {
+        GetComponent<Renderer>().sharedMaterial.SetFloat("_HeightScale", terrainScale);
     }
 
     void OnDrawGizmos()

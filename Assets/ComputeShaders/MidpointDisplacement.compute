@@ -1,7 +1,7 @@
 #include "../../3rdparty/hlsl_noise/ashima/classicnoise2D.hlsl"
 
 RWTexture2D<float> Result;
-Texture2D<float> NoiseSource;
+Texture2D<float> NoiseSource; //TODO: I may want to repalce this one with on-the-fly sampling of gaussian
 
 uniform int threadDomainTexelWidth;
 uniform int texelWidthDivided;
@@ -14,14 +14,12 @@ uniform float octaveAmplitude;
 uniform float noiseFrequency;
 uniform float4 noiseDisplacement;
 
-// TODO: ensure neighboring noise values are independent
 // TODO: try intializing the grid with worley instead of plain perlin
-// TODO: consider wrapping the domain to avoid tons of if statements
+// TODO: I may want to move the extra noise addition to the division loops
 
 float sampleNoise(uint2 noiseTextureIdx)
 {
     return NoiseSource[noiseTextureIdx] * 2.0 - 1.0;
-    // return NoiseSource[idx];
 }
 
 uint2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimensions, uint2 noiseDimensions)
@@ -51,7 +49,7 @@ uint2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimens
 }
 
 #pragma kernel IntializeTexture
-    [numthreads(4, 4, 1)] void IntializeTexture(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+[numthreads(4, 4, 1)] void IntializeTexture(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     uint2 targetDimensions;
     Result.GetDimensions(targetDimensions.x, targetDimensions.y);
@@ -100,7 +98,7 @@ uint2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimens
 }
 
 #pragma kernel Transition21
-    [numthreads(4, 4, 1)] void Transition21(uint3 localID : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+[numthreads(4, 4, 1)] void Transition21(uint3 localID : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     uint width;
     uint height;
@@ -111,17 +109,13 @@ uint2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimens
 
     uint2 topLeftCellIdx = globalId.xy * threadDomainTexelWidth;
 
-    int xOnBoundary = (int)(globalId.x == (threadSubdomainsX - 1));
-    int yOnBoundary = (int)(globalId.y == (threadSubdomainsY - 1));
-
-    int numYPasses = pow(2, texelWidthDivisionFactor) + yOnBoundary;
+    int numYPasses = pow(2, texelWidthDivisionFactor);
     int numXPasses = texelWidthDivisionFactor;
 
     for (uint y = 0; y < numYPasses; ++y)
     {
         int xShiftAmount = (1 - (y % 2)) * texelWidthDivided;
-        int numXIterations = numXPasses + xOnBoundary * (xShiftAmount == 0); // only considers boundary X if the row is not shifted
-        for (uint x = 0; x < numXIterations; ++x)
+        for (uint x = 0; x < numXPasses; ++x)
         {
             int2 diamondIdx = topLeftCellIdx.xy + uint2(x * 2 * texelWidthDivided + xShiftAmount, y * texelWidthDivided);
 
