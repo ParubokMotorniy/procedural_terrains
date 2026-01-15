@@ -121,7 +121,7 @@ public class MidpointDisplacementController : MonoBehaviour
     public bool addExtraNoise;
 
     private RenderTexture noiseRenderTexture;
-    private const int groupSize = 16;
+    private const int groupSize = 4;
 
     void Start()
     {

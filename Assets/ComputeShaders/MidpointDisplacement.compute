@@ -30,7 +30,7 @@ uint2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimens
 }
 
 #pragma kernel AddExtraNoise
-[numthreads(16, 16, 1)] void AddExtraNoise(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+[numthreads(4, 4, 1)] void AddExtraNoise(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     uint2 noiseDimensions;
     NoiseSource.GetDimensions(noiseDimensions.x, noiseDimensions.y);
@@ -51,7 +51,7 @@ uint2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimens
 }
 
 #pragma kernel IntializeTexture
-    [numthreads(16, 16, 1)] void IntializeTexture(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+    [numthreads(4, 4, 1)] void IntializeTexture(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     uint2 targetDimensions;
     Result.GetDimensions(targetDimensions.x, targetDimensions.y);
@@ -71,7 +71,7 @@ uint2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimens
 }
 
 #pragma kernel Transition12
-[numthreads(16, 16, 1)] void Transition12(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+[numthreads(4, 4, 1)] void Transition12(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     uint2 noiseDimensions;
     NoiseSource.GetDimensions(noiseDimensions.x, noiseDimensions.y);
@@ -100,7 +100,7 @@ uint2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimens
 }
 
 #pragma kernel Transition21
-    [numthreads(16, 16, 1)] void Transition21(uint3 localID : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+    [numthreads(4, 4, 1)] void Transition21(uint3 localID : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     uint width;
     uint height;
