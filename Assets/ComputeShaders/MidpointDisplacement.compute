@@ -85,7 +85,7 @@ uint2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimens
     {
         for (int y = 0; y < texelWidthDivisionFactor; ++y)
         {
-            uint2 subdivisionIdx = topLeftCellIdx.xy + uint2(texelWidthDivided + 2 * texelWidthDivided * x, texelWidthDivided + 2 * texelWidthDivided * y);
+            int2 subdivisionIdx = topLeftCellIdx.xy + uint2(texelWidthDivided + 2 * texelWidthDivided * x, texelWidthDivided + 2 * texelWidthDivided * y);
 
             float averageNeighbors =
                 (Result[subdivisionIdx + int2(texelWidthDivided, texelWidthDivided)] +
@@ -110,10 +110,12 @@ uint2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimens
     NoiseSource.GetDimensions(noiseDimensions.x, noiseDimensions.y);
 
     uint2 topLeftCellIdx = globalId.xy * threadDomainTexelWidth;
-    int numYPasses = pow(2, texelWidthDivisionFactor) + (int)(globalId.y == (threadSubdomainsY - 1));
 
-    int numXPasses = texelWidthDivisionFactor;
     int xOnBoundary = (int)(globalId.x == (threadSubdomainsX - 1));
+    int yOnBoundary = (int)(globalId.y == (threadSubdomainsY - 1));
+
+    int numYPasses = pow(2, texelWidthDivisionFactor) + yOnBoundary;
+    int numXPasses = texelWidthDivisionFactor;
 
     for (uint y = 0; y < numYPasses; ++y)
     {
@@ -121,7 +123,7 @@ uint2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimens
         int numXIterations = numXPasses + xOnBoundary * (xShiftAmount == 0); // only considers boundary X if the row is not shifted
         for (uint x = 0; x < numXIterations; ++x)
         {
-            uint2 diamondIdx = topLeftCellIdx.xy + uint2(x * 2 * texelWidthDivided + xShiftAmount, y * texelWidthDivided);
+            int2 diamondIdx = topLeftCellIdx.xy + uint2(x * 2 * texelWidthDivided + xShiftAmount, y * texelWidthDivided);
 
             float neighborLeft = 0.0;
             float neighborRight = 0.0;

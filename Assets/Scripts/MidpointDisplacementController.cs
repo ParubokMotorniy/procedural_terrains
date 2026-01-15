@@ -63,10 +63,10 @@ public class MidpointDisplacementController : MonoBehaviour
         shaderToDispatch.Dispatch(initializationKernelIdx, groupScaleFactor, groupScaleFactor, 1);
 
         float octaveAmplitude = 1.0f;
-        for (int sub = 1; sub <= numSubdivisions; ++sub)
+        for (int sub = 0; sub < numSubdivisions; ++sub)
         {
-            shaderToDispatch.SetInt("texelWidthDivisionFactor", sub);
-            shaderToDispatch.SetInt("texelWidthDivided", texelsPerThreadDomain / (int)math.pow(2, sub));
+            shaderToDispatch.SetInt("texelWidthDivisionFactor", (int)math.pow(2, sub));
+            shaderToDispatch.SetInt("texelWidthDivided", texelsPerThreadDomain / (int)math.pow(2, sub + 1));
 
             octaveAmplitude *= H;
             shaderToDispatch.SetFloat("octaveAmplitude", octaveAmplitude);
