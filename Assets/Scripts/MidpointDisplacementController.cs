@@ -40,8 +40,9 @@ public class MidpointDisplacementController : MonoBehaviour
         int initializationKernelIdx = shaderToDispatch.FindKernel("IntializeTexture");
         int transition12KernelIdx = shaderToDispatch.FindKernel("Transition12");
         int transition21KernelIdx = shaderToDispatch.FindKernel("Transition21");
+        int extraNoiseKernel = shaderToDispatch.FindKernel("AddExtraNoise");
 
-        shaderToDispatch.SetInt("threadCellTexelWidth", texelsPerThreadDomain);
+        shaderToDispatch.SetInt("threadDomainTexelWidth", texelsPerThreadDomain);
         shaderToDispatch.SetFloat("noiseFrequency", noiseFrequency);
         shaderToDispatch.SetInt("threadSubdomainsX", groupSize * groupScaleFactor);
         shaderToDispatch.SetInt("threadSubdomainsY", groupSize * groupScaleFactor);
@@ -49,29 +50,45 @@ public class MidpointDisplacementController : MonoBehaviour
         shaderToDispatch.SetTexture(initializationKernelIdx, "Result", noiseRenderTexture);
         shaderToDispatch.SetTexture(transition12KernelIdx, "Result", noiseRenderTexture);
         shaderToDispatch.SetTexture(transition21KernelIdx, "Result", noiseRenderTexture);
+        shaderToDispatch.SetTexture(extraNoiseKernel, "Result", noiseRenderTexture);
 
         shaderToDispatch.SetTexture(initializationKernelIdx, "NoiseSource", whiteNoiseTexture);
-        shaderToDispatch.SetTexture(transition12KernelIdx,   "NoiseSource", whiteNoiseTexture);
-        shaderToDispatch.SetTexture(transition21KernelIdx,   "NoiseSource", whiteNoiseTexture);
+        shaderToDispatch.SetTexture(transition12KernelIdx, "NoiseSource", whiteNoiseTexture);
+        shaderToDispatch.SetTexture(transition21KernelIdx, "NoiseSource", whiteNoiseTexture);
+        shaderToDispatch.SetTexture(extraNoiseKernel, "NoiseSource", whiteNoiseTexture);
 
         System.Random rng = new System.Random();
         shaderToDispatch.SetVector("noiseDisplacement", new Vector4((float)rng.NextDouble(), (float)rng.NextDouble(), 0.0f, 0.0f));
 
         shaderToDispatch.Dispatch(initializationKernelIdx, groupScaleFactor, groupScaleFactor, 1);
+
         float octaveAmplitude = 1.0f;
         for (int sub = 1; sub <= numSubdivisions; ++sub)
         {
             shaderToDispatch.SetInt("texelWidthDivisionFactor", sub);
             shaderToDispatch.SetInt("texelWidthDivided", texelsPerThreadDomain / (int)math.pow(2, sub));
-            shaderToDispatch.SetVector("noiseDisplacement", new Vector4((float)rng.NextDouble(), (float)rng.NextDouble(), 0.0f, 0.0f));
 
-            shaderToDispatch.SetFloat("octaveAmplitude", octaveAmplitude);
             octaveAmplitude *= H;
+            shaderToDispatch.SetFloat("octaveAmplitude", octaveAmplitude);
+            shaderToDispatch.SetVector("noiseDisplacement", new Vector4((float)rng.NextDouble(), (float)rng.NextDouble(), 0.0f, 0.0f));
             shaderToDispatch.Dispatch(transition12KernelIdx, groupScaleFactor, groupScaleFactor, 1);
-            
-            shaderToDispatch.SetFloat("octaveAmplitude", octaveAmplitude);
+
+            if (addExtraNoise)
+            {
+                shaderToDispatch.SetVector("noiseDisplacement", new Vector4((float)rng.NextDouble(), (float)rng.NextDouble(), 0.0f, 0.0f));
+                shaderToDispatch.Dispatch(extraNoiseKernel, groupScaleFactor, groupScaleFactor, 1);
+            }
+
             octaveAmplitude *= H;
+            shaderToDispatch.SetFloat("octaveAmplitude", octaveAmplitude);
+            shaderToDispatch.SetVector("noiseDisplacement", new Vector4((float)rng.NextDouble(), (float)rng.NextDouble(), 0.0f, 0.0f));
             shaderToDispatch.Dispatch(transition21KernelIdx, groupScaleFactor, groupScaleFactor, 1);
+
+            if (addExtraNoise)
+            {
+                shaderToDispatch.SetVector("noiseDisplacement", new Vector4((float)rng.NextDouble(), (float)rng.NextDouble(), 0.0f, 0.0f));
+                shaderToDispatch.Dispatch(extraNoiseKernel, groupScaleFactor, groupScaleFactor, 1);
+            }
         }
 
         // EditorUtility.SetDirty(this);
@@ -99,6 +116,9 @@ public class MidpointDisplacementController : MonoBehaviour
 
     [SerializeField]
     public Texture2D whiteNoiseTexture;
+
+    [SerializeField]
+    public bool addExtraNoise;
 
     private RenderTexture noiseRenderTexture;
     private const int groupSize = 16;
