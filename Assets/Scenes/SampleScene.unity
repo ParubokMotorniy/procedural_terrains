@@ -719,7 +719,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _HeightMap:
-        m_Texture: {fileID: 1341852161}
+        m_Texture: {fileID: 2141817776}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _Heightmap:
@@ -860,7 +860,6 @@ GameObject:
   m_Component:
   - component: {fileID: 852555919}
   - component: {fileID: 852555921}
-  - component: {fileID: 852555920}
   - component: {fileID: 852555917}
   - component: {fileID: 852555916}
   m_Layer: 0
@@ -942,27 +941,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: -180, z: 0}
---- !u!114 &852555920
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 852555915}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 48906e66da0e00341b35225c6b4933d7, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::GenerationControllerr
-  shaderToDispatch: {fileID: 7200000, guid: 960e83aac4f822fd1b16e9e8930df0bb, type: 3}
-  normalizationShader: {fileID: 7200000, guid: ed4a6099d31776101823a3be173a3eb7, type: 3}
-  groupScaleFactor: 1
-  noiseFrequency: 0.01
-  sharpness: 0
-  slopeErosion: 0.01
-  numOctaves: 5
-  perturbationStrength: 0.01
-  terrainScale: 1
 --- !u!114 &852555921
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -977,12 +955,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MidpointDisplacementController
   shaderToDispatch: {fileID: 7200000, guid: 2da1ab904200f97c69eeb6b358aa73d3, type: 3}
   normalizationShader: {fileID: 7200000, guid: ed4a6099d31776101823a3be173a3eb7, type: 3}
-  groupScaleFactor: 1
+  groupScaleFactor: 2
   terrainScale: 1
   numSubdivisions: 4
-  H: 0.348
+  H: 0.366
   whiteNoiseTexture: {fileID: 2800000, guid: afee5c6b54066a28780ac35dab832c3e, type: 3}
-  addExtraNoise: 1
+  addExtraNoise: 0
+  worleyFrequency: 3.22
 --- !u!1 &1078476957
 GameObject:
   m_ObjectHideFlags: 0
@@ -1047,7 +1026,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!84 &1341852161
+--- !u!84 &2141817776
 RenderTexture:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -1059,8 +1038,8 @@ RenderTexture:
     Hash: 00000000000000000000000000000000
   m_IsAlphaChannelOptional: 0
   serializedVersion: 6
-  m_Width: 64
-  m_Height: 64
+  m_Width: 128
+  m_Height: 128
   m_AntiAliasing: 1
   m_MipCount: -1
   m_DepthStencilFormat: 0

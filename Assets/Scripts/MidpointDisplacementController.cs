@@ -45,6 +45,7 @@ public class MidpointDisplacementController : MonoBehaviour
         shaderToDispatch.SetInt("threadDomainTexelWidth", texelsPerThreadDomain);
         shaderToDispatch.SetInt("threadSubdomainsX", groupSize * groupScaleFactor);
         shaderToDispatch.SetInt("threadSubdomainsY", groupSize * groupScaleFactor);
+        shaderToDispatch.SetFloat("worleyFrequency", worleyFrequency);
 
         shaderToDispatch.SetTexture(initializationKernelIdx, "Result", noiseRenderTexture);
         shaderToDispatch.SetTexture(transition12KernelIdx, "Result", noiseRenderTexture);
@@ -59,9 +60,10 @@ public class MidpointDisplacementController : MonoBehaviour
         System.Random rng = new System.Random();
         shaderToDispatch.SetVector("noiseDisplacement", new Vector4((float)rng.NextDouble(), (float)rng.NextDouble(), 0.0f, 0.0f));
 
+        float octaveAmplitude = 1.0f;
+        shaderToDispatch.SetFloat("octaveAmplitude", octaveAmplitude);
         shaderToDispatch.Dispatch(initializationKernelIdx, groupScaleFactor, groupScaleFactor, 1);
 
-        float octaveAmplitude = 1.0f;
         for (int sub = 0; sub < numSubdivisions; ++sub)
         {
             shaderToDispatch.SetInt("texelWidthDivisionFactor", (int)math.pow(2, sub));
@@ -100,7 +102,6 @@ public class MidpointDisplacementController : MonoBehaviour
         normalizationShader.Dispatch(normalizationKernel, 1, 1, 1);
 
         // EditorUtility.SetDirty(this);
-
         Debug.Log("Terrain has been regenerated!");
     }
 
@@ -127,6 +128,9 @@ public class MidpointDisplacementController : MonoBehaviour
 
     [SerializeField]
     public bool addExtraNoise;
+
+    [Range(0.01f, 10.0f)]
+    public float worleyFrequency;
 
     private RenderTexture noiseRenderTexture;
     private const int groupSize = 4;

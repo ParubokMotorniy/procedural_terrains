@@ -1,7 +1,8 @@
 #include "../../3rdparty/hlsl_noise/ashima/classicnoise2D.hlsl"
+#include "../../3rdparty/hlsl_noise/ashima/cellular2D.hlsl"
 
 RWTexture2D<float> Result;
-Texture2D<float> NoiseSource; //TODO: I may want to repalce this one with on-the-fly sampling of gaussian
+Texture2D<float> NoiseSource; //TODO: I may want to repalce this one with on-the-fly sampling of gaussian, for consistentcy of benchmarks
 
 uniform int threadDomainTexelWidth;
 uniform int texelWidthDivided;
@@ -13,16 +14,31 @@ uniform uint threadSubdomainsY;
 uniform float octaveAmplitude;
 uniform float noiseFrequency;
 uniform float4 noiseDisplacement;
+uniform float worleyFrequency;
 
-// TODO: try intializing the grid with worley instead of plain perlin
 // TODO: I may want to move the extra noise addition to the division loops
+// TODO: develop a final solution for the boundary conditions
 
-float sampleNoise(uint2 noiseTextureIdx)
+float sampleGaussianNoise(float2 noiseTextureIdx)
 {
     return NoiseSource[noiseTextureIdx] * 2.0 - 1.0;
 }
 
-uint2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimensions, uint2 noiseDimensions)
+float sampleNoise(float2 noiseTextureIdx)
+{
+    float randomCoord = sampleGaussianNoise(noiseTextureId); 
+    return cnoise(noiseTextureIdx * randomCoord); //domain warping 
+
+    //TODO: can be improved with sampling of the noise texture rather than indexing
+    // return cnoise(noiseTextureIdx); //-> produces smoother terrains due to the nature of gradient noise
+}
+
+float sampleWorleyNoise(float2 noiseTextureIdx)
+{
+    return cellular(noiseTextureIdx).x;
+}
+
+float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimensions, uint2 noiseDimensions)
 {
     return frac((targetTextureCoordinates / (float2)targetDimensions) + noiseDisplacement.xy) * (float2)noiseDimensions;
 }
@@ -43,7 +59,7 @@ uint2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimens
         for (int y = 0; y < threadDomainTexelWidth; ++y)
         {
             uint2 targetIdx = topLeftCellIdx + uint2(x, y);
-            Result[targetIdx] += sampleNoise(computeNoiseCoordinates(targetIdx, targetDimensions, noiseDimensions)) * octaveAmplitude;
+            Result[targetIdx] += sampleGaussianNoise(computeNoiseCoordinates(targetIdx, targetDimensions, noiseDimensions)) * octaveAmplitude;
         }
     }
 }
@@ -58,13 +74,13 @@ uint2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimens
     NoiseSource.GetDimensions(noiseDimensions.x, noiseDimensions.y);
 
     uint2 topLeftCellIdx = globalId.xy * threadDomainTexelWidth;
-    Result[topLeftCellIdx.xy] = sampleNoise(computeNoiseCoordinates(topLeftCellIdx, targetDimensions, noiseDimensions)) * octaveAmplitude;
+    Result[topLeftCellIdx.xy] = sampleWorleyNoise(frac((topLeftCellIdx / (float2)targetDimensions) + noiseDisplacement.xy) * worleyFrequency) * octaveAmplitude;
     //  the heightmaps are always square, but hey
     // TODO: two border points remain uninitialized
     if (globalId.x == (threadSubdomainsX - 1) || globalId.y == (threadSubdomainsY - 1))
     {
         uint2 bottomRightCellIdx = topLeftCellIdx + threadDomainTexelWidth.xx;
-        Result[bottomRightCellIdx] = sampleNoise(computeNoiseCoordinates(bottomRightCellIdx, targetDimensions, noiseDimensions)) * octaveAmplitude;
+        Result[bottomRightCellIdx] = sampleWorleyNoise(frac((bottomRightCellIdx / (float2)targetDimensions) + noiseDisplacement.xy) * worleyFrequency) * octaveAmplitude;
     }
 }
 
