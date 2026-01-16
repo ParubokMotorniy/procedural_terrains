@@ -2,7 +2,7 @@
 #include "../../3rdparty/hlsl_noise/ashima/cellular2D.hlsl"
 
 RWTexture2D<float> Result;
-Texture2D<float> NoiseSource; //TODO: I may want to repalce this one with on-the-fly sampling of gaussian, for consistentcy of benchmarks
+Texture2D<float> NoiseSource; // TODO: I may want to repalce this one with on-the-fly sampling of gaussian, for consistentcy of benchmarks
 
 uniform int threadDomainTexelWidth;
 uniform int texelWidthDivided;
@@ -17,7 +17,11 @@ uniform float4 noiseDisplacement;
 uniform float worleyFrequency;
 
 // TODO: I may want to move the extra noise addition to the division loops
-// TODO: develop a final solution for the boundary conditions
+
+int2 terrainWrap(int2 a, int2 b)
+{
+    return (a % b + b) % b;
+}
 
 float sampleGaussianNoise(float2 noiseTextureIdx)
 {
@@ -26,11 +30,11 @@ float sampleGaussianNoise(float2 noiseTextureIdx)
 
 float sampleNoise(float2 noiseTextureIdx)
 {
-    float randomCoord = sampleGaussianNoise(noiseTextureId); 
-    return cnoise(noiseTextureIdx * randomCoord); //domain warping 
+    float randomCoord = sampleGaussianNoise(noiseTextureIdx);
+    return cnoise(noiseTextureIdx * randomCoord); // domain warping
 
-    //TODO: can be improved with sampling of the noise texture rather than indexing
-    // return cnoise(noiseTextureIdx); //-> produces smoother terrains due to the nature of gradient noise
+    // TODO: can be improved with sampling of the noise texture rather than indexing
+    //  return cnoise(noiseTextureIdx); //-> produces smoother terrains due to the nature of gradient noise
 }
 
 float sampleWorleyNoise(float2 noiseTextureIdx)
@@ -65,7 +69,7 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimen
 }
 
 #pragma kernel IntializeTexture
-[numthreads(4, 4, 1)] void IntializeTexture(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+    [numthreads(4, 4, 1)] void IntializeTexture(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     uint2 targetDimensions;
     Result.GetDimensions(targetDimensions.x, targetDimensions.y);
@@ -75,13 +79,6 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimen
 
     uint2 topLeftCellIdx = globalId.xy * threadDomainTexelWidth;
     Result[topLeftCellIdx.xy] = sampleWorleyNoise(frac((topLeftCellIdx / (float2)targetDimensions) + noiseDisplacement.xy) * worleyFrequency) * octaveAmplitude;
-    //  the heightmaps are always square, but hey
-    // TODO: two border points remain uninitialized
-    if (globalId.x == (threadSubdomainsX - 1) || globalId.y == (threadSubdomainsY - 1))
-    {
-        uint2 bottomRightCellIdx = topLeftCellIdx + threadDomainTexelWidth.xx;
-        Result[bottomRightCellIdx] = sampleWorleyNoise(frac((bottomRightCellIdx / (float2)targetDimensions) + noiseDisplacement.xy) * worleyFrequency) * octaveAmplitude;
-    }
 }
 
 #pragma kernel Transition12
@@ -101,11 +98,12 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimen
         {
             int2 subdivisionIdx = topLeftCellIdx.xy + uint2(texelWidthDivided + 2 * texelWidthDivided * x, texelWidthDivided + 2 * texelWidthDivided * y);
 
+            // let the terrain wrap around currently
             float averageNeighbors =
-                (Result[subdivisionIdx + int2(texelWidthDivided, texelWidthDivided)] +
-                 Result[subdivisionIdx + int2(texelWidthDivided, -texelWidthDivided)] +
-                 Result[subdivisionIdx + int2(-texelWidthDivided, texelWidthDivided)] +
-                 Result[subdivisionIdx + int2(-texelWidthDivided, -texelWidthDivided)]) /
+                (Result[terrainWrap(subdivisionIdx + int2(texelWidthDivided, texelWidthDivided), targetDimensions)] +
+                 Result[terrainWrap(subdivisionIdx + int2(texelWidthDivided, -texelWidthDivided), targetDimensions)] +
+                 Result[terrainWrap(subdivisionIdx + int2(-texelWidthDivided, texelWidthDivided), targetDimensions)] +
+                 Result[terrainWrap(subdivisionIdx + int2(-texelWidthDivided, -texelWidthDivided), targetDimensions)]) /
                 4.0;
 
             Result[subdivisionIdx] = averageNeighbors + sampleNoise(computeNoiseCoordinates(subdivisionIdx, targetDimensions, noiseDimensions)) * octaveAmplitude;
@@ -114,11 +112,10 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimen
 }
 
 #pragma kernel Transition21
-[numthreads(4, 4, 1)] void Transition21(uint3 localID : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+    [numthreads(4, 4, 1)] void Transition21(uint3 localID : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
-    uint width;
-    uint height;
-    Result.GetDimensions(width, height);
+    uint2 targetDimensions;
+    Result.GetDimensions(targetDimensions.x, targetDimensions.y);
 
     uint2 noiseDimensions;
     NoiseSource.GetDimensions(noiseDimensions.x, noiseDimensions.y);
@@ -144,25 +141,25 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimen
 
             if (diamondIdx.x != 0)
             {
-                neighborLeft = Result[diamondIdx + int2(-texelWidthDivided, 0)];
+                neighborLeft = Result[terrainWrap(diamondIdx + int2(-texelWidthDivided, 0), targetDimensions)];
                 numberValid++;
             }
 
-            if (diamondIdx.x != width - 1)
+            if (diamondIdx.x != targetDimensions.x - 1)
             {
-                neighborRight = Result[diamondIdx + int2(+texelWidthDivided, 0)];
+                neighborRight = Result[terrainWrap(diamondIdx + int2(+texelWidthDivided, 0), targetDimensions)];
                 numberValid++;
             }
 
             if (diamondIdx.y != 0)
             {
-                neighborTop = Result[diamondIdx + int2(0, -texelWidthDivided)];
+                neighborTop = Result[terrainWrap(diamondIdx + int2(0, -texelWidthDivided), targetDimensions)];
                 numberValid++;
             }
 
-            if (diamondIdx.y != height - 1)
+            if (diamondIdx.y != targetDimensions.y - 1)
             {
-                neighborBottom = Result[diamondIdx + int2(0, +texelWidthDivided)];
+                neighborBottom = Result[terrainWrap(diamondIdx + int2(0, +texelWidthDivided), targetDimensions)];
                 numberValid++;
             }
 
@@ -171,7 +168,7 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimen
                                    neighborTop +
                                    neighborBottom) /
                                   numberValid) +
-                                 sampleNoise(computeNoiseCoordinates(diamondIdx, uint2(width, height), noiseDimensions)) * octaveAmplitude;
+                                 sampleNoise(computeNoiseCoordinates(diamondIdx, targetDimensions, noiseDimensions)) * octaveAmplitude;
         }
     }
 }
