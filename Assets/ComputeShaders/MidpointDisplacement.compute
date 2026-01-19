@@ -34,12 +34,34 @@ float sampleNoise(float2 noiseTextureIdx)
     return cnoise(noiseTextureIdx * randomCoord); // domain warping
 
     // TODO: can be improved with sampling of the noise texture rather than indexing
-    //  return cnoise(noiseTextureIdx); //-> produces smoother terrains due to the nature of gradient noise
 }
 
 float sampleWorleyNoise(float2 noiseTextureIdx)
 {
-    return cellular(noiseTextureIdx).x;
+    // float plateauThreshold = 0.02f;
+    // float difference = cellular(noiseTextureIdx).y - cellular(noiseTextureIdx).x;
+    // return difference <= plateauThreshold ? 0.0 : difference;
+    // return clamp(cellular(noiseTextureIdx).x, 0.0, 1.0);
+
+    #define RANGE_THRSH_CEIL 0.6
+    #define EPSILON 3.5e-2
+    #define RIDGE_FALLOF_SPEED 0.25
+
+    float2 f1_f2 = cellular(float2(noiseTextureIdx.x + sin(noiseTextureIdx.x) * 0.25, noiseTextureIdx.y));
+
+    if (abs(f1_f2.x - f1_f2.y) >= EPSILON)
+    {
+        return f1_f2.x;
+    }
+
+    if (f1_f2.x >= RANGE_THRSH_CEIL)
+    {
+        return f1_f2.x;
+    }
+    else
+    {
+        return (f1_f2.x * RIDGE_FALLOF_SPEED) / RANGE_THRSH_CEIL;
+    }
 }
 
 float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimensions, uint2 noiseDimensions)

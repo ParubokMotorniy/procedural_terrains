@@ -7,7 +7,6 @@ using UnityEngine.Rendering;
 using System.IO;
 using System;
 
-
 [RequireComponent(typeof(Renderer))]
 [RequireComponent(typeof(MeshFilter))]
 [ExecuteAlways]
