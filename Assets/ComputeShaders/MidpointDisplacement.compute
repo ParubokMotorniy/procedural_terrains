@@ -2,7 +2,6 @@
 #include "../../3rdparty/hlsl_noise/ashima/cellular2D.hlsl"
 
 RWTexture2D<float> Result;
-Texture2D<float> NoiseSource; // TODO: I may want to repalce this one with on-the-fly sampling of gaussian, for consistentcy of benchmarks
 
 uniform int threadDomainTexelWidth;
 uniform int texelWidthDivided;
@@ -16,6 +15,8 @@ uniform float noiseFrequency;
 uniform float4 noiseDisplacement;
 uniform float worleyFrequency;
 
+#define TWO_PI 6.283185307
+
 // TODO: I may want to move the extra noise addition to the division loops
 
 int2 terrainWrap(int2 a, int2 b)
@@ -23,29 +24,31 @@ int2 terrainWrap(int2 a, int2 b)
     return (a % b + b) % b;
 }
 
+float sampleGaussBoxMuller(float2 u)
+{
+    const float a = sqrt(-2.0f * log(1.0f - u.x));
+    const float b = TWO_PI * u.y;
+
+    // return float2(cos(b), sin(b)) * a;
+    return cos(b) * a;
+}
+
 float sampleGaussianNoise(float2 noiseTextureIdx)
 {
-    return NoiseSource[noiseTextureIdx] * 2.0 - 1.0;
+    return sampleGaussBoxMuller(noiseTextureIdx);
 }
 
 float sampleNoise(float2 noiseTextureIdx)
 {
     float randomCoord = sampleGaussianNoise(noiseTextureIdx);
     return cnoise(noiseTextureIdx * randomCoord); // domain warping
-
-    // TODO: can be improved with sampling of the noise texture rather than indexing
 }
 
 float sampleWorleyNoise(float2 noiseTextureIdx)
 {
-    // float plateauThreshold = 0.02f;
-    // float difference = cellular(noiseTextureIdx).y - cellular(noiseTextureIdx).x;
-    // return difference <= plateauThreshold ? 0.0 : difference;
-    // return clamp(cellular(noiseTextureIdx).x, 0.0, 1.0);
-
-    #define RANGE_THRSH_CEIL 0.6
-    #define EPSILON 3.5e-2
-    #define RIDGE_FALLOF_SPEED 0.25
+#define RANGE_THRSH_CEIL 0.6
+#define EPSILON 3.5e-2
+#define RIDGE_FALLOF_SPEED 0.25
 
     float2 f1_f2 = cellular(float2(noiseTextureIdx.x + sin(noiseTextureIdx.x) * 0.25, noiseTextureIdx.y));
 
@@ -64,17 +67,14 @@ float sampleWorleyNoise(float2 noiseTextureIdx)
     }
 }
 
-float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimensions, uint2 noiseDimensions)
+float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimensions)
 {
-    return frac((targetTextureCoordinates / (float2)targetDimensions) + noiseDisplacement.xy) * (float2)noiseDimensions;
+    return ((targetTextureCoordinates + int2(1, 1)) / (float2)targetDimensions) * noiseDisplacement.xy;
 }
 
 #pragma kernel AddExtraNoise
 [numthreads(4, 4, 1)] void AddExtraNoise(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
-    uint2 noiseDimensions;
-    NoiseSource.GetDimensions(noiseDimensions.x, noiseDimensions.y);
-
     uint2 targetDimensions;
     Result.GetDimensions(targetDimensions.x, targetDimensions.y);
 
@@ -85,7 +85,7 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimen
         for (int y = 0; y < threadDomainTexelWidth; ++y)
         {
             uint2 targetIdx = topLeftCellIdx + uint2(x, y);
-            Result[targetIdx] += sampleGaussianNoise(computeNoiseCoordinates(targetIdx, targetDimensions, noiseDimensions)) * octaveAmplitude;
+            Result[targetIdx] += sampleGaussianNoise(computeNoiseCoordinates(targetIdx, targetDimensions)) * octaveAmplitude;
         }
     }
 }
@@ -96,9 +96,6 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimen
     uint2 targetDimensions;
     Result.GetDimensions(targetDimensions.x, targetDimensions.y);
 
-    uint2 noiseDimensions;
-    NoiseSource.GetDimensions(noiseDimensions.x, noiseDimensions.y);
-
     uint2 topLeftCellIdx = globalId.xy * threadDomainTexelWidth;
     Result[topLeftCellIdx.xy] = sampleWorleyNoise(frac((topLeftCellIdx / (float2)targetDimensions) + noiseDisplacement.xy) * worleyFrequency) * octaveAmplitude;
 }
@@ -106,9 +103,6 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimen
 #pragma kernel Transition12
 [numthreads(4, 4, 1)] void Transition12(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
-    uint2 noiseDimensions;
-    NoiseSource.GetDimensions(noiseDimensions.x, noiseDimensions.y);
-
     uint2 targetDimensions;
     Result.GetDimensions(targetDimensions.x, targetDimensions.y);
 
@@ -128,7 +122,7 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimen
                  Result[terrainWrap(subdivisionIdx + int2(-texelWidthDivided, -texelWidthDivided), targetDimensions)]) /
                 4.0;
 
-            Result[subdivisionIdx] = averageNeighbors + sampleNoise(computeNoiseCoordinates(subdivisionIdx, targetDimensions, noiseDimensions)) * octaveAmplitude;
+            Result[subdivisionIdx] = averageNeighbors + sampleNoise(computeNoiseCoordinates(subdivisionIdx, targetDimensions)) * octaveAmplitude;
         }
     }
 }
@@ -138,9 +132,6 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimen
 {
     uint2 targetDimensions;
     Result.GetDimensions(targetDimensions.x, targetDimensions.y);
-
-    uint2 noiseDimensions;
-    NoiseSource.GetDimensions(noiseDimensions.x, noiseDimensions.y);
 
     uint2 topLeftCellIdx = globalId.xy * threadDomainTexelWidth;
 
@@ -190,7 +181,7 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimen
                                    neighborTop +
                                    neighborBottom) /
                                   numberValid) +
-                                 sampleNoise(computeNoiseCoordinates(diamondIdx, targetDimensions, noiseDimensions)) * octaveAmplitude;
+                                 sampleNoise(computeNoiseCoordinates(diamondIdx, targetDimensions)) * octaveAmplitude;
         }
     }
 }

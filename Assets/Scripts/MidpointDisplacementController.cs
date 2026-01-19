@@ -51,11 +51,6 @@ public class MidpointDisplacementController : MonoBehaviour
         shaderToDispatch.SetTexture(transition21KernelIdx, "Result", noiseRenderTexture);
         shaderToDispatch.SetTexture(extraNoiseKernel, "Result", noiseRenderTexture);
 
-        shaderToDispatch.SetTexture(initializationKernelIdx, "NoiseSource", whiteNoiseTexture);
-        shaderToDispatch.SetTexture(transition12KernelIdx, "NoiseSource", whiteNoiseTexture);
-        shaderToDispatch.SetTexture(transition21KernelIdx, "NoiseSource", whiteNoiseTexture);
-        shaderToDispatch.SetTexture(extraNoiseKernel, "NoiseSource", whiteNoiseTexture);
-
         System.Random rng = new System.Random();
         shaderToDispatch.SetVector("noiseDisplacement", new Vector4((float)rng.NextDouble(), (float)rng.NextDouble(), 0.0f, 0.0f));
 
@@ -121,9 +116,6 @@ public class MidpointDisplacementController : MonoBehaviour
 
     [Range(0.01f, 1.0f)]
     public float H = 0.85f;
-
-    [SerializeField]
-    public Texture2D whiteNoiseTexture;
 
     [SerializeField]
     public bool addExtraNoise;
