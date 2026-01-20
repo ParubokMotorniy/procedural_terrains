@@ -52,7 +52,7 @@ public class MidpointDisplacementController : MonoBehaviour
         shaderToDispatch.SetTexture(extraNoiseKernel, "Result", noiseRenderTexture);
 
         System.Random rng = new System.Random();
-        shaderToDispatch.SetVector("noiseDisplacement", new Vector4((float)rng.NextDouble(), (float)rng.NextDouble(), 0.0f, 0.0f));
+        shaderToDispatch.SetFloats("noiseDisplacement", new float[]{(float)rng.NextDouble(), (float)rng.NextDouble()});
 
         float octaveAmplitude = 1.0f;
         shaderToDispatch.SetFloat("octaveAmplitude", octaveAmplitude);
@@ -65,23 +65,23 @@ public class MidpointDisplacementController : MonoBehaviour
 
             octaveAmplitude *= H;
             shaderToDispatch.SetFloat("octaveAmplitude", octaveAmplitude);
-            shaderToDispatch.SetVector("noiseDisplacement", new Vector4((float)rng.NextDouble(), (float)rng.NextDouble(), 0.0f, 0.0f));
+            shaderToDispatch.SetFloats("noiseDisplacement", new float[]{(float)rng.NextDouble(), (float)rng.NextDouble()});
             shaderToDispatch.Dispatch(transition12KernelIdx, groupScaleFactor, groupScaleFactor, 1);
 
             if (addExtraNoise)
             {
-                shaderToDispatch.SetVector("noiseDisplacement", new Vector4((float)rng.NextDouble(), (float)rng.NextDouble(), 0.0f, 0.0f));
+                shaderToDispatch.SetFloats("noiseDisplacement", new float[]{(float)rng.NextDouble(), (float)rng.NextDouble()});
                 shaderToDispatch.Dispatch(extraNoiseKernel, groupScaleFactor, groupScaleFactor, 1);
             }
 
             octaveAmplitude *= H;
             shaderToDispatch.SetFloat("octaveAmplitude", octaveAmplitude);
-            shaderToDispatch.SetVector("noiseDisplacement", new Vector4((float)rng.NextDouble(), (float)rng.NextDouble(), 0.0f, 0.0f));
+            shaderToDispatch.SetFloats("noiseDisplacement", new float[]{(float)rng.NextDouble(), (float)rng.NextDouble()});
             shaderToDispatch.Dispatch(transition21KernelIdx, groupScaleFactor, groupScaleFactor, 1);
 
             if (addExtraNoise)
             {
-                shaderToDispatch.SetVector("noiseDisplacement", new Vector4((float)rng.NextDouble(), (float)rng.NextDouble(), 0.0f, 0.0f));
+                shaderToDispatch.SetFloats("noiseDisplacement", new float[]{(float)rng.NextDouble(), (float)rng.NextDouble()});
                 shaderToDispatch.Dispatch(extraNoiseKernel, groupScaleFactor, groupScaleFactor, 1);
             }
         }
