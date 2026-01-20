@@ -45,6 +45,7 @@ public class MidpointDisplacementController : MonoBehaviour
         shaderToDispatch.SetInt("threadSubdomainsX", groupSize * groupScaleFactor);
         shaderToDispatch.SetInt("threadSubdomainsY", groupSize * groupScaleFactor);
         shaderToDispatch.SetFloat("worleyFrequency", worleyFrequency);
+        shaderToDispatch.SetFloat("perlinFrequency", perlinFrequency);
 
         shaderToDispatch.SetTexture(initializationKernelIdx, "Result", noiseRenderTexture);
         shaderToDispatch.SetTexture(transition12KernelIdx, "Result", noiseRenderTexture);
@@ -122,6 +123,9 @@ public class MidpointDisplacementController : MonoBehaviour
 
     [Range(0.01f, 10.0f)]
     public float worleyFrequency;
+
+    [Range(0.01f, 10.0f)]
+    public float perlinFrequency;
 
     private RenderTexture noiseRenderTexture;
     private const int groupSize = 4;

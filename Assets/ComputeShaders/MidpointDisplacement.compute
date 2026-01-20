@@ -1,4 +1,4 @@
-#include "../../3rdparty/hlsl_noise/ashima/classicnoise2D.hlsl"
+#include "../../3rdparty/hlsl_noise/ashima/noise2D.hlsl"
 #include "../../3rdparty/hlsl_noise/ashima/cellular2D.hlsl"
 #include "../../3rdparty/hlsl_noise/common/stegu-math.hlsl"
 
@@ -15,6 +15,7 @@ uniform float octaveAmplitude;
 uniform float noiseFrequency;
 uniform float4 noiseDisplacement;
 uniform float worleyFrequency;
+uniform float perlinFrequency;
 
 #define TWO_PI 6.283185307
 
@@ -42,7 +43,7 @@ float sampleGaussianNoise(float2 noiseTextureIdx)
 float sampleNoise(float2 noiseTextureIdx)
 {
     float randomCoord = sampleGaussianNoise(noiseTextureIdx);
-    return cnoise(noiseTextureIdx * randomCoord); // domain warping
+    return snoise(randomCoord * perlinFrequency); // domain warping
 }
 
 float sampleWorleyNoise(float2 noiseTextureIdx)
@@ -73,6 +74,7 @@ float sampleWorleyNoise(float2 noiseTextureIdx)
     }
 }
 
+//these end up normalized and uniformly distributed
 float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimensions)
 {
     float linearX = targetTextureCoordinates.y * targetDimensions.x + targetTextureCoordinates.x;
@@ -80,6 +82,19 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimen
     float2 displacedCoordinates = float2(linearX, linearY) + targetDimensions * noiseDisplacement;
     float2 permutedCoordinates = permute(displacedCoordinates) / 289.0;
     return clamp(permutedCoordinates, 1.0e-3, 1.0);
+}
+
+#pragma kernel IntializeTexture
+[numthreads(4, 4, 1)] void IntializeTexture(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+{
+    uint2 targetDimensions;
+    Result.GetDimensions(targetDimensions.x, targetDimensions.y);
+
+    uint2 topLeftCellIdx = globalId.xy * threadDomainTexelWidth;
+
+    float2 worleyCoordinates = (topLeftCellIdx / (float2)targetDimensions) * worleyFrequency + noiseDisplacement.xy * worleyFrequency; 
+    Result[topLeftCellIdx.xy] = sampleWorleyNoise(worleyCoordinates) * octaveAmplitude;
+    // Result[topLeftCellIdx] = sampleNoise(computeNoiseCoordinates(topLeftCellIdx, targetDimensions)) * octaveAmplitude;
 }
 
 #pragma kernel AddExtraNoise
@@ -98,19 +113,6 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimen
             Result[targetIdx] = Result[targetIdx] + sampleGaussianNoise(computeNoiseCoordinates(targetIdx, targetDimensions)) * octaveAmplitude;
         }
     }
-}
-
-#pragma kernel IntializeTexture
-    [numthreads(4, 4, 1)] void IntializeTexture(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
-{
-    uint2 targetDimensions;
-    Result.GetDimensions(targetDimensions.x, targetDimensions.y);
-
-    uint2 topLeftCellIdx = globalId.xy * threadDomainTexelWidth;
-
-    float2 worleyCoordinates = (topLeftCellIdx / (float2)targetDimensions) * worleyFrequency + noiseDisplacement.xy * worleyFrequency; 
-
-    Result[topLeftCellIdx.xy] = sampleWorleyNoise(worleyCoordinates) * octaveAmplitude;
 }
 
 #pragma kernel Transition12
@@ -194,7 +196,7 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimen
                                    neighborTop +
                                    neighborBottom) /
                                   numberValid) +
-                                 sampleGaussianNoise(computeNoiseCoordinates(diamondIdx, targetDimensions)) * octaveAmplitude;
+                                 sampleNoise(computeNoiseCoordinates(diamondIdx, targetDimensions)) * octaveAmplitude;
         }
     }
 }
