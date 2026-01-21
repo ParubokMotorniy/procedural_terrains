@@ -20,6 +20,8 @@ uniform float perlinFrequency;
 #define TWO_PI 6.283185307
 
 // TODO: I may want to move the extra noise addition to the division loops
+// TODO: can I employ gradients of noise here?
+// TODO: consider using computebuffers prior to building a final texture
 
 int2 terrainWrap(int2 a, int2 b)
 {

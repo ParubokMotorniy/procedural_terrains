@@ -24,7 +24,6 @@ uniform int numOctaves;
 // uint	    gl_LocalInvocationIndex	1d index representation of gl_LocalInvocationID (gl_LocalInvocationID.z * gl_WorkGroupSize.x * gl_WorkGroupSize.y + gl_LocalInvocationID.y * gl_WorkGroupSize.x + gl_LocalInvocationID.x)
 
 // TODO: when possible, I should use analytical derivatives of the resulting terrain
-//TODO: return my heightmap normalization technique, debugged
 
 RWTexture2D<float> Result;
 const float2x2 m = float2x2(0.8, -0.6, 0.6, 0.8);
