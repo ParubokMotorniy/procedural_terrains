@@ -1,12 +1,16 @@
-Texture2D<float> inputTexture; // white-black, unsigned normalized
+Texture2D<float> inputTexture;    // white-black, unsigned normalized
+RWTexture2D<float> outputTexture; // red channel, signed unnormalized
+
 RWStructuredBuffer<uint2> buffer1;
 RWStructuredBuffer<uint2> buffer2;
+
 uniform int currentSourceBuffer;
+uniform int floodStepSize;
 
 uniform int texelsPerThread;
 uniform int bufferSideLength;
 
-static const uint  MAX_UINT  = 0xFFFFFFFFu;          
+static const uint MAX_UINT = 0xFFFFFFFFu;
 static const uint2 MAX_COORD = uint2(MAX_UINT, MAX_UINT);
 
 uint tabularToLinearIdx(uint2 tabularIdx)
@@ -14,19 +18,43 @@ uint tabularToLinearIdx(uint2 tabularIdx)
     return tabularIdx.x * (uint)bufferSideLength + tabularIdx.y;
 }
 
+uint2 readFromBuffer(uint2 targetCoord)
+{
+    if (currentSourceBuffer == 0)
+    {
+        return buffer1[tabularToLinearIdx(targetCoord)];
+    }
+    else
+    {
+        return buffer2[tabularToLinearIdx(targetCoord)];
+    }
+}
+
+uint writeToBuffer(uint targetCoord, uint2 newValue)
+{
+    if (currentSourceBuffer == 0)
+    {
+        buffer2[tabularToLinearIdx(targetCoord)] = newValue;
+    }
+    else
+    {
+        buffer1[tabularToLinearIdx(targetCoord)] = newValue;
+    }
+}
+
 bool texelIsWhite(float texelColor)
 {
     return abs(1.0 - texelColor) <= 1.0e-3;
 }
 
-#pragma kernel InputTextureRemapper
-[numthreads(16, 16, 1)] void InputTextureRemapper(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+#pragma kernel MaskToSeedBuffer
+[numthreads(16, 16, 1)] void MaskToSeedBuffer(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     uint2 topLeftCorner = globalId.xy * texelsPerThread;
 
-    for (int x = 0; x < texelsPerThread; x += 1)
+    for (int x = 0; x < texelsPerThread; x += 2)
     {
-        for (int y = 0; y < texelsPerThread; y += 1)
+        for (int y = 0; y < texelsPerThread; y += 2)
         {
             uint2 kernelCenter = topLeftCorner + uint2(x, y);
             float texelColor = inputTexture[kernelCenter];
@@ -36,8 +64,8 @@ bool texelIsWhite(float texelColor)
                 // center is white
                 // if any neighbor is black -> set this as seed. if any neighbor is white -> do nothing. Omit kernel if already set, set to infinity is no black neighbors
 
-                uint2 currentBufferValue = buffer1[tabularToLinearIdx(kernelCenter)]; 
-                if (currentBufferValue.x != MAX_UINT && currentBufferValue.y != MAX_UINT )
+                uint2 currentBufferValue = buffer1[tabularToLinearIdx(kernelCenter)];
+                if (currentBufferValue.x != MAX_UINT && currentBufferValue.y != MAX_UINT)
                 {
                     continue;
                 }
@@ -73,7 +101,8 @@ bool texelIsWhite(float texelColor)
                         if (texelIsWhite(neighborColor))
                         {
                             buffer1[tabularToLinearIdx(targetNeighbor)] = targetNeighbor;
-                        }else
+                        }
+                        else
                         {
                             buffer1[tabularToLinearIdx(targetNeighbor)] = MAX_COORD;
                         }
@@ -84,7 +113,63 @@ bool texelIsWhite(float texelColor)
     }
 }
 
-// kernel for initialization
+#pragma kernel FloodingStep
+[numthreads(16, 16, 1)] void FloodingStep(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+{
+    uint2 topLeftCorner = globalId.xy * texelsPerThread;
+
+    for (int x = 0; x < texelsPerThread; ++x)
+    {
+        for (int y = 0; y < texelsPerThread; ++y)
+        {
+            uint2 cellCoords = topLeftCorner + uint2(x, y);
+            uint minSquareDistance = MAX_UINT;
+
+            for (int i = -1; i < 2; ++i)
+            {
+                int targetX = (int)cellCoords.x + i * floodStepSize;
+
+                if (targetX < 0 || targetX >= bufferSideLength)
+                {
+                    continue;
+                }
+
+                for (int j = -1; j < 2; ++j)
+                {
+                    int targetY = (int)cellCoords.y + j * floodStepSize;
+
+                    if (targetY < 0 || targetY >= bufferSideLength)
+                    {
+                        continue;
+                    }
+
+                    uint2 targetCoord = uint2(targetY, targetX);
+                    uint2 closestSeedAtTargetDistanceVector = readFromBuffer(targetCoord) - cellCoords;
+                    minSquareDistance = min(minSquareDistance, dot(closestSeedAtTargetDistanceVector, closestSeedAtTargetDistanceVector));
+                }
+            }
+        }
+    }
+}
+
+#pragma kernel SeedBufferToHieghtmap
+[numthreads(16, 16, 1)] void SeedBufferToHieghtmap(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+{
+    uint2 topLeftCorner = globalId.xy * texelsPerThread;
+
+    for (int x = 0; x < texelsPerThread; ++x)
+    {
+        for (int y = 0; y < texelsPerThread; ++y)
+        {
+            uint2 cellCoords = topLeftCorner + uint2(x, y);
+
+            uint2 seedCoordinates = readFromBuffer(cellCoords);
+            float actualDistance = length(seedCoordinates - cellCoords);
+
+            outputTexture[cellCoords] = actualDistance;
+        }
+    }
+}
 
 // kernel for 'step'
 
