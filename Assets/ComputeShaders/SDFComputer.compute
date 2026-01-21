@@ -15,7 +15,7 @@ static const uint2 MAX_COORD = uint2(MAX_UINT, MAX_UINT);
 
 uint tabularToLinearIdx(uint2 tabularIdx)
 {
-    return tabularIdx.x * (uint)bufferSideLength + tabularIdx.y;
+    return tabularIdx.x + (uint)bufferSideLength * tabularIdx.y;
 }
 
 uint2 readFromBuffer(uint2 targetCoord)
@@ -30,7 +30,7 @@ uint2 readFromBuffer(uint2 targetCoord)
     }
 }
 
-uint writeToBuffer(uint targetCoord, uint2 newValue)
+void writeToBuffer(uint2 targetCoord, uint2 newValue)
 {
     if (currentSourceBuffer == 0)
     {
@@ -47,14 +47,15 @@ bool texelIsWhite(float texelColor)
     return abs(1.0 - texelColor) <= 1.0e-3;
 }
 
+// TODO: using kernel stride of 2 gives 4 times fewer reads but 2 times more writes at border pixels. Can it be optimized?
 #pragma kernel MaskToSeedBuffer
 [numthreads(16, 16, 1)] void MaskToSeedBuffer(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     uint2 topLeftCorner = globalId.xy * texelsPerThread;
 
-    for (int x = 0; x < texelsPerThread; x += 2)
+    for (int x = 0; x < texelsPerThread; ++x)
     {
-        for (int y = 0; y < texelsPerThread; y += 2)
+        for (int y = 0; y < texelsPerThread; ++y)
         {
             uint2 kernelCenter = topLeftCorner + uint2(x, y);
             float texelColor = inputTexture[kernelCenter];
@@ -62,15 +63,6 @@ bool texelIsWhite(float texelColor)
             if (texelIsWhite(texelColor))
             {
                 // center is white
-                // if any neighbor is black -> set this as seed. if any neighbor is white -> do nothing. Omit kernel if already set, set to infinity is no black neighbors
-
-                uint2 currentBufferValue = buffer1[tabularToLinearIdx(kernelCenter)];
-                if (currentBufferValue.x != MAX_UINT && currentBufferValue.y != MAX_UINT)
-                {
-                    continue;
-                }
-
-                buffer1[tabularToLinearIdx(kernelCenter)] = MAX_COORD;
                 bool blackFound = false;
                 for (int i = -1; i < 2 && !blackFound; ++i)
                 {
@@ -85,36 +77,23 @@ bool texelIsWhite(float texelColor)
                         }
                     }
                 }
+
+                if (!blackFound)
+                {
+                    buffer1[tabularToLinearIdx(kernelCenter)] = MAX_COORD;
+                }
             }
             else
             {
                 // center is black
-                // if any neighbor is white -> set it as seed. if any neighbor is black -> set to infinity.
-
                 buffer1[tabularToLinearIdx(kernelCenter)] = MAX_COORD;
-                for (int i = -1; i < 2; ++i)
-                {
-                    for (int j = -1; j < 2; ++j)
-                    {
-                        uint2 targetNeighbor = uint2(clamp((int)kernelCenter.x + i, 0, bufferSideLength - 1), clamp((int)kernelCenter.y + j, 0, bufferSideLength - 1));
-                        float neighborColor = inputTexture[targetNeighbor];
-                        if (texelIsWhite(neighborColor))
-                        {
-                            buffer1[tabularToLinearIdx(targetNeighbor)] = targetNeighbor;
-                        }
-                        else
-                        {
-                            buffer1[tabularToLinearIdx(targetNeighbor)] = MAX_COORD;
-                        }
-                    }
-                }
             }
         }
     }
 }
 
 #pragma kernel FloodingStep
-[numthreads(16, 16, 1)] void FloodingStep(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+    [numthreads(16, 16, 1)] void FloodingStep(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     uint2 topLeftCorner = globalId.xy * texelsPerThread;
 
@@ -123,7 +102,9 @@ bool texelIsWhite(float texelColor)
         for (int y = 0; y < texelsPerThread; ++y)
         {
             uint2 cellCoords = topLeftCorner + uint2(x, y);
+
             uint minSquareDistance = MAX_UINT;
+            uint2 closestSeed = MAX_COORD;
 
             for (int i = -1; i < 2; ++i)
             {
@@ -143,11 +124,25 @@ bool texelIsWhite(float texelColor)
                         continue;
                     }
 
-                    uint2 targetCoord = uint2(targetY, targetX);
-                    uint2 closestSeedAtTargetDistanceVector = readFromBuffer(targetCoord) - cellCoords;
-                    minSquareDistance = min(minSquareDistance, dot(closestSeedAtTargetDistanceVector, closestSeedAtTargetDistanceVector));
+                    uint2 targetCoord = uint2(targetX, targetY);
+                    uint2 closestSeedAtTarget = readFromBuffer(targetCoord);
+
+                    if (closestSeedAtTarget.x == MAX_UINT && closestSeedAtTarget.y == MAX_UINT)
+                    {
+                        continue;
+                    }
+
+                    uint2 closestSeedDistanceVector = closestSeedAtTarget - cellCoords;
+                    uint squareDistance = dot(closestSeedDistanceVector, closestSeedDistanceVector);
+                    if (squareDistance < minSquareDistance)
+                    {
+                        minSquareDistance = squareDistance;
+                        closestSeed = closestSeedAtTarget;
+                    }
                 }
             }
+
+            writeToBuffer(cellCoords, closestSeed);
         }
     }
 }
@@ -164,13 +159,10 @@ bool texelIsWhite(float texelColor)
             uint2 cellCoords = topLeftCorner + uint2(x, y);
 
             uint2 seedCoordinates = readFromBuffer(cellCoords);
-            float actualDistance = length(seedCoordinates - cellCoords);
+
+            float actualDistance = length((int2)seedCoordinates - (int2)cellCoords);
 
             outputTexture[cellCoords] = actualDistance;
         }
     }
 }
-
-// kernel for 'step'
-
-// kernel for buffer transition

@@ -14,9 +14,12 @@ public class SDFDispatcher : MonoBehaviour
     [ContextMenu("Regenerate terrain")]
     void RegenerateTerrain()
     {
+        if (noiseRenderTexture && noiseRenderTexture.IsCreated())
+        { noiseRenderTexture.Release(); }
+
         int textureSize = inputTestMaskTexture.width;
 
-        RenderTexture noiseRenderTexture = new RenderTexture(textureSize, textureSize, 0)
+        noiseRenderTexture = new RenderTexture(textureSize, textureSize, 0)
         {
             graphicsFormat = UnityEngine.Experimental.Rendering.GraphicsFormat.R32_SFloat,
             useMipMap = false,
@@ -29,10 +32,10 @@ public class SDFDispatcher : MonoBehaviour
 
         Assert.IsTrue(noiseRenderTexture.IsCreated());
 
-        ComputeBuffer buffer1 = new ComputeBuffer(textureSize * textureSize, sizeof(float));
+        ComputeBuffer buffer1 = new ComputeBuffer(textureSize * textureSize * 2, sizeof(float));
         Assert.IsTrue(buffer1.IsValid());
 
-        ComputeBuffer buffer2 = new ComputeBuffer(textureSize * textureSize, sizeof(float));
+        ComputeBuffer buffer2 = new ComputeBuffer(textureSize * textureSize * 2, sizeof(float));
         Assert.IsTrue(buffer2.IsValid());
 
         GetComponent<Renderer>().sharedMaterial.SetTexture("_HeightMap", noiseRenderTexture);
@@ -59,27 +62,40 @@ public class SDFDispatcher : MonoBehaviour
         while (currentFloodStep > 1)
         {
             currentReadBuffer = (currentReadBuffer + 1) % 2;
-            shaderToDispatch.SetInt("currentSourceBuffer",  currentReadBuffer);
+            shaderToDispatch.SetInt("currentSourceBuffer", currentReadBuffer);
             currentFloodStep /= 2;
             shaderToDispatch.SetInt("floodStepSize", currentFloodStep);
             shaderToDispatch.Dispatch(floodingStepKernelIdx, groupScaleFactor, groupScaleFactor, 1);
         }
-        currentReadBuffer = (currentReadBuffer + 1) % 2;
-        shaderToDispatch.SetInt("currentSourceBuffer", 0);
-        shaderToDispatch.Dispatch(seedBufferToHieghtmapKernelIdx, groupScaleFactor, groupScaleFactor, 1);
+        //extra iteration
+        {
+            currentReadBuffer = (currentReadBuffer + 1) % 2;
+            shaderToDispatch.SetInt("currentSourceBuffer", currentReadBuffer);
+            shaderToDispatch.SetInt("floodStepSize", 1);
+            shaderToDispatch.Dispatch(floodingStepKernelIdx, groupScaleFactor, groupScaleFactor, 1);
+        }
+        //distance computation
+        {
+            currentReadBuffer = (currentReadBuffer + 1) % 2;
+            shaderToDispatch.SetInt("currentSourceBuffer", currentReadBuffer);
+            shaderToDispatch.Dispatch(seedBufferToHieghtmapKernelIdx, groupScaleFactor, groupScaleFactor, 1);
+        }
 
-        RenderTextureDumper.SaveRFloatToExr(noiseRenderTexture, "./sdf.exr");
+        // RenderTextureDumper.SaveRFloatToExr(noiseRenderTexture, "./sdf.exr");
 
-        // Assert.IsTrue(textureSize >= 8); //normalization groups are at least 8 threads wide 
+        Assert.IsTrue(textureSize >= 8); //normalization groups are at least 8 threads wide 
 
-        // int largestGroupSize = (int)math.pow(2, math.ceil(math.log2(math.clamp(textureSize, 8, 32))));
+        int largestGroupSize = (int)math.pow(2, math.ceil(math.log2(math.clamp(textureSize, 8, 32))));
 
-        // int normalizationKernel = normalizationShader.FindKernel("Normalizer" + largestGroupSize);
-        // normalizationShader.SetTexture(normalizationKernel, "Result", noiseRenderTexture);
-        // normalizationShader.SetInt("texelsPerThread", (int)math.ceil((float)textureSize / largestGroupSize));
-        // normalizationShader.Dispatch(normalizationKernel, 1, 1, 1);
+        int normalizationKernel = normalizationShader.FindKernel("Normalizer" + largestGroupSize);
+        normalizationShader.SetTexture(normalizationKernel, "Result", noiseRenderTexture);
+        normalizationShader.SetInt("texelsPerThread", (int)math.ceil((float)textureSize / largestGroupSize));
+        normalizationShader.Dispatch(normalizationKernel, 1, 1, 1);
 
-        // Debug.Log("Terrain has been regenerated!");
+        buffer1.Release();
+        buffer2.Release();
+
+        Debug.Log("Terrain has been regenerated!");
     }
 
     [SerializeField]
@@ -98,6 +114,8 @@ public class SDFDispatcher : MonoBehaviour
     public float terrainScale = 1.0f;
 
     private const int groupSize = 16;
+
+    private RenderTexture noiseRenderTexture;
 
     void Start()
     {
