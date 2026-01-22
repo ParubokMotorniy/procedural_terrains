@@ -2,7 +2,7 @@
 
 #pragma kernel UberNoiseTerrainGenerator
 
-uniform int groupScaleFactor;
+uniform int texelsPerThread;
 uniform float noiseFrequency;
 
 uniform float sharpness;
@@ -26,18 +26,18 @@ uniform int numOctaves;
 // TODO: when possible, I should use analytical derivatives of the resulting terrain
 
 RWTexture2D<float> Result;
-const float2x2 m = float2x2(0.8, -0.6, 0.6, 0.8);
 
 #define PI 3.141592654
 
-//TODO: I may want to flip it upside down and dispatch multiple groups
-[numthreads(32, 32, 1)] void UberNoiseTerrainGenerator(uint3 id : SV_GroupThreadID)
+[numthreads(32, 32, 1)] void UberNoiseTerrainGenerator(uint3 id : SV_DispatchThreadID)
 {
-    for (int i = 0; i < groupScaleFactor; ++i)
+    uint2 topLeftThreadCorner = id.xy * texelsPerThread;
+
+    for (int i = 0; i < texelsPerThread; ++i)
     {
-        for (int j = 0; j < groupScaleFactor; ++j)
+        for (int j = 0; j < texelsPerThread; ++j)
         {
-            int2 actualTextureIdx = id.xy * groupScaleFactor + int2(i, j);
+            int2 actualTextureIdx = topLeftThreadCorner + uint2(i, j);
             float2 floatIdx = (float2)actualTextureIdx;
 
             float2 slopeErosionDerivativeSum = clamp(sdnoise(floatIdx).x, -0.15, 0.15).xx;
@@ -64,18 +64,18 @@ const float2x2 m = float2x2(0.8, -0.6, 0.6, 0.8);
                 // featureNoise *= exp(-dot(featureDerivative, featureDerivative)) * sharpness;
 
                 // TODO: rework to use amplitude damping technique. Generally, define the usage of amplitude(s).
-                // TODO: add feature amplification 
+                // TODO: add feature amplification
 
                 slopeErosionDerivativeSum += featureDerivative * slopeErosion;
                 perturbDerivativeSum += featureDerivative * perturbationStrength;
                 float derivativeNorm = dot(slopeErosionDerivativeSum, slopeErosionDerivativeSum);
-                noiseResult += octaveAmplitude  * featureNoise * (1.0 / (1.0 + derivativeNorm));
+                noiseResult += octaveAmplitude * featureNoise * (1.0 / (1.0 + derivativeNorm));
 
                 octaveAmplitude /= 2.0;
                 octaveFrequency *= 2.0;
             }
 
-            Result[actualTextureIdx] = (noiseResult + 1.0) / 2.0;
+            Result[actualTextureIdx] = noiseResult;
         }
     }
 }

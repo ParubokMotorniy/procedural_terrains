@@ -158,11 +158,20 @@ bool texelIsWhite(float texelColor)
         {
             uint2 cellCoords = topLeftCorner + uint2(x, y);
 
-            uint2 seedCoordinates = readFromBuffer(cellCoords);
+            float texelColor = inputTexture[cellCoords];
 
-            float actualDistance = length((int2)seedCoordinates - (int2)cellCoords);
+            if (texelIsWhite(texelColor))
+            {
 
-            outputTexture[cellCoords] = actualDistance;
+                uint2 seedCoordinates = readFromBuffer(cellCoords);
+
+                float actualDistance = length((int2)seedCoordinates - (int2)cellCoords);
+
+                outputTexture[cellCoords] = actualDistance;
+            }else
+            {
+                outputTexture[cellCoords] = 0.0;
+            }
         }
     }
 }

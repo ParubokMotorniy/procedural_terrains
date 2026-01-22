@@ -5,6 +5,8 @@ using UnityEngine;
 using UnityEngine.Assertions;
 using UnityEngine.Rendering;
 using System.IO;
+using System;
+using Unity.VisualScripting;
 
 [RequireComponent(typeof(Renderer))]
 [RequireComponent(typeof(MeshFilter))]
@@ -58,26 +60,29 @@ public class SDFDispatcher : MonoBehaviour
         int currentReadBuffer = 1;
         int currentFloodStep = textureSize;
 
-        shaderToDispatch.Dispatch(maskToSeedBufferKernelIdx, groupScaleFactor, groupScaleFactor, 1);
-        while (currentFloodStep > 1)
+        Action updateSourceBuffer = () =>
         {
             currentReadBuffer = (currentReadBuffer + 1) % 2;
             shaderToDispatch.SetInt("currentSourceBuffer", currentReadBuffer);
+        };
+
+        shaderToDispatch.Dispatch(maskToSeedBufferKernelIdx, groupScaleFactor, groupScaleFactor, 1);
+        while (currentFloodStep > 1)
+        {
+            updateSourceBuffer();
             currentFloodStep /= 2;
             shaderToDispatch.SetInt("floodStepSize", currentFloodStep);
             shaderToDispatch.Dispatch(floodingStepKernelIdx, groupScaleFactor, groupScaleFactor, 1);
         }
         //extra iteration
         {
-            currentReadBuffer = (currentReadBuffer + 1) % 2;
-            shaderToDispatch.SetInt("currentSourceBuffer", currentReadBuffer);
+            updateSourceBuffer();
             shaderToDispatch.SetInt("floodStepSize", 1);
             shaderToDispatch.Dispatch(floodingStepKernelIdx, groupScaleFactor, groupScaleFactor, 1);
         }
         //distance computation
         {
-            currentReadBuffer = (currentReadBuffer + 1) % 2;
-            shaderToDispatch.SetInt("currentSourceBuffer", currentReadBuffer);
+            updateSourceBuffer();
             shaderToDispatch.Dispatch(seedBufferToHieghtmapKernelIdx, groupScaleFactor, groupScaleFactor, 1);
         }
 

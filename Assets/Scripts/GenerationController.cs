@@ -17,7 +17,7 @@ public class GenerationControllerr : MonoBehaviour
         if (noiseRenderTexture && noiseRenderTexture.IsCreated())
         { noiseRenderTexture.Release(); }
 
-        int textureSize = groupSize * groupScaleFactor;
+        int textureSize = terrainSize * 1024;
         noiseRenderTexture = new RenderTexture(textureSize, textureSize, 0)
         {
             graphicsFormat = UnityEngine.Experimental.Rendering.GraphicsFormat.R32_SFloat,
@@ -35,7 +35,7 @@ public class GenerationControllerr : MonoBehaviour
 
         int kernelIdx = shaderToDispatch.FindKernel("UberNoiseTerrainGenerator");
         shaderToDispatch.SetTexture(kernelIdx, Shader.PropertyToID("Result"), noiseRenderTexture);
-        shaderToDispatch.SetInt("groupScaleFactor", groupScaleFactor);
+        shaderToDispatch.SetInt("texelsPerThread", textureSize / (groupScaleFactor * groupSize));
         shaderToDispatch.SetFloat("noiseFrequency", noiseFrequency);
 
         shaderToDispatch.SetFloat("sharpness", sharpness);
@@ -43,7 +43,7 @@ public class GenerationControllerr : MonoBehaviour
         shaderToDispatch.SetFloat("perturbationStrength", perturbationStrength);
         shaderToDispatch.SetInt("numOctaves", numOctaves);
 
-        shaderToDispatch.Dispatch(kernelIdx, 1, 1, 1);
+        shaderToDispatch.Dispatch(kernelIdx, groupScaleFactor, groupScaleFactor, groupScaleFactor);
 
         // EditorUtility.SetDirty(this);
 
@@ -68,8 +68,8 @@ public class GenerationControllerr : MonoBehaviour
     [Range(1, 8)]
     public int groupScaleFactor = 1;
 
-    [Range(0.01f, 2.0f)]
-    public float noiseFrequency = 0.01f;
+    [Range(0.001f, 2.0f)]
+    public float noiseFrequency = 0.001f;
 
     [Range(-10.0f, 10.0f)]
     public float sharpness = 0.0f;
@@ -85,6 +85,9 @@ public class GenerationControllerr : MonoBehaviour
 
     [Range(0.001f, 32.0f)]
     public float terrainScale = 1.0f;
+
+    [Range(1,3)]
+    public int terrainSize = 1;
 
     private RenderTexture noiseRenderTexture;
     private const int groupSize = 32;
