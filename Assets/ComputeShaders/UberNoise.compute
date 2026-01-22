@@ -23,8 +23,8 @@ uniform int numOctaves;
 // uvec3	gl_GlobalInvocationID	global index of the current work item (gl_WorkGroupID * gl_WorkGroupSize + gl_LocalInvocationID)
 // uint	    gl_LocalInvocationIndex	1d index representation of gl_LocalInvocationID (gl_LocalInvocationID.z * gl_WorkGroupSize.x * gl_WorkGroupSize.y + gl_LocalInvocationID.y * gl_WorkGroupSize.x + gl_LocalInvocationID.x)
 
-// TODO: when possible, I should use analytical derivatives of the resulting terrain
 
+// TODO: when possible, I should use analytical derivatives of the resulting terrain
 RWTexture2D<float> Result;
 
 #define PI 3.141592654
@@ -67,7 +67,7 @@ RWTexture2D<float> Result;
                 // TODO: add feature amplification
 
                 slopeErosionDerivativeSum += featureDerivative * slopeErosion;
-                perturbDerivativeSum += featureDerivative * perturbationStrength;
+                perturbDerivativeSum += featureDerivative * perturbationStrength * octaveAmplitude;
                 float derivativeNorm = dot(slopeErosionDerivativeSum, slopeErosionDerivativeSum);
                 noiseResult += octaveAmplitude * featureNoise * (1.0 / (1.0 + derivativeNorm));
 

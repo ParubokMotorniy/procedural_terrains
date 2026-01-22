@@ -89,7 +89,6 @@ float coastlineComputer(float2 texelCoord)
     for (int i = 0; i < 5; i++)
     {
         float3 psrdSample = amp * srdnoise(uv * freq + gsum * 0.15, 0.5 * freq);
-        ;
         disp += psrdSample.x;
         gsum += psrdSample.yz * amp;
 
