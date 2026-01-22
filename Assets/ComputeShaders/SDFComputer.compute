@@ -1,7 +1,7 @@
 #include "../../3rdparty/hlsl_noise/ashima/psrdnoise2D.hlsl"
 #include "../../3rdparty/hlsl_noise/ashima/noise2D.hlsl"
 
-RWTexture2D<float> inputTexture;    // white-black, unsigned normalized
+RWTexture2D<float> inputTexture;  // white-black, unsigned normalized
 RWTexture2D<float> outputTexture; // red channel, signed unnormalized
 
 RWStructuredBuffer<uint2> buffer1;
@@ -12,11 +12,11 @@ uniform int floodStepSize;
 
 uniform int texelsPerThread;
 uniform int bufferSideLength;
+uniform float shoreBaseHeight;
 
 static const uint MAX_UINT = 0xFFFFFFFFu;
 static const uint2 MAX_COORD = uint2(MAX_UINT, MAX_UINT);
-static const float shoreDistanceThreshold = 20.0;
-static const float shoreBaseHeight = 1.0;
+static const float shoreDistanceThreshold = 30.0;
 
 uint tabularToLinearIdx(uint2 tabularIdx)
 {
@@ -47,10 +47,16 @@ void writeToBuffer(uint2 targetCoord, uint2 newValue)
     }
 }
 
+//tells if a texel is considered part of the mask
 bool texelIsWhiteForMask(float texelColor)
 {
-    // return abs(1.0 - texelColor) <= 1.0e-3;
-    return texelColor > 0.2;
+    return texelColor > 0.3; 
+}
+
+//tells if texel is considered part of land when 'punching' lakes 
+bool texelIsWhiteForLake(float texelColor)
+{
+    return texelColor > 0.05;
 }
 
 // fractal accumulation of simplx noise
@@ -101,7 +107,6 @@ float coastlineComputer(float2 texelCoord)
     return smokeEffect;
 }
 
-//TODO: handle proper writeback to normalized texture
 #pragma kernel CoastlineGenerator
 [numthreads(16, 16, 1)] void CoastlineGenerator(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
@@ -217,9 +222,8 @@ float coastlineComputer(float2 texelCoord)
     }
 }
 
-//TODO: first normalize the buffer -> then combine it with the input 
 #pragma kernel SeedBufferToHieghtmap
-[numthreads(16, 16, 1)] void SeedBufferToHieghtmap(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+    [numthreads(16, 16, 1)] void SeedBufferToHieghtmap(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     uint2 topLeftCorner = globalId.xy * texelsPerThread;
 
@@ -234,21 +238,40 @@ float coastlineComputer(float2 texelCoord)
             uint2 seedCoordinates = readFromBuffer(cellCoords);
             float actualDistance = length((int2)seedCoordinates - (int2)cellCoords);
 
-            float extraHeight = 0;
             if (texelIsWhiteForMask(texelColor))
             {
-                // outputTexture[cellCoords] = actualDistance < shoreBaseHeight ? shoreBaseHeight : actualDistance;
-                extraHeight = actualDistance < shoreBaseHeight ? shoreBaseHeight : actualDistance;
+                outputTexture[cellCoords] = (actualDistance + shoreBaseHeight);
             }
             else
             {
-                // outputTexture[cellCoords] = actualDistance <= shoreDistanceThreshold ? shoreBaseHeight : 0.0;
-                extraHeight = actualDistance <= shoreDistanceThreshold ? shoreBaseHeight : 0.0;
+                outputTexture[cellCoords] = lerp(shoreBaseHeight, 0.0, min(actualDistance, shoreDistanceThreshold) / shoreDistanceThreshold); 
             }
-
-            outputTexture[cellCoords] = texelColor + extraHeight;
         }
     }
 }
 
-// TODO: kernel for high-frequency post-processing
+#pragma kernel SDFPostprocessor
+[numthreads(16, 16, 1)] void SDFPostprocessor(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+{
+    uint2 topLeftCorner = globalId.xy * texelsPerThread;
+
+    for (int x = 0; x < texelsPerThread; ++x)
+    {
+        for (int y = 0; y < texelsPerThread; ++y)
+        {
+            uint2 cellCoords = topLeftCorner + uint2(x, y);
+
+            float inputTexelColor = inputTexture[cellCoords];
+            float distanceAtTexel = outputTexture[cellCoords];
+
+            if(!texelIsWhiteForLake(inputTexelColor))
+            {
+                //this texel was definitely considered 'black' when applying mask, and so the distance is zero
+                inputTexelColor = 0.0;
+            }
+
+            //clamp goes here since we expect more 'noisy' features to appear where tectonic processes were the most porminent - at mountains
+            outputTexture[cellCoords] = inputTexelColor * clamp(distanceAtTexel, 0.5, 1.0) + distanceAtTexel; 
+        }
+    }
+}
