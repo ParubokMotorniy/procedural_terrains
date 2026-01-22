@@ -1,4 +1,7 @@
-Texture2D<float> inputTexture;    // white-black, unsigned normalized
+#include "../../3rdparty/hlsl_noise/ashima/psrdnoise2D.hlsl"
+#include "../../3rdparty/hlsl_noise/ashima/noise2D.hlsl"
+
+RWTexture2D<float> inputTexture;    // white-black, unsigned normalized
 RWTexture2D<float> outputTexture; // red channel, signed unnormalized
 
 RWStructuredBuffer<uint2> buffer1;
@@ -12,6 +15,8 @@ uniform int bufferSideLength;
 
 static const uint MAX_UINT = 0xFFFFFFFFu;
 static const uint2 MAX_COORD = uint2(MAX_UINT, MAX_UINT);
+static const float shoreDistanceThreshold = 20.0;
+static const float shoreBaseHeight = 1.0;
 
 uint tabularToLinearIdx(uint2 tabularIdx)
 {
@@ -42,14 +47,79 @@ void writeToBuffer(uint2 targetCoord, uint2 newValue)
     }
 }
 
-bool texelIsWhite(float texelColor)
+bool texelIsWhiteForMask(float texelColor)
 {
-    return abs(1.0 - texelColor) <= 1.0e-3;
+    // return abs(1.0 - texelColor) <= 1.0e-3;
+    return texelColor > 0.2;
+}
+
+// fractal accumulation of simplx noise
+float fbm(float2 uv, float startFreq)
+{
+    float freq = startFreq;
+    float amp = 1.0;
+    float n = 0.0;
+    for (int i = 0; i < 5; i++)
+    {
+        n += amp * snoise(uv * freq);
+        freq *= 2.0;
+        amp *= 0.5;
+    }
+
+    return n;
+}
+
+float coastlineComputer(float2 texelCoord)
+{
+    float2 uv = texelCoord / bufferSideLength;
+    float basePerlinFreq = 2.0;
+
+    float freq = basePerlinFreq / 1.5;
+    float amp = 1.0;
+    float n = 0.0;
+    float2 gsum = float2(5.0, 5.0);
+
+    float disp = 0.0;
+    for (int i = 0; i < 5; i++)
+    {
+        float3 psrdSample = amp * srdnoise(uv * freq + gsum * 0.15, 0.5 * freq);
+        ;
+        disp += psrdSample.x;
+        gsum += psrdSample.yz * amp;
+
+        freq *= 2.0;
+        amp *= 0.5;
+    }
+    disp = 0.55 + disp * 0.35;
+
+    float2 q = float2(fbm(uv + float2(0.0, 0.7), basePerlinFreq),
+                      fbm(uv + float2(0.7, 0.0), basePerlinFreq));
+    n = fbm(uv + 0.05 * q, basePerlinFreq) - disp;
+
+    float smokeEffect = 0.5 + n * 0.35;
+
+    return smokeEffect;
+}
+
+//TODO: handle proper writeback to normalized texture
+#pragma kernel CoastlineGenerator
+[numthreads(16, 16, 1)] void CoastlineGenerator(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+{
+    uint2 topLeftCorner = globalId.xy * texelsPerThread;
+
+    for (int x = 0; x < texelsPerThread; ++x)
+    {
+        for (int y = 0; y < texelsPerThread; ++y)
+        {
+            uint2 texelCoord = topLeftCorner + uint2(x, y);
+            inputTexture[texelCoord] = coastlineComputer(texelCoord);
+        }
+    }
 }
 
 // TODO: using kernel stride of 2 gives 4 times fewer reads but 2 times more writes at border pixels. Can it be optimized?
 #pragma kernel MaskToSeedBuffer
-[numthreads(16, 16, 1)] void MaskToSeedBuffer(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+    [numthreads(16, 16, 1)] void MaskToSeedBuffer(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     uint2 topLeftCorner = globalId.xy * texelsPerThread;
 
@@ -60,7 +130,7 @@ bool texelIsWhite(float texelColor)
             uint2 kernelCenter = topLeftCorner + uint2(x, y);
             float texelColor = inputTexture[kernelCenter];
 
-            if (texelIsWhite(texelColor))
+            if (texelIsWhiteForMask(texelColor))
             {
                 // center is white
                 bool blackFound = false;
@@ -70,7 +140,7 @@ bool texelIsWhite(float texelColor)
                     {
                         uint2 targetNeighbor = uint2(clamp((int)kernelCenter.x + i, 0, bufferSideLength - 1), clamp((int)kernelCenter.y + j, 0, bufferSideLength - 1));
                         float neighborColor = inputTexture[targetNeighbor];
-                        if (!texelIsWhite(neighborColor))
+                        if (!texelIsWhiteForMask(neighborColor))
                         {
                             buffer1[tabularToLinearIdx(kernelCenter)] = kernelCenter;
                             blackFound = true;
@@ -93,7 +163,7 @@ bool texelIsWhite(float texelColor)
 }
 
 #pragma kernel FloodingStep
-    [numthreads(16, 16, 1)] void FloodingStep(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+[numthreads(16, 16, 1)] void FloodingStep(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     uint2 topLeftCorner = globalId.xy * texelsPerThread;
 
@@ -147,6 +217,7 @@ bool texelIsWhite(float texelColor)
     }
 }
 
+//TODO: first normalize the buffer -> then combine it with the input 
 #pragma kernel SeedBufferToHieghtmap
 [numthreads(16, 16, 1)] void SeedBufferToHieghtmap(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
@@ -160,18 +231,24 @@ bool texelIsWhite(float texelColor)
 
             float texelColor = inputTexture[cellCoords];
 
-            if (texelIsWhite(texelColor))
+            uint2 seedCoordinates = readFromBuffer(cellCoords);
+            float actualDistance = length((int2)seedCoordinates - (int2)cellCoords);
+
+            float extraHeight = 0;
+            if (texelIsWhiteForMask(texelColor))
             {
-
-                uint2 seedCoordinates = readFromBuffer(cellCoords);
-
-                float actualDistance = length((int2)seedCoordinates - (int2)cellCoords);
-
-                outputTexture[cellCoords] = actualDistance;
-            }else
-            {
-                outputTexture[cellCoords] = 0.0;
+                // outputTexture[cellCoords] = actualDistance < shoreBaseHeight ? shoreBaseHeight : actualDistance;
+                extraHeight = actualDistance < shoreBaseHeight ? shoreBaseHeight : actualDistance;
             }
+            else
+            {
+                // outputTexture[cellCoords] = actualDistance <= shoreDistanceThreshold ? shoreBaseHeight : 0.0;
+                extraHeight = actualDistance <= shoreDistanceThreshold ? shoreBaseHeight : 0.0;
+            }
+
+            outputTexture[cellCoords] = texelColor + extraHeight;
         }
     }
 }
+
+// TODO: kernel for high-frequency post-processing

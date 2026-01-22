@@ -94,6 +94,7 @@ public class MidpointDisplacementController : MonoBehaviour
         int normalizationKernel = normalizationShader.FindKernel("Normalizer" + largestGroupSize);
         normalizationShader.SetTexture(normalizationKernel, "Result", noiseRenderTexture);
         normalizationShader.SetInt("texelsPerThread", (int)math.ceil((float)textureSize / largestGroupSize));
+        normalizationShader.SetFloat("desiredMaxHeight", 1.0f);
         normalizationShader.Dispatch(normalizationKernel, 1, 1, 1);
 
         // EditorUtility.SetDirty(this);

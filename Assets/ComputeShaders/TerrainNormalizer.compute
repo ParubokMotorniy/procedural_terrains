@@ -1,8 +1,7 @@
 RWTexture2D<float> Result;
 
 uniform int texelsPerThread; // how many texels a single thread processes
-
-const float heightUnitSize = 0.01;
+uniform float desiredMaxHeight; //makes sense as long as <= 1 or the texture is not Normalized
 
 groupshared float globalMin = 0;
 groupshared float globalMax = 0;
@@ -67,7 +66,7 @@ for (int x = 0; x < texelsPerThread; ++x)\
     for (int y = 0; y < texelsPerThread; ++y)\
     {\
         uint2 idx = (uint2)threadCorner + uint2(x, y);\
-        Result[idx] = (Result[idx] - globalMin) / heightSpan;\
+        Result[idx] = desiredMaxHeight * ((Result[idx] - globalMin) / heightSpan);\
     }\
 }\
 

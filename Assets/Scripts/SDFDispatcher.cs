@@ -21,18 +21,31 @@ public class SDFDispatcher : MonoBehaviour
 
         int textureSize = inputTestMaskTexture.width;
 
-        noiseRenderTexture = new RenderTexture(textureSize, textureSize, 0)
         {
-            graphicsFormat = UnityEngine.Experimental.Rendering.GraphicsFormat.R32_SFloat,
+            noiseRenderTexture = new RenderTexture(textureSize, textureSize, 0)
+            {
+                graphicsFormat = UnityEngine.Experimental.Rendering.GraphicsFormat.R32_SFloat,
+                useMipMap = false,
+                enableRandomWrite = true,
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+
+            noiseRenderTexture.Create();
+
+            Assert.IsTrue(noiseRenderTexture.IsCreated());
+        }
+
+        RenderTexture coastlineTexture = new RenderTexture(textureSize, textureSize, 0)
+        {
+            graphicsFormat = UnityEngine.Experimental.Rendering.GraphicsFormat.R16_UNorm,
             useMipMap = false,
             enableRandomWrite = true,
             filterMode = FilterMode.Bilinear,
             wrapMode = TextureWrapMode.Clamp
         };
-
-        noiseRenderTexture.Create();
-
-        Assert.IsTrue(noiseRenderTexture.IsCreated());
+        coastlineTexture.Create();
+        Assert.IsTrue(coastlineTexture.IsCreated());
 
         ComputeBuffer buffer1 = new ComputeBuffer(textureSize * textureSize * 2, sizeof(float));
         Assert.IsTrue(buffer1.IsValid());
@@ -45,12 +58,13 @@ public class SDFDispatcher : MonoBehaviour
         int maskToSeedBufferKernelIdx = shaderToDispatch.FindKernel("MaskToSeedBuffer");
         int floodingStepKernelIdx = shaderToDispatch.FindKernel("FloodingStep");
         int seedBufferToHieghtmapKernelIdx = shaderToDispatch.FindKernel("SeedBufferToHieghtmap");
+        int coastlineGeneratorKernel = shaderToDispatch.FindKernel("CoastlineGenerator");
 
-        foreach (int kernelIdx in new int[] { maskToSeedBufferKernelIdx, floodingStepKernelIdx, seedBufferToHieghtmapKernelIdx })
+        foreach (int kernelIdx in new int[] { maskToSeedBufferKernelIdx, floodingStepKernelIdx, seedBufferToHieghtmapKernelIdx, coastlineGeneratorKernel })
         {
             shaderToDispatch.SetBuffer(kernelIdx, "buffer1", buffer1);
             shaderToDispatch.SetBuffer(kernelIdx, "buffer2", buffer2);
-            shaderToDispatch.SetTexture(kernelIdx, "inputTexture", inputTestMaskTexture);
+            shaderToDispatch.SetTexture(kernelIdx, "inputTexture", coastlineTexture);
             shaderToDispatch.SetTexture(kernelIdx, "outputTexture", noiseRenderTexture);
         }
 
@@ -66,6 +80,7 @@ public class SDFDispatcher : MonoBehaviour
             shaderToDispatch.SetInt("currentSourceBuffer", currentReadBuffer);
         };
 
+        shaderToDispatch.Dispatch(coastlineGeneratorKernel, groupScaleFactor, groupScaleFactor, 1);
         shaderToDispatch.Dispatch(maskToSeedBufferKernelIdx, groupScaleFactor, groupScaleFactor, 1);
         while (currentFloodStep > 1)
         {
@@ -84,8 +99,9 @@ public class SDFDispatcher : MonoBehaviour
         {
             updateSourceBuffer();
             shaderToDispatch.Dispatch(seedBufferToHieghtmapKernelIdx, groupScaleFactor, groupScaleFactor, 1);
-        }
+        }  
 
+        // RenderTextureDumper.SaveRFloatToExr(coastlineTexture, "./coastline.exr");
         // RenderTextureDumper.SaveRFloatToExr(noiseRenderTexture, "./sdf.exr");
 
         Assert.IsTrue(textureSize >= 8); //normalization groups are at least 8 threads wide 
@@ -95,6 +111,7 @@ public class SDFDispatcher : MonoBehaviour
         int normalizationKernel = normalizationShader.FindKernel("Normalizer" + largestGroupSize);
         normalizationShader.SetTexture(normalizationKernel, "Result", noiseRenderTexture);
         normalizationShader.SetInt("texelsPerThread", (int)math.ceil((float)textureSize / largestGroupSize));
+        normalizationShader.SetFloat("desiredMaxHeight", 1.0f);
         normalizationShader.Dispatch(normalizationKernel, 1, 1, 1);
 
         buffer1.Release();
