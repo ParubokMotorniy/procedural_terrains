@@ -16,7 +16,7 @@ public class SDFDispatcher : MonoBehaviour
     [ContextMenu("Regenerate terrain")]
     void RegenerateTerrain()
     {
-        int textureSize = inputTestMaskTexture.width;
+        int textureSize = heightmapSize * 1024;
 
         {
             if (noiseRenderTexture && noiseRenderTexture.IsCreated())
@@ -78,8 +78,10 @@ public class SDFDispatcher : MonoBehaviour
 
         shaderToDispatch.SetInt("texelsPerThread", textureSize / (groupSize * groupScaleFactor));
         shaderToDispatch.SetInt("bufferSideLength", textureSize);
+        shaderToDispatch.SetInt("maskBorderWidth", (int)(textureSize * 0.2f)); //fix at 20%
         float maxDistanceToSeed = math.sqrt(2 * textureSize * textureSize);
         shaderToDispatch.SetFloat("shoreBaseHeight", maxDistanceToSeed * 0.005f); //fix at 0.5%
+        shaderToDispatch.SetFloat("simplexFrequency", baseSimplexFrequency);
 
         int currentReadBuffer = 1;
         int currentFloodStep = textureSize;
@@ -156,6 +158,12 @@ public class SDFDispatcher : MonoBehaviour
 
     [Range(0.001f, 32.0f)]
     public float terrainScale = 1.0f;
+
+    [Range(0.025f, 3.0f)]
+    public float baseSimplexFrequency = 1.0f;
+
+    [Range(1, 3)]
+    public int heightmapSize = 1;
 
     private const int groupSize = 16;
 

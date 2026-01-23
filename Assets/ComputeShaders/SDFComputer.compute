@@ -13,10 +13,12 @@ uniform int floodStepSize;
 uniform int texelsPerThread;
 uniform int bufferSideLength;
 uniform float shoreBaseHeight;
+uniform float simplexFrequency;
+uniform int maskBorderWidth;
 
 static const uint MAX_UINT = 0xFFFFFFFFu;
 static const uint2 MAX_COORD = uint2(MAX_UINT, MAX_UINT);
-static const float shoreDistanceThreshold = 30.0;
+static const float shoreDistanceThreshold = 50.0;
 
 uint tabularToLinearIdx(uint2 tabularIdx)
 {
@@ -75,35 +77,67 @@ float fbm(float2 uv, float startFreq)
     return n;
 }
 
-float coastlineComputer(float2 texelCoord)
+float3 computeClosestPointOnEllipse(float a, float b, float2 pointOfInterest)
 {
-    float2 uv = texelCoord / bufferSideLength;
-    float basePerlinFreq = 2.0;
+    float scaling = (a * b) / sqrt(pointOfInterest.x * pointOfInterest.x * b * b + pointOfInterest.y * pointOfInterest.y * a * a);
+    float2 actualEllipsePoint = pointOfInterest * scaling;
+    
+    return float3(actualEllipsePoint, scaling);
+}
 
-    float freq = basePerlinFreq / 1.5;
-    float amp = 1.0;
+float maskCoefficient(float2 texelPosition)
+{
+    float halfLength = bufferSideLength / 2.0;
+    //TODO: can be simplified to simple circle computation
+    float innerA = halfLength - maskBorderWidth;
+    float innerB = halfLength - maskBorderWidth;
+    
+    float outerA = halfLength;
+    float outerB = halfLength;
+    
+    float3 closestInner = computeClosestPointOnEllipse(innerA, innerB, texelPosition);
+    float3 closestOuter = computeClosestPointOnEllipse(outerA, outerB, texelPosition); 
+    
+    float falloffLength = length(closestOuter.xy - closestInner.xy);
+    float distanceToInner = length(texelPosition - closestInner.xy);
+    
+    return 1.0 - clamp((distanceToInner / falloffLength) * (float)(closestInner.z < 1.0), 0.0, 1.0);
+}
+
+float computeFlowNoise(float2 uv, float startFreq)
+{
+    float amp = 0.9;
     float n = 0.0;
-    float2 gsum = float2(5.0, 5.0);
-
+    float perturbStrength = 0.15;
+    float2 gsum = float2(0.2, 0.2);
+    
     float disp = 0.0;
-    for (int i = 0; i < 5; i++)
-    {
-        float3 psrdSample = amp * srdnoise(uv * freq + gsum * 0.15, 0.5 * freq);
+    for (int i=0; i<5; i++) {
+        float3 psrdSample = amp*srdnoise(uv*startFreq+gsum*perturbStrength,0.5*startFreq);
         disp += psrdSample.x;
-        gsum += psrdSample.yz * amp;
-
-        freq *= 2.0;
+        gsum += psrdSample.yz*amp;
+        
+        startFreq *=2.0;
         amp *= 0.5;
     }
-    disp = 0.55 + disp * 0.35;
+    
+    return disp;
+}
 
-    float2 q = float2(fbm(uv + float2(0.0, 0.7), basePerlinFreq),
-                      fbm(uv + float2(0.7, 0.0), basePerlinFreq));
-    n = fbm(uv + 0.05 * q, basePerlinFreq) - disp;
-
-    float smokeEffect = 0.5 + n * 0.35;
-
-    return smokeEffect;
+float coastlineComputer(float2 texelCoord )
+{
+    float2 uv = texelCoord / bufferSideLength;
+    
+    float addFlow = 1.0 - (0.85 + computeFlowNoise(uv, simplexFrequency/1.3));
+    float subFlow = 1.0 - (0.75 + computeFlowNoise(uv, simplexFrequency/1.7));
+            
+    float maskValue = maskCoefficient(texelCoord - float2(bufferSideLength/2.0, bufferSideLength/2.0));
+    float2 q = float2( fbm( uv + float2(0.0,0.7), simplexFrequency),
+                   fbm( uv + float2(0.7,0.0), simplexFrequency ) );  
+    float n = maskValue * fbm( uv + 0.09*q, simplexFrequency) + addFlow - subFlow;
+     
+    float smoke = 0.5 * maskValue + n*0.35;
+    return smoke;
 }
 
 #pragma kernel CoastlineGenerator
@@ -263,6 +297,7 @@ float coastlineComputer(float2 texelCoord)
             float inputTexelColor = inputTexture[cellCoords];
             float distanceAtTexel = outputTexture[cellCoords];
 
+            //"lake" formation
             if(!texelIsWhiteForLake(inputTexelColor))
             {
                 //this texel was definitely considered 'black' when applying mask, and so the distance is zero
@@ -270,7 +305,7 @@ float coastlineComputer(float2 texelCoord)
             }
 
             //clamp goes here since we expect more 'noisy' features to appear where tectonic processes were the most porminent - at mountains
-            outputTexture[cellCoords] = inputTexelColor * clamp(distanceAtTexel, 0.5, 1.0) + distanceAtTexel; 
+            outputTexture[cellCoords] = distanceAtTexel + inputTexelColor * clamp(distanceAtTexel, 0.6, 1.0); 
         }
     }
 }

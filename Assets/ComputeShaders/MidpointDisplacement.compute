@@ -22,6 +22,7 @@ uniform float perlinFrequency;
 // TODO: I may want to move the extra noise addition to the division loops
 // TODO: can I employ gradients of noise here?
 // TODO: consider using computebuffers prior to building a final texture
+// TODO: further try to understand whta causes the spikes and lattice artifacts at times
 
 int2 terrainWrap(int2 a, int2 b)
 {
@@ -76,13 +77,13 @@ float sampleWorleyNoise(float2 noiseTextureIdx)
     }
 }
 
-//these end up normalized and uniformly distributed
+// these end up normalized and uniformly distributed
 float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimensions)
 {
     float linearX = targetTextureCoordinates.y * targetDimensions.x + targetTextureCoordinates.x;
     float linearY = targetTextureCoordinates.x * targetDimensions.y + targetTextureCoordinates.y;
     float2 displacedCoordinates = float2(linearX, linearY) + targetDimensions * noiseDisplacement;
-    float2 permutedCoordinates = permute(displacedCoordinates) / 289.0;
+    float2 permutedCoordinates = permute(displacedCoordinates) / 289.0; // passes through the permutation polynomial
     return clamp(permutedCoordinates, 1.0e-3, 1.0);
 }
 
@@ -94,13 +95,13 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimen
 
     uint2 topLeftCellIdx = globalId.xy * threadDomainTexelWidth;
 
-    float2 worleyCoordinates = (topLeftCellIdx / (float2)targetDimensions) * worleyFrequency + noiseDisplacement.xy * worleyFrequency; 
+    float2 worleyCoordinates = (topLeftCellIdx / (float2)targetDimensions) * worleyFrequency + noiseDisplacement.xy * worleyFrequency;
     Result[topLeftCellIdx.xy] = sampleWorleyNoise(worleyCoordinates) * octaveAmplitude;
     // Result[topLeftCellIdx] = sampleNoise(computeNoiseCoordinates(topLeftCellIdx, targetDimensions)) * octaveAmplitude;
 }
 
 #pragma kernel AddExtraNoise
-[numthreads(4, 4, 1)] void AddExtraNoise(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+    [numthreads(4, 4, 1)] void AddExtraNoise(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     uint2 targetDimensions;
     Result.GetDimensions(targetDimensions.x, targetDimensions.y);
