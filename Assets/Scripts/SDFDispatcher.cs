@@ -136,7 +136,7 @@ public class SDFDispatcher : MonoBehaviour
         }
 
         // RenderTextureDumper.SaveRFloatToExr(coastlineTexture, "./coastline.exr");
-        // RenderTextureDumper.SaveRFloatToExr(noiseRenderTexture, "./sdf.exr");
+        // RenderTextureDumper.SaveRFloatToExr(noiseRenderTexture, "./heightmap.exr");
 
         buffer1.Release();
         buffer2.Release();

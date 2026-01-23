@@ -49,13 +49,14 @@ void writeToBuffer(uint2 targetCoord, uint2 newValue)
     }
 }
 
-//tells if a texel is considered part of the mask
+// tells if a texel is considered part of the mask
 bool texelIsWhiteForMask(float texelColor)
 {
-    return texelColor > 0.3; 
+    // return smoothstep(0.0, 1.0, texelColor) > 0.3;
+    return sqrt(texelColor) > 0.5;
 }
 
-//tells if texel is considered part of land when 'punching' lakes 
+// tells if texel is considered part of land when 'punching' lakes
 bool texelIsWhiteForLake(float texelColor)
 {
     return texelColor > 0.05;
@@ -81,26 +82,26 @@ float3 computeClosestPointOnEllipse(float a, float b, float2 pointOfInterest)
 {
     float scaling = (a * b) / sqrt(pointOfInterest.x * pointOfInterest.x * b * b + pointOfInterest.y * pointOfInterest.y * a * a);
     float2 actualEllipsePoint = pointOfInterest * scaling;
-    
+
     return float3(actualEllipsePoint, scaling);
 }
 
 float maskCoefficient(float2 texelPosition)
 {
     float halfLength = bufferSideLength / 2.0;
-    //TODO: can be simplified to simple circle computation
+    // TODO: can be simplified to simple circle computation
     float innerA = halfLength - maskBorderWidth;
     float innerB = halfLength - maskBorderWidth;
-    
+
     float outerA = halfLength;
     float outerB = halfLength;
-    
+
     float3 closestInner = computeClosestPointOnEllipse(innerA, innerB, texelPosition);
-    float3 closestOuter = computeClosestPointOnEllipse(outerA, outerB, texelPosition); 
-    
+    float3 closestOuter = computeClosestPointOnEllipse(outerA, outerB, texelPosition);
+
     float falloffLength = length(closestOuter.xy - closestInner.xy);
     float distanceToInner = length(texelPosition - closestInner.xy);
-    
+
     return 1.0 - clamp((distanceToInner / falloffLength) * (float)(closestInner.z < 1.0), 0.0, 1.0);
 }
 
@@ -110,33 +111,34 @@ float computeFlowNoise(float2 uv, float startFreq)
     float n = 0.0;
     float perturbStrength = 0.15;
     float2 gsum = float2(0.2, 0.2);
-    
+
     float disp = 0.0;
-    for (int i=0; i<5; i++) {
-        float3 psrdSample = amp*srdnoise(uv*startFreq+gsum*perturbStrength,0.5*startFreq);
+    for (int i = 0; i < 5; i++)
+    {
+        float3 psrdSample = amp * srdnoise(uv * startFreq + gsum * perturbStrength, 0.5 * startFreq);
         disp += psrdSample.x;
-        gsum += psrdSample.yz*amp;
-        
-        startFreq *=2.0;
+        gsum += psrdSample.yz * amp;
+
+        startFreq *= 2.0;
         amp *= 0.5;
     }
-    
+
     return disp;
 }
 
-float coastlineComputer(float2 texelCoord )
+float coastlineComputer(float2 texelCoord)
 {
     float2 uv = texelCoord / bufferSideLength;
-    
-    float addFlow = 1.0 - (0.85 + computeFlowNoise(uv, simplexFrequency/1.3));
-    float subFlow = 1.0 - (0.75 + computeFlowNoise(uv, simplexFrequency/1.7));
-            
-    float maskValue = maskCoefficient(texelCoord - float2(bufferSideLength/2.0, bufferSideLength/2.0));
-    float2 q = float2( fbm( uv + float2(0.0,0.7), simplexFrequency),
-                   fbm( uv + float2(0.7,0.0), simplexFrequency ) );  
-    float n = maskValue * fbm( uv + 0.09*q, simplexFrequency) + addFlow - subFlow;
-     
-    float smoke = 0.5 * maskValue + n*0.35;
+
+    float addFlow = 1.0 - (0.85 + computeFlowNoise(uv, simplexFrequency / 1.3));
+    float subFlow = 1.0 - (0.75 + computeFlowNoise(uv, simplexFrequency / 1.7));
+
+    float maskValue = maskCoefficient(texelCoord - float2(bufferSideLength / 2.0, bufferSideLength / 2.0));
+    float2 q = float2(fbm(uv + float2(0.0, 0.7), simplexFrequency),
+                      fbm(uv + float2(0.7, 0.0), simplexFrequency));
+    float n = maskValue * fbm(uv + 0.09 * q, simplexFrequency) + addFlow - subFlow;
+
+    float smoke = 0.5 * maskValue + n * 0.35;
     return smoke;
 }
 
@@ -277,7 +279,7 @@ float coastlineComputer(float2 texelCoord )
             }
             else
             {
-                outputTexture[cellCoords] = lerp(shoreBaseHeight, 0.0, min(actualDistance, shoreDistanceThreshold) / shoreDistanceThreshold); 
+                outputTexture[cellCoords] = lerp(shoreBaseHeight, 0.0, min(actualDistance, shoreDistanceThreshold) / shoreDistanceThreshold);
             }
         }
     }
@@ -298,14 +300,14 @@ float coastlineComputer(float2 texelCoord )
             float distanceAtTexel = outputTexture[cellCoords];
 
             //"lake" formation
-            if(!texelIsWhiteForLake(inputTexelColor))
+            if (!texelIsWhiteForLake(inputTexelColor))
             {
-                //this texel was definitely considered 'black' when applying mask, and so the distance is zero
+                // this texel was definitely considered 'black' when applying mask, and so the distance is zero
                 inputTexelColor = 0.0;
             }
 
-            //clamp goes here since we expect more 'noisy' features to appear where tectonic processes were the most porminent - at mountains
-            outputTexture[cellCoords] = distanceAtTexel + inputTexelColor * clamp(distanceAtTexel, 0.6, 1.0); 
+            // clamp goes here since we expect more 'noisy' features to appear where tectonic processes were the most porminent - at mountains
+            outputTexture[cellCoords] = distanceAtTexel + inputTexelColor * clamp(distanceAtTexel, 0.6, 1.0);
         }
     }
 }
