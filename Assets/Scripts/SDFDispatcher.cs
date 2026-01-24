@@ -107,6 +107,8 @@ public class SDFDispatcher : MultiFormatPipelineStep
             shaderToDispatch.Dispatch(sDFPostprocessorKernel, groupScaleFactor, groupScaleFactor, 1);
         }   
 
+        RenderTextureDumper.SaveRFloatToExr(coastlineTexture, "test_coastline.exr");
+
         buffer1.Release();
         buffer2.Release();
         coastlineTexture.Release();
