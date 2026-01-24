@@ -15,10 +15,10 @@ uniform int bufferSideLength;
 uniform float shoreBaseHeight;
 uniform float simplexFrequency;
 uniform int maskBorderWidth;
+uniform float shoreDistanceThreshold;
 
 static const uint MAX_UINT = 0xFFFFFFFFu;
 static const uint2 MAX_COORD = uint2(MAX_UINT, MAX_UINT);
-static const float shoreDistanceThreshold = 50.0;
 
 uint tabularToLinearIdx(uint2 tabularIdx)
 {
@@ -307,7 +307,7 @@ float coastlineComputer(float2 texelCoord)
             }
 
             // clamp goes here since we expect more 'noisy' features to appear where tectonic processes were the most porminent - at mountains
-            outputTexture[cellCoords] = distanceAtTexel + inputTexelColor * clamp(distanceAtTexel, 0.6, 1.0);
+            outputTexture[cellCoords] = distanceAtTexel + inputTexelColor * clamp(distanceAtTexel, 0.7, 1.0);
         }
     }
 }

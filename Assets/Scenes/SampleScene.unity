@@ -554,8 +554,6 @@ GameObject:
   m_Component:
   - component: {fileID: 360891027}
   - component: {fileID: 360891026}
-  - component: {fileID: 360891025}
-  - component: {fileID: 360891024}
   m_Layer: 0
   m_Name: SDFDispatcher
   m_TagString: Untagged
@@ -563,13 +561,64 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!23 &360891024
-MeshRenderer:
+--- !u!114 &360891026
+MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 360891023}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3275438243bd01c0e9bb0bafcd428c60, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SDFDispatcher
+  shaderToDispatch: {fileID: 7200000, guid: 6533fa195b3b17795aa989c0fcf24026, type: 3}
+  normalizationShader: {fileID: 7200000, guid: ed4a6099d31776101823a3be173a3eb7, type: 3}
+  inputTestMaskTexture: {fileID: 2800000, guid: f47e8e03b6b35fffba2c8461d925e33d, type: 3}
+  groupScaleFactor: 2
+  baseSimplexFrequency: 3.1
+--- !u!4 &360891027
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 360891023}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: -1, z: 0, w: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 200, y: 200, z: 200}
+  m_ConstrainProportionsScale: 1
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: -180, z: 0}
+--- !u!1 &385078003
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 385078007}
+  - component: {fileID: 385078006}
+  - component: {fileID: 385078005}
+  - component: {fileID: 385078004}
+  m_Layer: 0
+  m_Name: TerrainGenerator
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!23 &385078004
+MeshRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 385078003}
   m_Enabled: 1
   m_CastShadows: 1
   m_ReceiveShadows: 1
@@ -612,40 +661,37 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!33 &360891025
+--- !u!33 &385078005
 MeshFilter:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 360891023}
+  m_GameObject: {fileID: 385078003}
   m_Mesh: {fileID: -462981019419857548, guid: ad8c9fcdb4d3f648bb5ab01d253fa44f, type: 3}
---- !u!114 &360891026
+--- !u!114 &385078006
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 360891023}
+  m_GameObject: {fileID: 385078003}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3275438243bd01c0e9bb0bafcd428c60, type: 3}
+  m_Script: {fileID: 11500000, guid: 6a05cec52a91ddfa19dd37485cd50122, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SDFDispatcher
-  shaderToDispatch: {fileID: 7200000, guid: 6533fa195b3b17795aa989c0fcf24026, type: 3}
-  normalizationShader: {fileID: 7200000, guid: ed4a6099d31776101823a3be173a3eb7, type: 3}
-  inputTestMaskTexture: {fileID: 2800000, guid: f47e8e03b6b35fffba2c8461d925e33d, type: 3}
-  groupScaleFactor: 2
-  terrainScale: 0.3
-  baseSimplexFrequency: 3
-  heightmapSize: 1
---- !u!4 &360891027
+  m_EditorClassIdentifier: Assembly-CSharp::GenerationPipeline.TerrainGenerator
+  terrainSize: 1
+  terrainScale: 0.5
+  pipelineSteps:
+  - {fileID: 360891026}
+--- !u!4 &385078007
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 360891023}
+  m_GameObject: {fileID: 385078003}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: -1, z: 0, w: 0}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -745,13 +791,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 410087039}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.043619405, y: 0, z: 0, w: 0.9990483}
+  m_LocalRotation: {x: 0.10452846, y: 0, z: 0, w: 0.9945219}
   m_LocalPosition: {x: 0, y: 239.4, z: -421}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 5, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 12, y: 0, z: 0}
 --- !u!114 &410087042
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -781,7 +827,7 @@ MonoBehaviour:
   m_ShadowLayerMask: 1
   m_RenderingLayers: 1
   m_ShadowRenderingLayers: 1
---- !u!84 &515462828
+--- !u!84 &738840890
 RenderTexture:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -798,7 +844,7 @@ RenderTexture:
   m_AntiAliasing: 1
   m_MipCount: -1
   m_DepthStencilFormat: 0
-  m_ColorFormat: 49
+  m_ColorFormat: 21
   m_MipMap: 0
   m_GenerateMips: 1
   m_SRGB: 1
@@ -867,7 +913,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _HeightMap:
-        m_Texture: {fileID: 515462828}
+        m_Texture: {fileID: 738840890}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _Heightmap:
@@ -926,7 +972,7 @@ Material:
     - _GlossMapScale: 0
     - _Glossiness: 0
     - _GlossyReflections: 0
-    - _HeightScale: 0.3
+    - _HeightScale: 0.5
     - _Metallic: 0
     - _OcclusionStrength: 1
     - _Parallax: 0.005
@@ -1184,4 +1230,5 @@ SceneRoots:
   - {fileID: 280840672}
   - {fileID: 852555919}
   - {fileID: 360891027}
+  - {fileID: 385078007}
   - {fileID: 1078476959}
