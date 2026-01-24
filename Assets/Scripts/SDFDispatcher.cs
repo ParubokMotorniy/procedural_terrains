@@ -112,8 +112,6 @@ public class SDFDispatcher : MultiFormatPipelineStep
         buffer1.Release();
         buffer2.Release();
         coastlineTexture.Release();
-
-        Debug.Log("Terrain has been regenerated!");
     }
 
     public override void StepConclusion(PipelineContext pipelineContext)

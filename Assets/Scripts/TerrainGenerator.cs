@@ -72,6 +72,8 @@ namespace GenerationPipeline
             {
                 step.ExecuteStep(currentContext);
             }
+
+            Debug.Log("Terrain has been regenerated!");
         }
 
         void OnValidate()

@@ -129,15 +129,13 @@ GameObject:
   m_Component:
   - component: {fileID: 280840672}
   - component: {fileID: 280840668}
-  - component: {fileID: 280840671}
-  - component: {fileID: 280840670}
   m_Layer: 0
   m_Name: UberNoiseDispatcher
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &280840668
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -151,72 +149,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GenerationControllerr
   shaderToDispatch: {fileID: 7200000, guid: 960e83aac4f822fd1b16e9e8930df0bb, type: 3}
-  normalizationShader: {fileID: 7200000, guid: ed4a6099d31776101823a3be173a3eb7, type: 3}
   groupScaleFactor: 4
-  noiseFrequency: 0.0015
+  noiseFrequency: 0.0017
   sharpness: 0.1
   slopeErosion: 0.01
   numOctaves: 3
   perturbationStrength: 0.2
-  terrainScale: 0.5
-  terrainSize: 1
---- !u!23 &280840670
-MeshRenderer:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 280840667}
-  m_Enabled: 1
-  m_CastShadows: 1
-  m_ReceiveShadows: 1
-  m_DynamicOccludee: 1
-  m_StaticShadowCaster: 0
-  m_MotionVectors: 1
-  m_LightProbeUsage: 1
-  m_ReflectionProbeUsage: 1
-  m_RayTracingMode: 2
-  m_RayTraceProcedural: 0
-  m_RayTracingAccelStructBuildFlagsOverride: 0
-  m_RayTracingAccelStructBuildFlags: 1
-  m_SmallMeshCulling: 1
-  m_ForceMeshLod: -1
-  m_MeshLodSelectionBias: 0
-  m_RenderingLayerMask: 1
-  m_RendererPriority: 0
-  m_Materials:
-  - {fileID: 812907298}
-  m_StaticBatchInfo:
-    firstSubMesh: 0
-    subMeshCount: 0
-  m_StaticBatchRoot: {fileID: 0}
-  m_ProbeAnchor: {fileID: 0}
-  m_LightProbeVolumeOverride: {fileID: 0}
-  m_ScaleInLightmap: 1
-  m_ReceiveGI: 1
-  m_PreserveUVs: 0
-  m_IgnoreNormalsForChartDetection: 0
-  m_ImportantGI: 0
-  m_StitchLightmapSeams: 1
-  m_SelectedEditorRenderState: 3
-  m_MinimumChartSize: 4
-  m_AutoUVMaxDistance: 0.5
-  m_AutoUVMaxAngle: 89
-  m_LightmapParameters: {fileID: 0}
-  m_GlobalIlluminationMeshLod: 0
-  m_SortingLayerID: 0
-  m_SortingLayer: 0
-  m_SortingOrder: 0
-  m_MaskInteraction: 0
-  m_AdditionalVertexStreams: {fileID: 0}
---- !u!33 &280840671
-MeshFilter:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 280840667}
-  m_Mesh: {fileID: -462981019419857548, guid: ad8c9fcdb4d3f648bb5ab01d253fa44f, type: 3}
 --- !u!4 &280840672
 Transform:
   m_ObjectHideFlags: 0
@@ -680,9 +618,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GenerationPipeline.TerrainGenerator
   terrainSize: 1
-  terrainScale: 0.25
+  terrainScale: 0.5
   pipelineSteps:
-  - {fileID: 360891026}
+  - {fileID: 852555921}
 --- !u!4 &385078007
 Transform:
   m_ObjectHideFlags: 0
@@ -874,7 +812,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _HeightMap:
-        m_Texture: {fileID: 1977301766}
+        m_Texture: {fileID: 1173784755}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _Heightmap:
@@ -933,7 +871,7 @@ Material:
     - _GlossMapScale: 0
     - _Glossiness: 0
     - _GlossyReflections: 0
-    - _HeightScale: 0.25
+    - _HeightScale: 0.5
     - _Metallic: 0
     - _OcclusionStrength: 1
     - _Parallax: 0.005
@@ -1015,72 +953,13 @@ GameObject:
   m_Component:
   - component: {fileID: 852555919}
   - component: {fileID: 852555921}
-  - component: {fileID: 852555917}
-  - component: {fileID: 852555916}
   m_Layer: 0
   m_Name: RMDDispatcher
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
---- !u!23 &852555916
-MeshRenderer:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 852555915}
-  m_Enabled: 1
-  m_CastShadows: 1
-  m_ReceiveShadows: 1
-  m_DynamicOccludee: 1
-  m_StaticShadowCaster: 0
-  m_MotionVectors: 1
-  m_LightProbeUsage: 1
-  m_ReflectionProbeUsage: 1
-  m_RayTracingMode: 2
-  m_RayTraceProcedural: 0
-  m_RayTracingAccelStructBuildFlagsOverride: 0
-  m_RayTracingAccelStructBuildFlags: 1
-  m_SmallMeshCulling: 1
-  m_ForceMeshLod: -1
-  m_MeshLodSelectionBias: 0
-  m_RenderingLayerMask: 1
-  m_RendererPriority: 0
-  m_Materials:
-  - {fileID: 812907298}
-  m_StaticBatchInfo:
-    firstSubMesh: 0
-    subMeshCount: 0
-  m_StaticBatchRoot: {fileID: 0}
-  m_ProbeAnchor: {fileID: 0}
-  m_LightProbeVolumeOverride: {fileID: 0}
-  m_ScaleInLightmap: 1
-  m_ReceiveGI: 1
-  m_PreserveUVs: 0
-  m_IgnoreNormalsForChartDetection: 0
-  m_ImportantGI: 0
-  m_StitchLightmapSeams: 1
-  m_SelectedEditorRenderState: 3
-  m_MinimumChartSize: 4
-  m_AutoUVMaxDistance: 0.5
-  m_AutoUVMaxAngle: 89
-  m_LightmapParameters: {fileID: 0}
-  m_GlobalIlluminationMeshLod: 0
-  m_SortingLayerID: 0
-  m_SortingLayer: 0
-  m_SortingOrder: 0
-  m_MaskInteraction: 0
-  m_AdditionalVertexStreams: {fileID: 0}
---- !u!33 &852555917
-MeshFilter:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 852555915}
-  m_Mesh: {fileID: -462981019419857548, guid: ad8c9fcdb4d3f648bb5ab01d253fa44f, type: 3}
+  m_IsActive: 1
 --- !u!4 &852555919
 Transform:
   m_ObjectHideFlags: 0
@@ -1109,13 +988,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MidpointDisplacementController
   shaderToDispatch: {fileID: 7200000, guid: 2da1ab904200f97c69eeb6b358aa73d3, type: 3}
-  normalizationShader: {fileID: 7200000, guid: ed4a6099d31776101823a3be173a3eb7, type: 3}
-  groupScaleFactor: 2
-  terrainScale: 1
-  numSubdivisions: 2
-  H: 0.1
+  groupScaleFactor: 4
+  numSubdivisions: 4
+  H: 0.103
   addExtraNoise: 1
-  worleyFrequency: 2
+  worleyFrequency: 3.13
   perlinFrequency: 2.68
 --- !u!1 &1078476957
 GameObject:
@@ -1181,7 +1058,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!84 &1977301766
+--- !u!84 &1173784755
 RenderTexture:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
