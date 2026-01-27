@@ -20,8 +20,8 @@ public class UNDispatcher : GenerationPipeline.MultiFormatPipelineStep
     [Range(-10.0f, 10.0f)]
     public float sharpness = 0.0f;
 
-    [Range(0.01f, 10.0f)]
-    public float slopeErosion = 0.01f;
+    [Range(0.001f, 10.0f)]
+    public float slopeErosion = 0.001f;
 
     [Range(1, 20)]
     public int numOctaves = 5;
@@ -45,11 +45,13 @@ public class UNDispatcher : GenerationPipeline.MultiFormatPipelineStep
         shaderToDispatch.SetInt("texelsPerThread", textureSize / numLinearThreads);
         shaderToDispatch.SetFloat("noiseFrequency", noiseFrequency);
 
-        shaderToDispatch.SetFloat("sharpness", sharpness);
-        shaderToDispatch.SetFloat("slopeErosion", slopeErosion);
-        shaderToDispatch.SetFloat("perturbationStrength", perturbationStrength);
-        shaderToDispatch.SetInt("numOctaves", numOctaves);
-        shaderToDispatch.SetFloat("persistence", persistence);
+        {
+            shaderToDispatch.SetFloat("sharpness", sharpness);
+            shaderToDispatch.SetFloat("slopeErosion", slopeErosion);
+            shaderToDispatch.SetFloat("perturbationStrength", perturbationStrength);
+            shaderToDispatch.SetInt("numOctaves", numOctaves);
+            shaderToDispatch.SetFloat("persistence", persistence);
+        }
 
         shaderToDispatch.Dispatch(kernelIdx, numGroups, numGroups, 1);
     }
