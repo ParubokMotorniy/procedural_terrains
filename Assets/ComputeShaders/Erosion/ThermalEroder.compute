@@ -1,0 +1,145 @@
+RWTexture2D<float> resultHeightmap;
+uniform int2 heightmapDimensions; // so as not to GetDimensions() every time
+
+uniform int texelsPerThread;
+uniform float distributionCoefficient;
+uniform float talusThreshold;
+
+// TODO: first, let's stick to the reference implementation. The boundary reads/writes can be resolved with atomics without the need for an extra texture. The reliance on compute shaders allows to experiment with Moore neighborhood and scale the material transition by distance to cells. I'll probably have to keep a map of  two reads and sub VS two reads -> useless
+
+// TODO: the goal is to address grid updtaes. Perfectly, I'd need to isloate 3x3 grid from other threads on the boundary. I need to serialize operations on the boundary.
+
+int2 terrainWrap(int2 a, int2 b)
+{
+    return (a % b + b) % b;
+}
+
+struct TexelHeightDistribution
+{
+    float heightSpreadValue[3][3];
+};
+
+float computeSingleHeightIncrement(float texelHeight, float heightDistance, float distanceSum, float maxNeighborHeightDistance)
+{
+    return distributionCoefficient * (maxNeighborHeightDistance - talusThreshold) * (heightDistance / distanceSum);
+}
+
+TexelHeightDistribution computeHeightDistribution(int2 processedTexel)
+{
+    TexelHeightDistribution nInfo;
+
+    float texelHeight = resultHeightmap[processedTexel];
+    // clockwise, starting from top left
+    float d1 = texelHeight - resultHeightmap[terrainWrap(processedTexel + int2(-1, -1), heightmapDimensions)];
+    d1 = d1 > talusThreshold ? d1 : 0.0;
+
+    float d2 = texelHeight - resultHeightmap[terrainWrap(processedTexel + int2(0, -1), heightmapDimensions)];
+    d2 = d2 > talusThreshold ? d2 : 0.0;
+
+    float d3 = texelHeight - resultHeightmap[terrainWrap(processedTexel + int2(1, -1), heightmapDimensions)];
+    d3 = d3 > talusThreshold ? d3 : 0.0;
+
+    float d4 = texelHeight - resultHeightmap[terrainWrap(processedTexel + int2(1, 0), heightmapDimensions)];
+    d4 = d4 > talusThreshold ? d4 : 0.0;
+
+    float d5 = texelHeight - resultHeightmap[terrainWrap(processedTexel + int2(1, 1), heightmapDimensions)];
+    d5 = d5 > talusThreshold ? d5 : 0.0;
+
+    float d6 = texelHeight - resultHeightmap[terrainWrap(processedTexel + int2(0, 1), heightmapDimensions)];
+    d6 = d6 > talusThreshold ? d6 : 0.0;
+
+    float d7 = texelHeight - resultHeightmap[terrainWrap(processedTexel + int2(-1, 1), heightmapDimensions)];
+    d7 = d7 > talusThreshold ? d7 : 0.0;
+
+    float d8 = texelHeight - resultHeightmap[terrainWrap(processedTexel + int2(-1, 0), heightmapDimensions)];
+    d8 = d8 > talusThreshold ? d8 : 0.0;
+
+    float exceedingSum = d1 + d2 + d3 + d4 + d5 + d6 + d7 + d8 + 1.0e-5;
+    float maxHeight = max(d1, max(d2, max(d3, max(d4, max(d5, max(d6, max(d7, d8)))))));
+
+    nInfo.heightSpreadValue[0][0] = computeSingleHeightIncrement(texelHeight, d1, exceedingSum, maxHeight);
+    nInfo.heightSpreadValue[0][1] = computeSingleHeightIncrement(texelHeight, d2, exceedingSum, maxHeight);
+    nInfo.heightSpreadValue[0][2] = computeSingleHeightIncrement(texelHeight, d3, exceedingSum, maxHeight);
+
+    nInfo.heightSpreadValue[1][2] = computeSingleHeightIncrement(texelHeight, d4, exceedingSum, maxHeight);
+    nInfo.heightSpreadValue[2][2] = computeSingleHeightIncrement(texelHeight, d5, exceedingSum, maxHeight);
+
+    nInfo.heightSpreadValue[2][1] = computeSingleHeightIncrement(texelHeight, d6, exceedingSum, maxHeight);
+    nInfo.heightSpreadValue[2][0] = computeSingleHeightIncrement(texelHeight, d7, exceedingSum, maxHeight);
+    nInfo.heightSpreadValue[1][0] = computeSingleHeightIncrement(texelHeight, d8, exceedingSum, maxHeight);
+
+    nInfo.heightSpreadValue[1][1] = -(nInfo.heightSpreadValue[0][0] +
+                                      nInfo.heightSpreadValue[0][1] +
+                                      nInfo.heightSpreadValue[0][2] +
+                                      nInfo.heightSpreadValue[1][2] +
+                                      nInfo.heightSpreadValue[2][2] +
+                                      nInfo.heightSpreadValue[2][1] +
+                                      nInfo.heightSpreadValue[2][0] +
+                                      nInfo.heightSpreadValue[1][0]);
+    return nInfo;
+}
+
+#pragma kernel ThermalCoreEroder
+[numthreads(32, 32, 1)] void ThermalCoreEroder(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+{
+    int2 topLeftCorner = globalId.xy * texelsPerThread;
+
+    for (int x = 2; x < texelsPerThread; ++x)
+    {
+        for (int y = 2; y < texelsPerThread; ++y)
+        {
+            uint2 processedTexel = topLeftCorner + uint2(x, y);
+            TexelHeightDistribution distributionAtTexel = computeHeightDistribution(processedTexel);
+
+            for (int i = -1; i < 2; ++i)
+            {
+                for (int j = -1; j < 2; ++j)
+                {
+                    resultHeightmap[terrainWrap(processedTexel + int2(i, j), heightmapDimensions)] = distributionAtTexel.heightSpreadValue[j + 1][i + 1]; // atomicity is guaranteed
+                }
+            }
+        }
+    }
+}
+
+#pragma kernel ThermalBorderEroder
+    [numthreads(32, 32, 1)] void ThermalBorderEroder(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+{
+    uint2 topLeftCorner = globalId.xy * texelsPerThread;
+
+    // horizontal strip
+    for (int x_h = 0; x_h < texelsPerThread; ++x_h)
+    {
+        for (int y_h = 0; y_h < 2; ++y_h)
+        {
+            uint2 processedTexel = topLeftCorner + uint2(x_h, y_h);
+            TexelHeightDistribution distributionAtTexel = computeHeightDistribution(processedTexel);
+
+            for (int i = -1; i < 2; ++i)
+            {
+                for (int j = -1; j < 2; ++j)
+                {
+                    resultHeightmap[terrainWrap((int2)processedTexel + int2(i, j), heightmapDimensions)] = distributionAtTexel.heightSpreadValue[j + 1][i + 1]; // atomicity is guaranteed
+                }
+            }
+        }
+    }
+
+    // vertical strip
+    for (int x_v = 0; x_v < 2; ++x_v)
+    {
+        for (int y_v = 2; y_v < texelsPerThread; ++y_v)
+        {
+            uint2 processedTexel = topLeftCorner + uint2(x_v, y_v);
+            TexelHeightDistribution distributionAtTexel = computeHeightDistribution(processedTexel);
+
+            for (int i = -1; i < 2; ++i)
+            {
+                for (int j = -1; j < 2; ++j)
+                {
+                    resultHeightmap[terrainWrap((int2)processedTexel + int2(i, j), heightmapDimensions)] = distributionAtTexel.heightSpreadValue[j + 1][i + 1]; // atomicity is guaranteed
+                }
+            }
+        }
+    }
+}

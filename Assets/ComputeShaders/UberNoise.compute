@@ -1,6 +1,5 @@
 #include "../../3rdparty/hlsl_noise/ashima/psrdnoise2D.hlsl"
 
-#pragma kernel UberNoiseTerrainGenerator
 
 uniform int texelsPerThread;
 uniform float noiseFrequency;
@@ -8,6 +7,7 @@ uniform float noiseFrequency;
 uniform float sharpness;
 uniform float slopeErosion;
 uniform float perturbationStrength;
+uniform float persistence;
 uniform int numOctaves;
 
 // GLSL	                    HLSL
@@ -29,6 +29,7 @@ RWTexture2D<float> Result;
 
 #define PI 3.141592654
 
+#pragma kernel UberNoiseTerrainGenerator
 [numthreads(32, 32, 1)] void UberNoiseTerrainGenerator(uint3 id : SV_DispatchThreadID)
 {
     uint2 topLeftThreadCorner = id.xy * texelsPerThread;
@@ -71,7 +72,7 @@ RWTexture2D<float> Result;
                 float derivativeNorm = dot(slopeErosionDerivativeSum, slopeErosionDerivativeSum);
                 noiseResult += octaveAmplitude * featureNoise * (1.0 / (1.0 + derivativeNorm));
 
-                octaveAmplitude /= 2.0;
+                octaveAmplitude *= persistence;
                 octaveFrequency *= 2.0;
             }
 

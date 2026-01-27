@@ -73,6 +73,9 @@ namespace GenerationPipeline
                 step.ExecuteStep(currentContext);
             }
 
+            RenderTextureDumper.SaveRFloatToExr(intermediateHeightmap,"erosion_inter_test.exr");
+            RenderTextureDumper.SaveRFloatToExr(currentContext.finalHeightmap,"erosion_final_test.exr");
+
             Debug.Log("Terrain has been regenerated!");
         }
 

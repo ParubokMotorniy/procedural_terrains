@@ -29,6 +29,7 @@ namespace GenerationPipeline
                 normalizationShader.Dispatch(normalizationKernel, 1, 1, 1);
             }
 
+            Debug.Log("Heightmap has been normalized. Max height now: " + 1.0);
         }
 
         public InputExpectations GetStepExpectations()

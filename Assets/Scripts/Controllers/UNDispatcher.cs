@@ -1,17 +1,21 @@
 using UnityEngine;
 using UnityEngine.Assertions;
 using GenerationPipeline;
+using Unity.Mathematics;
 
-public class GenerationControllerr : GenerationPipeline.MultiFormatPipelineStep
+public class UNDispatcher : GenerationPipeline.MultiFormatPipelineStep
 {
     [SerializeField]
     private ComputeShader shaderToDispatch;
 
-    [Range(1, 8)]
-    public int groupScaleFactor = 1;
+    [Range(0, 3)]
+    public int groupScaleFactor = 0;
 
     [Range(0.001f, 2.0f)]
     public float noiseFrequency = 0.001f;
+
+    [Range(0.01f, 1.0f)]
+    public float persistence = 0.2f;
 
     [Range(-10.0f, 10.0f)]
     public float sharpness = 0.0f;
@@ -33,18 +37,21 @@ public class GenerationControllerr : GenerationPipeline.MultiFormatPipelineStep
     public override void StepBody(PipelineContext pipelineContext)
     {
         int textureSize = pipelineContext.GetHeightmapSize();
+        int numGroups = (int)math.pow(2, groupScaleFactor);
+        int numLinearThreads = groupSize * numGroups;
 
         int kernelIdx = shaderToDispatch.FindKernel("UberNoiseTerrainGenerator");
         shaderToDispatch.SetTexture(kernelIdx, Shader.PropertyToID("Result"), pipelineContext.intermediateHeightmap);
-        shaderToDispatch.SetInt("texelsPerThread", textureSize / (groupScaleFactor * groupSize));
+        shaderToDispatch.SetInt("texelsPerThread", textureSize / numLinearThreads);
         shaderToDispatch.SetFloat("noiseFrequency", noiseFrequency);
 
         shaderToDispatch.SetFloat("sharpness", sharpness);
         shaderToDispatch.SetFloat("slopeErosion", slopeErosion);
         shaderToDispatch.SetFloat("perturbationStrength", perturbationStrength);
         shaderToDispatch.SetInt("numOctaves", numOctaves);
+        shaderToDispatch.SetFloat("persistence", persistence);
 
-        shaderToDispatch.Dispatch(kernelIdx, groupScaleFactor, groupScaleFactor, groupScaleFactor);
+        shaderToDispatch.Dispatch(kernelIdx, numGroups, numGroups, 1);
     }
 
     public override void StepConclusion(PipelineContext pipelineContext)

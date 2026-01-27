@@ -8,13 +8,13 @@ using System.IO;
 using System;
 using GenerationPipeline;
 
-public class MidpointDisplacementController : GenerationPipeline.MultiFormatPipelineStep
+public class RMDDispatcher : GenerationPipeline.MultiFormatPipelineStep
 {
     [SerializeField]
     private ComputeShader shaderToDispatch;
 
-    [Range(1, 8)]
-    public int groupScaleFactor = 1;
+    [Range(0, 3)]
+    public int groupScaleFactor = 0;
 
     [Range(1, 16)]
     public uint numSubdivisions = 2;
@@ -39,7 +39,9 @@ public class MidpointDisplacementController : GenerationPipeline.MultiFormatPipe
     public override void StepBody(PipelineContext pipelineContext)
     {
         int texelsPerThreadDomain = (int)math.pow(2, numSubdivisions);
-        int textureSize = groupSize * texelsPerThreadDomain * groupScaleFactor;
+        int numGroups = (int)math.pow(2, groupScaleFactor);
+        int numLinearThreads = groupSize * numGroups;
+        int textureSize = numLinearThreads * texelsPerThreadDomain;
 
         RenderTexture noiseRenderTexture = new RenderTexture(textureSize, textureSize, 0)
         {
@@ -60,8 +62,8 @@ public class MidpointDisplacementController : GenerationPipeline.MultiFormatPipe
         int extraNoiseKernel = shaderToDispatch.FindKernel("AddExtraNoise");
 
         shaderToDispatch.SetInt("threadDomainTexelWidth", texelsPerThreadDomain);
-        shaderToDispatch.SetInt("threadSubdomainsX", groupSize * groupScaleFactor);
-        shaderToDispatch.SetInt("threadSubdomainsY", groupSize * groupScaleFactor);
+        shaderToDispatch.SetInt("threadSubdomainsX", numLinearThreads);
+        shaderToDispatch.SetInt("threadSubdomainsY", numLinearThreads);
         shaderToDispatch.SetFloat("worleyFrequency", worleyFrequency);
         shaderToDispatch.SetFloat("perlinFrequency", perlinFrequency);
 
@@ -75,7 +77,7 @@ public class MidpointDisplacementController : GenerationPipeline.MultiFormatPipe
 
         float octaveAmplitude = 1.0f;
         shaderToDispatch.SetFloat("octaveAmplitude", octaveAmplitude);
-        shaderToDispatch.Dispatch(initializationKernelIdx, groupScaleFactor, groupScaleFactor, 1);
+        shaderToDispatch.Dispatch(initializationKernelIdx, numGroups, numGroups, 1);
 
         for (int sub = 0; sub < numSubdivisions; ++sub)
         {
@@ -85,23 +87,23 @@ public class MidpointDisplacementController : GenerationPipeline.MultiFormatPipe
             octaveAmplitude *= H;
             shaderToDispatch.SetFloat("octaveAmplitude", octaveAmplitude);
             shaderToDispatch.SetFloats("noiseDisplacement", new float[] { (float)rng.NextDouble(), (float)rng.NextDouble() });
-            shaderToDispatch.Dispatch(transition12KernelIdx, groupScaleFactor, groupScaleFactor, 1);
+            shaderToDispatch.Dispatch(transition12KernelIdx, numGroups, numGroups, 1);
 
             if (addExtraNoise)
             {
                 shaderToDispatch.SetFloats("noiseDisplacement", new float[] { (float)rng.NextDouble(), (float)rng.NextDouble() });
-                shaderToDispatch.Dispatch(extraNoiseKernel, groupScaleFactor, groupScaleFactor, 1);
+                shaderToDispatch.Dispatch(extraNoiseKernel, numGroups, numGroups, 1);
             }
 
             octaveAmplitude *= H;
             shaderToDispatch.SetFloat("octaveAmplitude", octaveAmplitude);
             shaderToDispatch.SetFloats("noiseDisplacement", new float[] { (float)rng.NextDouble(), (float)rng.NextDouble() });
-            shaderToDispatch.Dispatch(transition21KernelIdx, groupScaleFactor, groupScaleFactor, 1);
+            shaderToDispatch.Dispatch(transition21KernelIdx, numGroups, numGroups, 1);
 
             if (addExtraNoise)
             {
                 shaderToDispatch.SetFloats("noiseDisplacement", new float[] { (float)rng.NextDouble(), (float)rng.NextDouble() });
-                shaderToDispatch.Dispatch(extraNoiseKernel, groupScaleFactor, groupScaleFactor, 1);
+                shaderToDispatch.Dispatch(extraNoiseKernel, numGroups, numGroups, 1);
             }
         }
 

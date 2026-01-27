@@ -149,8 +149,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GenerationControllerr
   shaderToDispatch: {fileID: 7200000, guid: 960e83aac4f822fd1b16e9e8930df0bb, type: 3}
-  groupScaleFactor: 4
+  groupScaleFactor: 3
   noiseFrequency: 0.0017
+  persistence: 0.2
   sharpness: 0.1
   slopeErosion: 0.01
   numOctaves: 3
@@ -512,7 +513,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SDFDispatcher
   shaderToDispatch: {fileID: 7200000, guid: 6533fa195b3b17795aa989c0fcf24026, type: 3}
-  groupScaleFactor: 2
+  groupScaleFactor: 1
   baseSimplexFrequency: 3.15
 --- !u!4 &360891027
 Transform:
@@ -618,9 +619,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GenerationPipeline.TerrainGenerator
   terrainSize: 1
-  terrainScale: 0.5
+  terrainScale: 0.25
   pipelineSteps:
-  - {fileID: 852555921}
+  - {fileID: 360891026}
+  - {fileID: 1412956747}
 --- !u!4 &385078007
 Transform:
   m_ObjectHideFlags: 0
@@ -812,7 +814,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _HeightMap:
-        m_Texture: {fileID: 1173784755}
+        m_Texture: {fileID: 1315101612}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _Heightmap:
@@ -871,7 +873,7 @@ Material:
     - _GlossMapScale: 0
     - _Glossiness: 0
     - _GlossyReflections: 0
-    - _HeightScale: 0.5
+    - _HeightScale: 0.25
     - _Metallic: 0
     - _OcclusionStrength: 1
     - _Parallax: 0.005
@@ -988,7 +990,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MidpointDisplacementController
   shaderToDispatch: {fileID: 7200000, guid: 2da1ab904200f97c69eeb6b358aa73d3, type: 3}
-  groupScaleFactor: 4
+  groupScaleFactor: 3
   numSubdivisions: 4
   H: 0.103
   addExtraNoise: 1
@@ -1058,7 +1060,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!84 &1173784755
+--- !u!84 &1315101612
 RenderTexture:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -1095,6 +1097,55 @@ RenderTexture:
   m_Dimension: 2
   m_VolumeDepth: 1
   m_ShadowSamplingMode: 2
+--- !u!1 &1412956746
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1412956748}
+  - component: {fileID: 1412956747}
+  m_Layer: 0
+  m_Name: ThermalErosionDispatcher
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1412956747
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1412956746}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c7cc9dd4177d33bb5a7fbefcdd4dffff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ThermalErosionDispatcher
+  erosionComputeShader: {fileID: 7200000, guid: fd1160cbc396f5665a006dc6a2d9b936, type: 3}
+  distributionCoefficient: 0.15
+  talusThreshold: 0.15
+  groupScaleFactor: 1
+  erosionIterationLimit: 1
+--- !u!4 &1412956748
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1412956746}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -31.13391, y: -0, z: -55.56196}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -1105,5 +1156,6 @@ SceneRoots:
   - {fileID: 280840672}
   - {fileID: 852555919}
   - {fileID: 360891027}
+  - {fileID: 1412956748}
   - {fileID: 385078007}
   - {fileID: 1078476959}
