@@ -16,6 +16,11 @@ namespace GenerationPipeline
         [Range(0.001f, 32.0f)]
         public float terrainScale = 1.0f;
 
+#if UNITY_EDITOR
+        [SerializeField]
+        bool dumpTextures = false;
+#endif
+
         public List<MonoPipelineStep> pipelineSteps;
 
         private RenderTexture intermediateHeightmap;
@@ -73,9 +78,13 @@ namespace GenerationPipeline
                 step.ExecuteStep(currentContext);
             }
 
-            RenderTextureDumper.SaveRFloatToExr(intermediateHeightmap,"erosion_inter_test.exr");
-            RenderTextureDumper.SaveRFloatToExr(currentContext.finalHeightmap,"erosion_final_test.exr");
-
+#if UNITY_EDITOR
+            if (dumpTextures)
+            {
+                RenderTextureDumper.SaveRFloatToExr(intermediateHeightmap, "heightmap_intermediate.exr");
+                RenderTextureDumper.SaveRFloatToExr(currentContext.finalHeightmap, "heightmap_final.exr");
+            }
+#endif
             Debug.Log("Terrain has been regenerated!");
         }
 

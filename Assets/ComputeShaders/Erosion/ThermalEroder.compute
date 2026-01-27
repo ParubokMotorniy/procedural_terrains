@@ -19,7 +19,7 @@ struct TexelHeightDistribution
     float heightSpreadValue[3][3];
 };
 
-float computeSingleHeightIncrement(float texelHeight, float heightDistance, float distanceSum, float maxNeighborHeightDistance)
+float computeSingleHeightIncrement(float heightDistance, float distanceSum, float maxNeighborHeightDistance)
 {
     return distributionCoefficient * (maxNeighborHeightDistance - talusThreshold) * (heightDistance / distanceSum);
 }
@@ -29,53 +29,42 @@ TexelHeightDistribution computeHeightDistribution(int2 processedTexel)
     TexelHeightDistribution nInfo;
 
     float texelHeight = resultHeightmap[processedTexel];
-    // clockwise, starting from top left
-    float d1 = texelHeight - resultHeightmap[terrainWrap(processedTexel + int2(-1, -1), heightmapDimensions)];
-    d1 = d1 > talusThreshold ? d1 : 0.0;
 
-    float d2 = texelHeight - resultHeightmap[terrainWrap(processedTexel + int2(0, -1), heightmapDimensions)];
-    d2 = d2 > talusThreshold ? d2 : 0.0;
+    float exceedingSum = 1.0e-5;
+    float maxHeightDistance = 0.0;
+    for (int x = -1; x < 2; ++x)
+    {
+        for (int y = -1; y < 2; ++y)
+        {
+            float d = texelHeight - resultHeightmap[terrainWrap(processedTexel + int2(x, y), heightmapDimensions)];
+            d = d > talusThreshold ? d : 0.0;
 
-    float d3 = texelHeight - resultHeightmap[terrainWrap(processedTexel + int2(1, -1), heightmapDimensions)];
-    d3 = d3 > talusThreshold ? d3 : 0.0;
+            exceedingSum += d;
+            maxHeightDistance = max(maxHeightDistance, d);
+            nInfo.heightSpreadValue[y + 1][x + 1] = d;
+        }
+    }
 
-    float d4 = texelHeight - resultHeightmap[terrainWrap(processedTexel + int2(1, 0), heightmapDimensions)];
-    d4 = d4 > talusThreshold ? d4 : 0.0;
+    for (int x = -1; x < 2; ++x)
+    {
+        for (int y = -1; y < 2; ++y)
+        {
+            float d = nInfo.heightSpreadValue[y + 1][x + 1];
+            nInfo.heightSpreadValue[y + 1][x + 1] = computeSingleHeightIncrement(d, exceedingSum, maxHeightDistance); 
+        }
+    }
 
-    float d5 = texelHeight - resultHeightmap[terrainWrap(processedTexel + int2(1, 1), heightmapDimensions)];
-    d5 = d5 > talusThreshold ? d5 : 0.0;
-
-    float d6 = texelHeight - resultHeightmap[terrainWrap(processedTexel + int2(0, 1), heightmapDimensions)];
-    d6 = d6 > talusThreshold ? d6 : 0.0;
-
-    float d7 = texelHeight - resultHeightmap[terrainWrap(processedTexel + int2(-1, 1), heightmapDimensions)];
-    d7 = d7 > talusThreshold ? d7 : 0.0;
-
-    float d8 = texelHeight - resultHeightmap[terrainWrap(processedTexel + int2(-1, 0), heightmapDimensions)];
-    d8 = d8 > talusThreshold ? d8 : 0.0;
-
-    float exceedingSum = d1 + d2 + d3 + d4 + d5 + d6 + d7 + d8 + 1.0e-5;
-    float maxHeight = max(d1, max(d2, max(d3, max(d4, max(d5, max(d6, max(d7, d8)))))));
-
-    nInfo.heightSpreadValue[0][0] = computeSingleHeightIncrement(texelHeight, d1, exceedingSum, maxHeight);
-    nInfo.heightSpreadValue[0][1] = computeSingleHeightIncrement(texelHeight, d2, exceedingSum, maxHeight);
-    nInfo.heightSpreadValue[0][2] = computeSingleHeightIncrement(texelHeight, d3, exceedingSum, maxHeight);
-
-    nInfo.heightSpreadValue[1][2] = computeSingleHeightIncrement(texelHeight, d4, exceedingSum, maxHeight);
-    nInfo.heightSpreadValue[2][2] = computeSingleHeightIncrement(texelHeight, d5, exceedingSum, maxHeight);
-
-    nInfo.heightSpreadValue[2][1] = computeSingleHeightIncrement(texelHeight, d6, exceedingSum, maxHeight);
-    nInfo.heightSpreadValue[2][0] = computeSingleHeightIncrement(texelHeight, d7, exceedingSum, maxHeight);
-    nInfo.heightSpreadValue[1][0] = computeSingleHeightIncrement(texelHeight, d8, exceedingSum, maxHeight);
-
+    //how much height the central texel loses
     nInfo.heightSpreadValue[1][1] = -(nInfo.heightSpreadValue[0][0] +
                                       nInfo.heightSpreadValue[0][1] +
                                       nInfo.heightSpreadValue[0][2] +
+
+                                      nInfo.heightSpreadValue[1][0] +
                                       nInfo.heightSpreadValue[1][2] +
-                                      nInfo.heightSpreadValue[2][2] +
-                                      nInfo.heightSpreadValue[2][1] +
+
                                       nInfo.heightSpreadValue[2][0] +
-                                      nInfo.heightSpreadValue[1][0]);
+                                      nInfo.heightSpreadValue[2][1] +
+                                      nInfo.heightSpreadValue[2][2]);
     return nInfo;
 }
 
@@ -95,7 +84,7 @@ TexelHeightDistribution computeHeightDistribution(int2 processedTexel)
             {
                 for (int j = -1; j < 2; ++j)
                 {
-                    resultHeightmap[terrainWrap(processedTexel + int2(i, j), heightmapDimensions)] = distributionAtTexel.heightSpreadValue[j + 1][i + 1]; // atomicity is guaranteed
+                    resultHeightmap[terrainWrap(processedTexel + int2(i, j), heightmapDimensions)] += distributionAtTexel.heightSpreadValue[j + 1][i + 1]; // atomicity is guaranteed
                 }
             }
         }
@@ -119,7 +108,7 @@ TexelHeightDistribution computeHeightDistribution(int2 processedTexel)
             {
                 for (int j = -1; j < 2; ++j)
                 {
-                    resultHeightmap[terrainWrap((int2)processedTexel + int2(i, j), heightmapDimensions)] = distributionAtTexel.heightSpreadValue[j + 1][i + 1]; // atomicity is guaranteed
+                    resultHeightmap[terrainWrap((int2)processedTexel + int2(i, j), heightmapDimensions)] += distributionAtTexel.heightSpreadValue[j + 1][i + 1]; // atomicity is guaranteed
                 }
             }
         }
@@ -137,7 +126,7 @@ TexelHeightDistribution computeHeightDistribution(int2 processedTexel)
             {
                 for (int j = -1; j < 2; ++j)
                 {
-                    resultHeightmap[terrainWrap((int2)processedTexel + int2(i, j), heightmapDimensions)] = distributionAtTexel.heightSpreadValue[j + 1][i + 1]; // atomicity is guaranteed
+                    resultHeightmap[terrainWrap((int2)processedTexel + int2(i, j), heightmapDimensions)] += distributionAtTexel.heightSpreadValue[j + 1][i + 1]; // atomicity is guaranteed
                 }
             }
         }
