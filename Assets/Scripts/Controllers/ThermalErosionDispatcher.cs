@@ -2,7 +2,7 @@ using GenerationPipeline;
 using Unity.Mathematics;
 using UnityEngine;
 
-public class ThermalErosionDispatcher : GenerationPipeline.MultiFormatPipelineStep
+public class ThermalErosionDispatcher : MultiFormatPipelineStep
 {
     [SerializeField]
     public ComputeShader erosionComputeShader;
@@ -17,14 +17,21 @@ public class ThermalErosionDispatcher : GenerationPipeline.MultiFormatPipelineSt
     public int groupScaleFactor = 0;
 
     [Range(1, 100)]
-    public int erosionIterationLimit = 25; //TODO: a complex border update serialization scheme can allow to get rid of iterative dispatching on CPU
+    public int erosionIterationLimit = 25; // TODO: border update serialization scheme may remove iterative CPU dispatching
 
-    private readonly int groupSize = 32;
+    private const int groupSize = 32;
+
+    // Property IDs (cached)
+    private static readonly int PID_resultHeightmap = Shader.PropertyToID("resultHeightmap");
+    private static readonly int PID_texelsPerThread = Shader.PropertyToID("texelsPerThread");
+    private static readonly int PID_distributionCoefficient = Shader.PropertyToID("distributionCoefficient");
+    private static readonly int PID_talusThreshold = Shader.PropertyToID("talusThreshold");
+    private static readonly int PID_heightmapDimensions = Shader.PropertyToID("heightmapDimensions");
 
     public override InputExpectations GetStepExpectations()
-    {
-        return InputExpectations.HeightMapNormalized; //TODO: I can save on normalization if the talus threshold is adjusted to the effective range of heights emerging from the previous stage.
-    }
+        => InputExpectations.HeightMapNormalized; // TODO: skip normalization by adjusting talus threshold to effective height range
+
+    public override void StepInitialization(PipelineContext pipelineContext) { }
 
     public override void StepBody(PipelineContext pipelineContext)
     {
@@ -35,28 +42,24 @@ public class ThermalErosionDispatcher : GenerationPipeline.MultiFormatPipelineSt
         int coreKernelIdx = erosionComputeShader.FindKernel("ThermalCoreEroder");
         int borderKernelIdx = erosionComputeShader.FindKernel("ThermalBorderEroder");
 
-        erosionComputeShader.SetTexture(coreKernelIdx, Shader.PropertyToID("resultHeightmap"), pipelineContext.intermediateHeightmap);
-        erosionComputeShader.SetTexture(borderKernelIdx, Shader.PropertyToID("resultHeightmap"), pipelineContext.intermediateHeightmap);
-
-        erosionComputeShader.SetInt("texelsPerThread", textureSize / numLinearThreads);
-        erosionComputeShader.SetFloat("distributionCoefficient", distributionCoefficient);
-        erosionComputeShader.SetFloat("talusThreshold", talusThreshold);
-        erosionComputeShader.SetInts("heightmapDimensions", new int[2] { textureSize, textureSize });
-
-        for (int d = 0; d < erosionIterationLimit; ++d)
+        foreach (int kernelIdx in new[] { coreKernelIdx, borderKernelIdx })
         {
-            pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, coreKernelIdx, new Vector3(numGroups, numGroups, 1));
-            pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, borderKernelIdx, new Vector3(numGroups, numGroups, 1));
+            pipelineContext.BindTexture(erosionComputeShader, kernelIdx, PID_resultHeightmap, pipelineContext.intermediateHeightmap);
+        }
+
+        pipelineContext.SetUniformInt(erosionComputeShader, PID_texelsPerThread, textureSize / numLinearThreads);
+        pipelineContext.SetUniformFloat(erosionComputeShader, PID_distributionCoefficient, distributionCoefficient);
+        pipelineContext.SetUniformFloat(erosionComputeShader, PID_talusThreshold, talusThreshold);
+
+        pipelineContext.SetUniformInts(erosionComputeShader, PID_heightmapDimensions, new int[2] { textureSize, textureSize });
+
+        var dispatchGroups = new Vector3(numGroups, numGroups, 1);
+        for (int i = 0; i < erosionIterationLimit; ++i)
+        {
+            pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, coreKernelIdx, dispatchGroups);
+            pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, borderKernelIdx, dispatchGroups);
         }
     }
 
-    public override void StepConclusion(PipelineContext pipelineContext)
-    {
-
-    }
-
-    public override void StepInitialization(PipelineContext pipelineContext)
-    {
-
-    }
+    public override void StepConclusion(PipelineContext pipelineContext) { }
 }

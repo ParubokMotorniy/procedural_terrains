@@ -57,19 +57,19 @@ public class SDFDispatcher : MultiFormatPipelineStep
 
         foreach (int kernelIdx in new int[] { maskToSeedBufferKernelIdx, floodingStepKernelIdx, seedBufferToHieghtmapKernelIdx, coastlineGeneratorKernel, sDFPostprocessorKernel })
         {
-            shaderToDispatch.SetBuffer(kernelIdx, "buffer1", buffer1);
-            shaderToDispatch.SetBuffer(kernelIdx, "buffer2", buffer2);
-            shaderToDispatch.SetTexture(kernelIdx, "inputTexture", coastlineTexture);
-            shaderToDispatch.SetTexture(kernelIdx, "outputTexture", pipelineContext.intermediateHeightmap);
+            pipelineContext.BindComputeBuffer(shaderToDispatch, kernelIdx, Shader.PropertyToID("buffer1"), buffer1);
+            pipelineContext.BindComputeBuffer(shaderToDispatch, kernelIdx, Shader.PropertyToID("buffer2"), buffer2);
+            pipelineContext.BindTexture(shaderToDispatch, kernelIdx, Shader.PropertyToID("inputTexture"), coastlineTexture);
+            pipelineContext.BindTexture(shaderToDispatch, kernelIdx, Shader.PropertyToID("outputTexture"), pipelineContext.intermediateHeightmap);
         }
 
-        shaderToDispatch.SetInt("texelsPerThread", textureSize / numLinearThreads);
-        shaderToDispatch.SetInt("bufferSideLength", textureSize);
-        shaderToDispatch.SetInt("maskBorderWidth", (int)(textureSize * 0.2f)); //fix at 20%
+        pipelineContext.SetUniformInt(shaderToDispatch, Shader.PropertyToID("texelsPerThread"), textureSize / numLinearThreads);
+        pipelineContext.SetUniformInt(shaderToDispatch, Shader.PropertyToID("bufferSideLength"), textureSize);
+        pipelineContext.SetUniformInt(shaderToDispatch, Shader.PropertyToID("maskBorderWidth"), (int)(textureSize * 0.2f)); //fix at 20%
         float maxDistanceToSeed = math.sqrt(2 * textureSize * textureSize);
-        shaderToDispatch.SetFloat("shoreBaseHeight", maxDistanceToSeed * 0.005f); //fix at 0.5%
-        shaderToDispatch.SetFloat("shoreDistanceThreshold", textureSize * 0.1f); //fit at 10%
-        shaderToDispatch.SetFloat("simplexFrequency", baseSimplexFrequency);
+        pipelineContext.SetUniformFloat(shaderToDispatch, Shader.PropertyToID("shoreBaseHeight"), maxDistanceToSeed * 0.005f); //fix at 0.5%
+        pipelineContext.SetUniformFloat(shaderToDispatch, Shader.PropertyToID("shoreDistanceThreshold"), textureSize * 0.1f); //fit at 10%
+        pipelineContext.SetUniformFloat(shaderToDispatch, Shader.PropertyToID("simplexFrequency"), baseSimplexFrequency);
 
         int currentReadBuffer = 1;
         int currentFloodStep = textureSize;
@@ -77,7 +77,7 @@ public class SDFDispatcher : MultiFormatPipelineStep
         Action updateSourceBuffer = () =>
         {
             currentReadBuffer = (currentReadBuffer + 1) % 2;
-            shaderToDispatch.SetInt("currentSourceBuffer", currentReadBuffer);
+            pipelineContext.SetUniformInt(shaderToDispatch, Shader.PropertyToID("currentSourceBuffer"), currentReadBuffer);
         };
 
         pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, coastlineGeneratorKernel, new Vector3(numGroups, numGroups, 1));
@@ -86,13 +86,13 @@ public class SDFDispatcher : MultiFormatPipelineStep
         {
             updateSourceBuffer();
             currentFloodStep /= 2;
-            shaderToDispatch.SetInt("floodStepSize", currentFloodStep);
+            pipelineContext.SetUniformInt(shaderToDispatch, Shader.PropertyToID("floodStepSize"), currentFloodStep);
             pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, floodingStepKernelIdx, new Vector3(numGroups, numGroups, 1));
         }
         //extra iteration to improve SDF accuracy
         {
             updateSourceBuffer();
-            shaderToDispatch.SetInt("floodStepSize", 1);
+            pipelineContext.SetUniformInt(shaderToDispatch, Shader.PropertyToID("floodStepSize"), 1);
             pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, floodingStepKernelIdx, new Vector3(numGroups, numGroups, 1));
         }
         //distance computation
@@ -109,9 +109,11 @@ public class SDFDispatcher : MultiFormatPipelineStep
             pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, sDFPostprocessorKernel, new Vector3(numGroups, numGroups, 1));
         }
 
-        buffer1.Release();
-        buffer2.Release();
-        coastlineTexture.Release();
+
+        //TODO: these will become obsolete if we decide to play with endless generation
+        // buffer1.Release();
+        // buffer2.Release();
+        // coastlineTexture.Release();
     }
 
     public override void StepConclusion(PipelineContext pipelineContext)

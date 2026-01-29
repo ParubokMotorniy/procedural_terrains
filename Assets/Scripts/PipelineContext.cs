@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Assertions;
@@ -37,7 +38,37 @@ namespace GenerationPipeline
             finalHeightmap.Create();
             Assert.IsTrue(finalHeightmap.IsCreated());
         }
+
         public int GetHeightmapSize() { return intermediateHeightmap.height; }
+
+        public void SetUniformInt(ComputeShader shader, int uniformId, int value)
+        {
+            terrainPipelineCMD.SetComputeIntParam(shader, uniformId, value);
+        }
+        public void SetUniformInts(ComputeShader shader, int uniformId, int[] values)
+        {
+            terrainPipelineCMD.SetComputeIntParams(shader, uniformId, values);
+        }
+
+        public void SetUniformFloat(ComputeShader shader, int uniformId, float value)
+        {
+            terrainPipelineCMD.SetComputeFloatParam(shader, uniformId, value);
+        }
+
+        public void SetUniformFloats(ComputeShader shader, int uniformId, float[] values)
+        {
+            terrainPipelineCMD.SetComputeFloatParams(shader, uniformId, values);
+        }
+
+        public void BindTexture(ComputeShader shader, int kernelIdx, int uniformId, Texture texToBind)
+        {
+            terrainPipelineCMD.SetComputeTextureParam(shader, kernelIdx, uniformId, texToBind);
+        }
+
+        public void BindComputeBuffer(ComputeShader shader, int kernelIdx, int uniformId, ComputeBuffer bufferToBind)
+        {
+            terrainPipelineCMD.SetComputeBufferParam(shader, kernelIdx, uniformId, bufferToBind);
+        }
 
         public void AppendDispatchToCommandBuffer(ComputeShader shader, int kernelIdx, Vector3 dispatchDimensions)
         {

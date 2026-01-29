@@ -1,9 +1,9 @@
 using UnityEngine;
 using UnityEngine.Assertions;
-using GenerationPipeline;
 using Unity.Mathematics;
+using GenerationPipeline;
 
-public class UNDispatcher : GenerationPipeline.MultiFormatPipelineStep
+public class UNDispatcher : MultiFormatPipelineStep
 {
     [SerializeField]
     private ComputeShader shaderToDispatch;
@@ -28,11 +28,19 @@ public class UNDispatcher : GenerationPipeline.MultiFormatPipelineStep
 
     [Range(0.01f, 10.0f)]
     public float perturbationStrength = 0.01f;
+
     private const int groupSize = 32;
 
-    public override void StepInitialization(PipelineContext pipelineContext)
-    {
-    }
+    private static readonly int PID_Result = Shader.PropertyToID("Result");
+    private static readonly int PID_texelsPerThread = Shader.PropertyToID("texelsPerThread");
+    private static readonly int PID_noiseFrequency = Shader.PropertyToID("noiseFrequency");
+    private static readonly int PID_sharpness = Shader.PropertyToID("sharpness");
+    private static readonly int PID_slopeErosion = Shader.PropertyToID("slopeErosion");
+    private static readonly int PID_perturbationStrength = Shader.PropertyToID("perturbationStrength");
+    private static readonly int PID_numOctaves = Shader.PropertyToID("numOctaves");
+    private static readonly int PID_persistence = Shader.PropertyToID("persistence");
+
+    public override void StepInitialization(PipelineContext pipelineContext) { }
 
     public override void StepBody(PipelineContext pipelineContext)
     {
@@ -41,27 +49,30 @@ public class UNDispatcher : GenerationPipeline.MultiFormatPipelineStep
         int numLinearThreads = groupSize * numGroups;
 
         int kernelIdx = shaderToDispatch.FindKernel("UberNoiseTerrainGenerator");
-        shaderToDispatch.SetTexture(kernelIdx, Shader.PropertyToID("Result"), pipelineContext.intermediateHeightmap);
-        shaderToDispatch.SetInt("texelsPerThread", textureSize / numLinearThreads);
-        shaderToDispatch.SetFloat("noiseFrequency", noiseFrequency);
+
+        pipelineContext.BindTexture(shaderToDispatch, kernelIdx, PID_Result, pipelineContext.intermediateHeightmap);
 
         {
-            shaderToDispatch.SetFloat("sharpness", sharpness);
-            shaderToDispatch.SetFloat("slopeErosion", slopeErosion);
-            shaderToDispatch.SetFloat("perturbationStrength", perturbationStrength);
-            shaderToDispatch.SetInt("numOctaves", numOctaves);
-            shaderToDispatch.SetFloat("persistence", persistence);
+            pipelineContext.SetUniformInt(shaderToDispatch, PID_texelsPerThread, textureSize / numLinearThreads);
+            pipelineContext.SetUniformFloat(shaderToDispatch, PID_noiseFrequency, noiseFrequency);
         }
 
-        pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, kernelIdx, new Vector3(numGroups, numGroups, 1));
+        {
+            pipelineContext.SetUniformFloat(shaderToDispatch, PID_sharpness, sharpness);
+            pipelineContext.SetUniformFloat(shaderToDispatch, PID_slopeErosion, slopeErosion);
+            pipelineContext.SetUniformFloat(shaderToDispatch, PID_perturbationStrength, perturbationStrength);
+            pipelineContext.SetUniformInt(shaderToDispatch, PID_numOctaves, numOctaves);
+            pipelineContext.SetUniformFloat(shaderToDispatch, PID_persistence, persistence);
+        }
+
+        pipelineContext.AppendDispatchToCommandBuffer(
+            shaderToDispatch,
+            kernelIdx,
+            new Vector3(numGroups, numGroups, 1)
+        );
     }
 
-    public override void StepConclusion(PipelineContext pipelineContext)
-    {
-    }
+    public override void StepConclusion(PipelineContext pipelineContext) { }
 
-    public override InputExpectations GetStepExpectations()
-    {
-        return InputExpectations.None;
-    }
+    public override InputExpectations GetStepExpectations() => InputExpectations.None;
 }
