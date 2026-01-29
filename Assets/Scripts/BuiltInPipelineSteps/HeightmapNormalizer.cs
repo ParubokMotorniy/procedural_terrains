@@ -12,7 +12,7 @@ namespace GenerationPipeline
 
         public void ExecuteStep(PipelineContext pipelineContext)
         {
-            if (normalizationShader is null) 
+            if (normalizationShader is null)
             {
                 normalizationShader = (ComputeShader)Resources.Load("ComputeShaders/TerrainNormalizer");
             }
@@ -26,7 +26,7 @@ namespace GenerationPipeline
             normalizationShader.SetFloat("desiredMaxHeight", 1.0f);
 
             {
-                normalizationShader.Dispatch(normalizationKernel, 1, 1, 1);
+                pipelineContext.AppendDispatchToCommandBuffer(normalizationShader, normalizationKernel, new Vector3(1, 1, 1));
             }
 
             Debug.Log("Heightmap has been normalized. Max height now: " + 1.0);

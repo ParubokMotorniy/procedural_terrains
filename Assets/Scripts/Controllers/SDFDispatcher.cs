@@ -80,25 +80,25 @@ public class SDFDispatcher : MultiFormatPipelineStep
             shaderToDispatch.SetInt("currentSourceBuffer", currentReadBuffer);
         };
 
-        shaderToDispatch.Dispatch(coastlineGeneratorKernel, numGroups, numGroups, 1);
-        shaderToDispatch.Dispatch(maskToSeedBufferKernelIdx, numGroups, numGroups, 1);
+        pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, coastlineGeneratorKernel, new Vector3(numGroups, numGroups, 1));
+        pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, maskToSeedBufferKernelIdx, new Vector3(numGroups, numGroups, 1));
         while (currentFloodStep > 1)
         {
             updateSourceBuffer();
             currentFloodStep /= 2;
             shaderToDispatch.SetInt("floodStepSize", currentFloodStep);
-            shaderToDispatch.Dispatch(floodingStepKernelIdx, numGroups, numGroups, 1);
+            pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, floodingStepKernelIdx, new Vector3(numGroups, numGroups, 1));
         }
         //extra iteration to improve SDF accuracy
         {
             updateSourceBuffer();
             shaderToDispatch.SetInt("floodStepSize", 1);
-            shaderToDispatch.Dispatch(floodingStepKernelIdx, numGroups, numGroups, 1);
+            pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, floodingStepKernelIdx, new Vector3(numGroups, numGroups, 1));
         }
         //distance computation
         {
             updateSourceBuffer();
-            shaderToDispatch.Dispatch(seedBufferToHieghtmapKernelIdx, numGroups, numGroups, 1);
+            pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, seedBufferToHieghtmapKernelIdx, new Vector3(numGroups, numGroups, 1));
         }
 
         //normalization of the output SDF texture
@@ -106,8 +106,8 @@ public class SDFDispatcher : MultiFormatPipelineStep
 
         // heightmap postprocessing
         {
-            shaderToDispatch.Dispatch(sDFPostprocessorKernel, numGroups, numGroups, 1);
-        }   
+            pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, sDFPostprocessorKernel, new Vector3(numGroups, numGroups, 1));
+        }
 
         buffer1.Release();
         buffer2.Release();

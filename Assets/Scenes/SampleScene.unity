@@ -620,10 +620,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GenerationPipeline.TerrainGenerator
   terrainSize: 1
   terrainScale: 0.25
-  dumpTextures: 0
+  dumpTextures: 1
+  enableProfiling: 0
   pipelineSteps:
   - {fileID: 360891026}
-  - {fileID: 1412956747}
 --- !u!4 &385078007
 Transform:
   m_ObjectHideFlags: 0
@@ -815,7 +815,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _HeightMap:
-        m_Texture: {fileID: 2110202038}
+        m_Texture: {fileID: 1489499030}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _Heightmap:
@@ -1110,7 +1110,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!84 &2110202038
+--- !u!84 &1489499030
 RenderTexture:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}

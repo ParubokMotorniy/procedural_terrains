@@ -77,7 +77,7 @@ public class RMDDispatcher : GenerationPipeline.MultiFormatPipelineStep
 
         float octaveAmplitude = 1.0f;
         shaderToDispatch.SetFloat("octaveAmplitude", octaveAmplitude);
-        shaderToDispatch.Dispatch(initializationKernelIdx, numGroups, numGroups, 1);
+        pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, initializationKernelIdx, new Vector3(numGroups, numGroups, 1));
 
         for (int sub = 0; sub < numSubdivisions; ++sub)
         {
@@ -87,28 +87,28 @@ public class RMDDispatcher : GenerationPipeline.MultiFormatPipelineStep
             octaveAmplitude *= H;
             shaderToDispatch.SetFloat("octaveAmplitude", octaveAmplitude);
             shaderToDispatch.SetFloats("noiseDisplacement", new float[] { (float)rng.NextDouble(), (float)rng.NextDouble() });
-            shaderToDispatch.Dispatch(transition12KernelIdx, numGroups, numGroups, 1);
+            pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, transition12KernelIdx, new Vector3(numGroups, numGroups, 1));
 
             if (addExtraNoise)
             {
                 shaderToDispatch.SetFloats("noiseDisplacement", new float[] { (float)rng.NextDouble(), (float)rng.NextDouble() });
-                shaderToDispatch.Dispatch(extraNoiseKernel, numGroups, numGroups, 1);
+                pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, extraNoiseKernel, new Vector3(numGroups, numGroups, 1));
             }
 
             octaveAmplitude *= H;
             shaderToDispatch.SetFloat("octaveAmplitude", octaveAmplitude);
             shaderToDispatch.SetFloats("noiseDisplacement", new float[] { (float)rng.NextDouble(), (float)rng.NextDouble() });
-            shaderToDispatch.Dispatch(transition21KernelIdx, numGroups, numGroups, 1);
+            pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, transition21KernelIdx, new Vector3(numGroups, numGroups, 1));
 
             if (addExtraNoise)
             {
                 shaderToDispatch.SetFloats("noiseDisplacement", new float[] { (float)rng.NextDouble(), (float)rng.NextDouble() });
-                shaderToDispatch.Dispatch(extraNoiseKernel, numGroups, numGroups, 1);
+                pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, extraNoiseKernel, new Vector3(numGroups, numGroups, 1));
             }
         }
 
         //interpolate the custom texture into the target one
-        Graphics.Blit(noiseRenderTexture, pipelineContext.intermediateHeightmap);
+        pipelineContext.AppendTextureCopyToCommandBuffer(noiseRenderTexture, pipelineContext.intermediateHeightmap);
     }
 
     public override void StepConclusion(PipelineContext pipelineContext)

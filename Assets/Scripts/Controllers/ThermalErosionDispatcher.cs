@@ -45,8 +45,8 @@ public class ThermalErosionDispatcher : GenerationPipeline.MultiFormatPipelineSt
 
         for (int d = 0; d < erosionIterationLimit; ++d)
         {
-            erosionComputeShader.Dispatch(coreKernelIdx, numGroups, numGroups, 1);
-            erosionComputeShader.Dispatch(borderKernelIdx, numGroups, numGroups, 1);
+            pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, coreKernelIdx, new Vector3(numGroups, numGroups, 1));
+            pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, borderKernelIdx, new Vector3(numGroups, numGroups, 1));
         }
     }
 

@@ -21,6 +21,9 @@ namespace GenerationPipeline
         bool dumpTextures = false;
 #endif
 
+        [SerializeField]
+        bool enableProfiling = false;
+
         public List<MonoPipelineStep> pipelineSteps;
 
         private RenderTexture intermediateHeightmap;
@@ -31,8 +34,9 @@ namespace GenerationPipeline
 
 
         [ContextMenu("Regenerate terrain")]
-        void RegenerateTerrain()
+        async void RegenerateTerrain()
         {
+
             int textureSize = terrainSize * 1024;
 
             { //intermediate heightmap creation
@@ -53,7 +57,7 @@ namespace GenerationPipeline
                 Assert.IsTrue(intermediateHeightmap.IsCreated());
             }
 
-            PipelineContext currentContext = new PipelineContext(intermediateHeightmap);
+            PipelineContext currentContext = enableProfiling ? new ProfilingPipelineContext(intermediateHeightmap) : new PipelineContext(intermediateHeightmap);
 
             GetComponent<Renderer>().sharedMaterial.SetTexture("_HeightMap", currentContext.finalHeightmap);
             GetComponent<Renderer>().sharedMaterial.SetFloat("_HeightScale", terrainScale);
@@ -78,6 +82,8 @@ namespace GenerationPipeline
                 step.ExecuteStep(currentContext);
             }
 
+            await currentContext.ExecuteBuffer();
+            
 #if UNITY_EDITOR
             if (dumpTextures)
             {

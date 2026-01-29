@@ -53,7 +53,7 @@ public class UNDispatcher : GenerationPipeline.MultiFormatPipelineStep
             shaderToDispatch.SetFloat("persistence", persistence);
         }
 
-        shaderToDispatch.Dispatch(kernelIdx, numGroups, numGroups, 1);
+        pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, kernelIdx, new Vector3(numGroups, numGroups, 1));
     }
 
     public override void StepConclusion(PipelineContext pipelineContext)
