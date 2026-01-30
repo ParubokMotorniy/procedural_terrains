@@ -27,6 +27,7 @@ public class ThermalErosionDispatcher : MultiFormatPipelineStep
     private static readonly int PID_distributionCoefficient = Shader.PropertyToID("distributionCoefficient");
     private static readonly int PID_talusThreshold = Shader.PropertyToID("talusThreshold");
     private static readonly int PID_heightmapDimensions = Shader.PropertyToID("heightmapDimensions");
+    private static readonly int PID_noiseDisplacement = Shader.PropertyToID("noiseDisplacement");
 
     public override InputExpectations GetStepExpectations()
         => InputExpectations.HeightMapNormalized; // TODO: skip normalization by adjusting talus threshold to effective height range
@@ -53,10 +54,23 @@ public class ThermalErosionDispatcher : MultiFormatPipelineStep
 
         pipelineContext.SetUniformInts(erosionComputeShader, PID_heightmapDimensions, new int[2] { textureSize, textureSize });
 
+        //TODO: move this thing to a common base class or whatever
+        var rng = new System.Random();
+        float[] noiseDisp2 = new float[2];
+
+        void SetNoiseDisplacement()
+        {
+            noiseDisp2[0] = (float)rng.NextDouble();
+            noiseDisp2[1] = (float)rng.NextDouble();
+            pipelineContext.SetUniformFloats(erosionComputeShader, PID_noiseDisplacement, noiseDisp2);
+        }
+
         var dispatchGroups = new Vector3(numGroups, numGroups, 1);
         for (int i = 0; i < erosionIterationLimit; ++i)
         {
+            SetNoiseDisplacement();
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, coreKernelIdx, dispatchGroups);
+            SetNoiseDisplacement();
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, borderKernelIdx, dispatchGroups);
         }
     }

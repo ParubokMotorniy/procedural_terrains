@@ -1,9 +1,12 @@
+#include "../Common/Utilities.hlsl"
+
 RWTexture2D<float> resultHeightmap;
 uniform int2 heightmapDimensions; // so as not to GetDimensions() every time
 
 uniform int texelsPerThread;
-uniform float distributionCoefficient;
+uniform float distributionCoefficient; // this parameter now controls how "sturdy" the material constituting the terrain is
 uniform float talusThreshold;
+uniform float2 noiseDisplacement;
 
 static const float MAX_FLOAT = 0xFFFFFFF;
 
@@ -15,11 +18,6 @@ static const float heightDistributionDistanceCoefficients[3][3] =
 
 // TODO: first, let's stick to the reference implementation. The boundary reads/writes can be resolved with atomics without the need for an extra texture. The reliance on compute shaders allows to experiment with Moore neighborhood and scale the material transition by distance to cells. I'll probably have to keep a map of  two reads and sub VS two reads -> useless
 // TODO: the goal is to address grid updtaes. Perfectly, I'd need to isloate 3x3 grid from other threads on the boundary. I need to serialize operations on the boundary.
-
-int2 terrainWrap(int2 a, int2 b)
-{
-    return (a % b + b) % b;
-}
 
 struct TexelHeightDistribution
 {
@@ -62,7 +60,14 @@ TexelHeightDistribution computeHeightDistribution(int2 processedTexel)
         }
     }
 
-    float totalHeightRemoved = numCriticalNeighbors > 0 ? distributionCoefficient * (maxHeightDistance - talusThreshold) : 0.0;
+    // the smaller the distance betweem the lowest and highest neighbors -> the more prominent is the effect of "avalanche" -> the higher is the distribution coefficient (i.e. the fraction of the height difference distributed)
+    float avalancheRatio = 1.0 - (maxHeightDistance - minHeightDistance) / maxHeightDistance;
+    uint seed = seedFromXYPass(processedTexel.x, processedTexel.y, numCriticalNeighbors);
+    float u1 = u01FromUint(pcgHash(seed));
+    // zero-mean gaussian is shifted to the estimated ratio. u2 is kept at zero to ensure sigma=1
+    float dynamicDistributionCoefficient = clamp((sampleGaussBoxMuller(float2(u1, 0.0)) + avalancheRatio), 1.0e-2, 1.0) * distributionCoefficient;
+
+    float totalHeightRemoved = numCriticalNeighbors > 0 ? dynamicDistributionCoefficient * (maxHeightDistance - talusThreshold) : 0.0;
     float heightConsistencyThreshold = (minHeightDistance * exceedingSum) / (minHeightDistance + exceedingSum + 1.0e-5);
     // to make sure the central texel does not end up higher than its closest neighbor
     totalHeightRemoved = totalHeightRemoved <= heightConsistencyThreshold ? totalHeightRemoved : heightConsistencyThreshold;

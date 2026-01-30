@@ -95,6 +95,11 @@ namespace GenerationPipeline
             Debug.Log("Terrain has been regenerated!");
         }
 
+        void Start()
+        {
+            RegenerateTerrain();
+        }
+
         void OnValidate()
         {
             GetComponent<Renderer>().sharedMaterial.SetFloat("_HeightScale", terrainScale);

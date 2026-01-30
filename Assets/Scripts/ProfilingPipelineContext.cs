@@ -45,7 +45,7 @@ namespace GenerationPipeline
             long gpuMilliseconds = millisecondsAtEnd - millisecondsAtStart;
 
             //TODO: prettify these for belivable benchmarking
-            Debug.Log("CPU housekeeping time (ms): " + cpuMilliseconds);
+            Debug.Log("CPU housekeeping time (ms): " + cpuMilliseconds + ". Ticks: " + cpuProfilingStopwatch.ElapsedTicks);
             Debug.Log("GPU processing time (ms): " + gpuMilliseconds);
         }
     }
