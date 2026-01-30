@@ -54,23 +54,12 @@ public class ThermalErosionDispatcher : MultiFormatPipelineStep
 
         pipelineContext.SetUniformInts(erosionComputeShader, PID_heightmapDimensions, new int[2] { textureSize, textureSize });
 
-        //TODO: move this thing to a common base class or whatever
-        var rng = new System.Random();
-        float[] noiseDisp2 = new float[2];
-
-        void SetNoiseDisplacement()
-        {
-            noiseDisp2[0] = (float)rng.NextDouble();
-            noiseDisp2[1] = (float)rng.NextDouble();
-            pipelineContext.SetUniformFloats(erosionComputeShader, PID_noiseDisplacement, noiseDisp2);
-        }
-
         var dispatchGroups = new Vector3(numGroups, numGroups, 1);
         for (int i = 0; i < erosionIterationLimit; ++i)
         {
-            SetNoiseDisplacement();
+            pipelineContext.SetRandomFloats(erosionComputeShader, PID_noiseDisplacement);
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, coreKernelIdx, dispatchGroups);
-            SetNoiseDisplacement();
+            pipelineContext.SetRandomFloats(erosionComputeShader, PID_noiseDisplacement);
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, borderKernelIdx, dispatchGroups);
         }
     }

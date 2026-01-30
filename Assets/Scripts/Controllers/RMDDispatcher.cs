@@ -78,19 +78,9 @@ public class RMDDispatcher : MultiFormatPipelineStep
         pipelineContext.SetUniformFloat(shaderToDispatch, PID_worleyFrequency, worleyFrequency);
         pipelineContext.SetUniformFloat(shaderToDispatch, PID_perlinFrequency, perlinFrequency);
 
-        var rng = new System.Random();
-        float[] noiseDisp2 = new float[2];
-
-        void SetNoiseDisplacement()
-        {
-            noiseDisp2[0] = (float)rng.NextDouble();
-            noiseDisp2[1] = (float)rng.NextDouble();
-            pipelineContext.SetUniformFloats(shaderToDispatch, PID_noiseDisplacement, noiseDisp2);
-        }
-
         float octaveAmplitude = 1.0f;
         pipelineContext.SetUniformFloat(shaderToDispatch, PID_octaveAmplitude, octaveAmplitude);
-        SetNoiseDisplacement();
+        pipelineContext.SetRandomFloats(shaderToDispatch, PID_noiseDisplacement);
 
         pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, initializationKernelIdx, new Vector3(numGroups, numGroups, 1));
 
@@ -104,23 +94,23 @@ public class RMDDispatcher : MultiFormatPipelineStep
 
             octaveAmplitude *= H;
             pipelineContext.SetUniformFloat(shaderToDispatch, PID_octaveAmplitude, octaveAmplitude);
-            SetNoiseDisplacement();
+            pipelineContext.SetRandomFloats(shaderToDispatch, PID_noiseDisplacement);
             pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, transition12KernelIdx, new Vector3(numGroups, numGroups, 1));
 
             if (addExtraNoise)
             {
-                SetNoiseDisplacement();
+                pipelineContext.SetRandomFloats(shaderToDispatch, PID_noiseDisplacement);
                 pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, extraNoiseKernelIdx, new Vector3(numGroups, numGroups, 1));
             }
 
             octaveAmplitude *= H;
             pipelineContext.SetUniformFloat(shaderToDispatch, PID_octaveAmplitude, octaveAmplitude);
-            SetNoiseDisplacement();
+            pipelineContext.SetRandomFloats(shaderToDispatch, PID_noiseDisplacement);
             pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, transition21KernelIdx, new Vector3(numGroups, numGroups, 1));
 
             if (addExtraNoise)
             {
-                SetNoiseDisplacement();
+                pipelineContext.SetRandomFloats(shaderToDispatch, PID_noiseDisplacement);
                 pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, extraNoiseKernelIdx, new Vector3(numGroups, numGroups, 1));
             }
         }
