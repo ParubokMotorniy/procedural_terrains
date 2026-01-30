@@ -7,6 +7,12 @@ uniform float talusThreshold;
 
 static const float MAX_FLOAT = 0xFFFFFFF;
 
+static const float heightDistributionDistanceCoefficients[3][3] =
+    {
+        {0.85, 1.0, 0.85},
+        {1.0, 0.0, 1.0},
+        {0.85, 1.0, 0.85}};
+
 // TODO: first, let's stick to the reference implementation. The boundary reads/writes can be resolved with atomics without the need for an extra texture. The reliance on compute shaders allows to experiment with Moore neighborhood and scale the material transition by distance to cells. I'll probably have to keep a map of  two reads and sub VS two reads -> useless
 // TODO: the goal is to address grid updtaes. Perfectly, I'd need to isloate 3x3 grid from other threads on the boundary. I need to serialize operations on the boundary.
 
@@ -66,7 +72,7 @@ TexelHeightDistribution computeHeightDistribution(int2 processedTexel)
         for (int y = -1; y < 2; ++y)
         {
             float d = nInfo.heightSpreadValue[y + 1][x + 1];
-            nInfo.heightSpreadValue[y + 1][x + 1] = computeSingleHeightIncrement(d, exceedingSum, totalHeightRemoved);
+            nInfo.heightSpreadValue[y + 1][x + 1] = heightDistributionDistanceCoefficients[y + 1][x + 1] * computeSingleHeightIncrement(d, exceedingSum, totalHeightRemoved);
         }
     }
 
