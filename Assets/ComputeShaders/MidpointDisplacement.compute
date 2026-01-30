@@ -13,7 +13,7 @@ uniform uint threadSubdomainsY;
 
 uniform float octaveAmplitude;
 uniform float noiseFrequency;
-uniform float4 noiseDisplacement;
+uniform float2 noiseDisplacement;
 uniform float worleyFrequency;
 uniform float perlinFrequency;
 
@@ -77,14 +77,35 @@ float sampleWorleyNoise(float2 noiseTextureIdx)
     }
 }
 
+//(c) Jarzynski and Olano
+uint pcgHash(uint v)
+{
+    v = v * 747796405u + 2891336453u;
+    uint word = ((v >> ((v >> 28u) + 4u)) ^ v) * 277803737u;
+    return (word >> 22u) ^ word;
+}
+
+float u01FromUint(uint x)
+{
+    return (x + 1.0) * (1.0 / 4294967296.0);
+}
+
+uint seedFromXYPass(uint x, uint y, int passId)
+{
+    uint v = x * 0x9E3779B9u ^ y * 0x85EBCA6Bu ^ passId * 0xC2B2AE35u;
+    return v;
+}
+
 // these end up normalized and uniformly distributed
 float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimensions)
 {
+    float maxLinearIdx = targetDimensions.x * targetDimensions.x;
     float linearX = targetTextureCoordinates.y * targetDimensions.x + targetTextureCoordinates.x;
     float linearY = targetTextureCoordinates.x * targetDimensions.y + targetTextureCoordinates.y;
-    float2 displacedCoordinates = float2(linearX, linearY) + targetDimensions * noiseDisplacement;
-    float2 permutedCoordinates = permute(displacedCoordinates) / 289.0; // passes through the permutation polynomial
-    return clamp(permutedCoordinates, 1.0e-3, 1.0);
+    uint seed = seedFromXYPass(linearX, linearY, texelWidthDivided);
+    float u1 = u01FromUint(pcgHash(seed));
+    float u2 = u01FromUint(pcgHash(seed ^ 0x68BC21EBu));
+    return float2(u1, u2);
 }
 
 #pragma kernel IntializeTexture
@@ -95,8 +116,9 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimen
 
     uint2 topLeftCellIdx = globalId.xy * threadDomainTexelWidth;
 
-    float2 worleyCoordinates = (topLeftCellIdx / (float2)targetDimensions) * worleyFrequency + noiseDisplacement.xy * worleyFrequency;
+    float2 worleyCoordinates = (topLeftCellIdx / (float2)targetDimensions) * worleyFrequency + noiseDisplacement * worleyFrequency;
     Result[topLeftCellIdx.xy] = sampleWorleyNoise(worleyCoordinates) * octaveAmplitude;
+    // float2 testCoords = computeNoiseCoordinates(topLeftCellIdx, targetDimensions);
     // Result[topLeftCellIdx] = sampleNoise(computeNoiseCoordinates(topLeftCellIdx, targetDimensions)) * octaveAmplitude;
 }
 

@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.Assertions;
 using System.Collections.Generic;
 using System;
+using Unity.Mathematics;
 
 namespace GenerationPipeline
 {
@@ -10,8 +11,8 @@ namespace GenerationPipeline
     [ExecuteAlways]
     public class TerrainGenerator : MonoBehaviour
     {
-        [Range(1, 4)]
-        public int terrainSize = 1;
+        [Range(5, 12)]
+        public int terrainSize = 5;
 
         [Range(0.001f, 32.0f)]
         public float terrainScale = 1.0f;
@@ -37,7 +38,7 @@ namespace GenerationPipeline
         async void RegenerateTerrain()
         {
 
-            int textureSize = terrainSize * 1024;
+            int textureSize = (int)math.pow(2, terrainSize);
 
             { //intermediate heightmap creation
                 if (intermediateHeightmap && intermediateHeightmap.IsCreated())

@@ -29,7 +29,6 @@ public class RMDDispatcher : MultiFormatPipelineStep
 
     private const int groupSize = 4;
 
-    // Cache property IDs once.
     private static readonly int PID_threadDomainTexelWidth = Shader.PropertyToID("threadDomainTexelWidth");
     private static readonly int PID_threadSubdomainsX = Shader.PropertyToID("threadSubdomainsX");
     private static readonly int PID_threadSubdomainsY = Shader.PropertyToID("threadSubdomainsY");
@@ -50,6 +49,8 @@ public class RMDDispatcher : MultiFormatPipelineStep
         int numLinearThreads = groupSize * numGroups;
         int textureSize = numLinearThreads * texelsPerThreadDomain;
 
+        Assert.IsTrue(textureSize <= pipelineContext.GetHeightmapSize(), "RMD heightmap can lose detail when downsampled into a smaller target texture.");
+
         var noiseRenderTexture = new RenderTexture(textureSize, textureSize, 0)
         {
             graphicsFormat = UnityEngine.Experimental.Rendering.GraphicsFormat.R32_SFloat,
@@ -66,21 +67,17 @@ public class RMDDispatcher : MultiFormatPipelineStep
         int transition21KernelIdx = shaderToDispatch.FindKernel("Transition21");
         int extraNoiseKernelIdx = shaderToDispatch.FindKernel("AddExtraNoise");
 
-        // Bind per-kernel resources via PipelineContext.
         foreach (int kernelIdx in new[] { initializationKernelIdx, transition12KernelIdx, transition21KernelIdx, extraNoiseKernelIdx })
         {
             pipelineContext.BindTexture(shaderToDispatch, kernelIdx, PID_Result, noiseRenderTexture);
         }
 
-        // Set uniforms via PipelineContext.
         pipelineContext.SetUniformInt(shaderToDispatch, PID_threadDomainTexelWidth, texelsPerThreadDomain);
         pipelineContext.SetUniformInt(shaderToDispatch, PID_threadSubdomainsX, numLinearThreads);
         pipelineContext.SetUniformInt(shaderToDispatch, PID_threadSubdomainsY, numLinearThreads);
         pipelineContext.SetUniformFloat(shaderToDispatch, PID_worleyFrequency, worleyFrequency);
         pipelineContext.SetUniformFloat(shaderToDispatch, PID_perlinFrequency, perlinFrequency);
 
-        // Avoid per-iteration allocations for noise displacement.
-        // If PipelineContext has SetUniformVector, prefer that. Otherwise reuse a float[2].
         var rng = new System.Random();
         float[] noiseDisp2 = new float[2];
 
@@ -88,8 +85,6 @@ public class RMDDispatcher : MultiFormatPipelineStep
         {
             noiseDisp2[0] = (float)rng.NextDouble();
             noiseDisp2[1] = (float)rng.NextDouble();
-            // Assuming your PipelineContext has a float-array setter, mirroring your older code.
-            // If you have SetUniformVector, switch to that.
             pipelineContext.SetUniformFloats(shaderToDispatch, PID_noiseDisplacement, noiseDisp2);
         }
 
@@ -97,11 +92,7 @@ public class RMDDispatcher : MultiFormatPipelineStep
         pipelineContext.SetUniformFloat(shaderToDispatch, PID_octaveAmplitude, octaveAmplitude);
         SetNoiseDisplacement();
 
-        pipelineContext.AppendDispatchToCommandBuffer(
-            shaderToDispatch,
-            initializationKernelIdx,
-            new Vector3(numGroups, numGroups, 1)
-        );
+        pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, initializationKernelIdx, new Vector3(numGroups, numGroups, 1));
 
         for (int sub = 0; sub < numSubdivisions; ++sub)
         {
@@ -136,9 +127,6 @@ public class RMDDispatcher : MultiFormatPipelineStep
 
         // Interpolate/transfer into the pipeline's target heightmap.
         pipelineContext.AppendTextureCopyToCommandBuffer(noiseRenderTexture, pipelineContext.intermediateHeightmap);
-
-        // Optional: if this RT is only for this step and you don't need it later,
-        // consider scheduling release in StepConclusion or through pipelineContext resource management.
     }
 
     public override void StepConclusion(PipelineContext pipelineContext) { }
