@@ -5,6 +5,8 @@ uniform int texelsPerThread;
 uniform float distributionCoefficient;
 uniform float talusThreshold;
 
+static const float MAX_FLOAT = 0xFFFFFFF;
+
 // TODO: first, let's stick to the reference implementation. The boundary reads/writes can be resolved with atomics without the need for an extra texture. The reliance on compute shaders allows to experiment with Moore neighborhood and scale the material transition by distance to cells. I'll probably have to keep a map of  two reads and sub VS two reads -> useless
 // TODO: the goal is to address grid updtaes. Perfectly, I'd need to isloate 3x3 grid from other threads on the boundary. I need to serialize operations on the boundary.
 
@@ -18,9 +20,9 @@ struct TexelHeightDistribution
     float heightSpreadValue[3][3];
 };
 
-float computeSingleHeightIncrement(float heightDistance, float distanceSum, float maxNeighborHeightDistance)
+float computeSingleHeightIncrement(float heightDistance, float distanceSum, float totalHeightRemoved)
 {
-    return distributionCoefficient * (maxNeighborHeightDistance - talusThreshold) * (heightDistance / distanceSum);
+    return totalHeightRemoved * (heightDistance / distanceSum);
 }
 
 TexelHeightDistribution computeHeightDistribution(int2 processedTexel)
@@ -31,39 +33,46 @@ TexelHeightDistribution computeHeightDistribution(int2 processedTexel)
 
     float exceedingSum = 1.0e-5;
     float maxHeightDistance = 0.0;
+    int numCriticalNeighbors = 0;
+    float minHeightDistance = MAX_FLOAT;
     for (int x = -1; x < 2; ++x)
     {
         for (int y = -1; y < 2; ++y)
         {
             float d = texelHeight - resultHeightmap[terrainWrap(processedTexel + int2(x, y), heightmapDimensions)];
-            d = d > talusThreshold ? d : 0.0;
+            if (d > talusThreshold)
+            {
+                maxHeightDistance = max(maxHeightDistance, d);
+                minHeightDistance = min(minHeightDistance, d);
+                numCriticalNeighbors++;
+            }
+            else
+            {
+                d = 0.0;
+            }
 
             exceedingSum += d;
-            maxHeightDistance = max(maxHeightDistance, d);
             nInfo.heightSpreadValue[y + 1][x + 1] = d;
         }
     }
+
+    float totalHeightRemoved = numCriticalNeighbors > 0 ? distributionCoefficient * (maxHeightDistance - talusThreshold) : 0.0;
+    float heightConsistencyThreshold = (minHeightDistance * exceedingSum) / (minHeightDistance + exceedingSum + 1.0e-5);
+    // to make sure the central texel does not end up higher than its closest neighbor
+    totalHeightRemoved = totalHeightRemoved <= heightConsistencyThreshold ? totalHeightRemoved : heightConsistencyThreshold;
 
     for (int x = -1; x < 2; ++x)
     {
         for (int y = -1; y < 2; ++y)
         {
             float d = nInfo.heightSpreadValue[y + 1][x + 1];
-            nInfo.heightSpreadValue[y + 1][x + 1] = computeSingleHeightIncrement(d, exceedingSum, maxHeightDistance);
+            nInfo.heightSpreadValue[y + 1][x + 1] = computeSingleHeightIncrement(d, exceedingSum, totalHeightRemoved);
         }
     }
 
     // how much height the central texel loses
-    nInfo.heightSpreadValue[1][1] = -(nInfo.heightSpreadValue[0][0] +
-                                      nInfo.heightSpreadValue[0][1] +
-                                      nInfo.heightSpreadValue[0][2] +
+    nInfo.heightSpreadValue[1][1] = -totalHeightRemoved;
 
-                                      nInfo.heightSpreadValue[1][0] +
-                                      nInfo.heightSpreadValue[1][2] +
-
-                                      nInfo.heightSpreadValue[2][0] +
-                                      nInfo.heightSpreadValue[2][1] +
-                                      nInfo.heightSpreadValue[2][2]);
     return nInfo;
 }
 
