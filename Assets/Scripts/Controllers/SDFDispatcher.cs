@@ -15,7 +15,7 @@ public class SDFDispatcher : MultiFormatPipelineStep
     [Range(0.025f, 4.0f)]
     public float baseSimplexFrequency = 1.0f;
 
-    private const int groupSize = 16;
+    private const int groupSize = 32;
 
     private static readonly int PID_buffer1 = Shader.PropertyToID("buffer1");
     private static readonly int PID_buffer2 = Shader.PropertyToID("buffer2");

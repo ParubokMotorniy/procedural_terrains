@@ -44,7 +44,6 @@ RWTexture2D<float> Result;
             float2 slopeErosionDerivativeSum = clamp(sdnoise(floatIdx).x, -0.15, 0.15).xx;
             float2 perturbDerivativeSum = float2(0.0, 0.0);
             float noiseResult = 0.0;
-            float lfSum = 0;
 
             float octaveAmplitude = 1.0;
             float octaveFrequency = noiseFrequency;

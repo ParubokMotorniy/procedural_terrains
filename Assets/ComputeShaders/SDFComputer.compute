@@ -112,6 +112,8 @@ float computeFlowNoise(float2 uv, float startFreq)
     float perturbStrength = 0.15;
     float2 gsum = float2(0.2, 0.2);
 
+    //TODO: it can be possible to get rid of some vars here
+
     float disp = 0.0;
     for (int i = 0; i < 5; i++)
     {
@@ -143,7 +145,7 @@ float coastlineComputer(float2 texelCoord)
 }
 
 #pragma kernel CoastlineGenerator
-[numthreads(16, 16, 1)] void CoastlineGenerator(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+[numthreads(32, 32, 1)] void CoastlineGenerator(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     uint2 topLeftCorner = globalId.xy * texelsPerThread;
 
@@ -159,7 +161,7 @@ float coastlineComputer(float2 texelCoord)
 
 // TODO: using kernel stride of 2 gives 4 times fewer reads but 2 times more writes at border pixels. Can it be optimized?
 #pragma kernel MaskToSeedBuffer
-    [numthreads(16, 16, 1)] void MaskToSeedBuffer(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+[numthreads(32, 32, 1)] void MaskToSeedBuffer(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     uint2 topLeftCorner = globalId.xy * texelsPerThread;
 
@@ -168,9 +170,8 @@ float coastlineComputer(float2 texelCoord)
         for (int y = 0; y < texelsPerThread; ++y)
         {
             uint2 kernelCenter = topLeftCorner + uint2(x, y);
-            float texelColor = inputTexture[kernelCenter];
 
-            if (texelIsWhiteForMask(texelColor))
+            if (texelIsWhiteForMask(inputTexture[kernelCenter]))
             {
                 // center is white
                 bool blackFound = false;
@@ -203,7 +204,7 @@ float coastlineComputer(float2 texelCoord)
 }
 
 #pragma kernel FloodingStep
-[numthreads(16, 16, 1)] void FloodingStep(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+[numthreads(32, 32, 1)] void FloodingStep(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     uint2 topLeftCorner = globalId.xy * texelsPerThread;
 
@@ -234,8 +235,7 @@ float coastlineComputer(float2 texelCoord)
                         continue;
                     }
 
-                    uint2 targetCoord = uint2(targetX, targetY);
-                    uint2 closestSeedAtTarget = readFromBuffer(targetCoord);
+                    uint2 closestSeedAtTarget = readFromBuffer(uint2(targetX, targetY));
 
                     if (closestSeedAtTarget.x == MAX_UINT && closestSeedAtTarget.y == MAX_UINT)
                     {
@@ -258,7 +258,7 @@ float coastlineComputer(float2 texelCoord)
 }
 
 #pragma kernel SeedBufferToHieghtmap
-    [numthreads(16, 16, 1)] void SeedBufferToHieghtmap(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+[numthreads(32, 32, 1)] void SeedBufferToHieghtmap(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     uint2 topLeftCorner = globalId.xy * texelsPerThread;
 
@@ -268,12 +268,10 @@ float coastlineComputer(float2 texelCoord)
         {
             uint2 cellCoords = topLeftCorner + uint2(x, y);
 
-            float texelColor = inputTexture[cellCoords];
-
             uint2 seedCoordinates = readFromBuffer(cellCoords);
             float actualDistance = length((int2)seedCoordinates - (int2)cellCoords);
 
-            if (texelIsWhiteForMask(texelColor))
+            if (texelIsWhiteForMask(inputTexture[cellCoords]))
             {
                 outputTexture[cellCoords] = (actualDistance + shoreBaseHeight);
             }
@@ -286,7 +284,7 @@ float coastlineComputer(float2 texelCoord)
 }
 
 #pragma kernel SDFPostprocessor
-[numthreads(16, 16, 1)] void SDFPostprocessor(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+[numthreads(32, 32, 1)] void SDFPostprocessor(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     uint2 topLeftCorner = globalId.xy * texelsPerThread;
 
@@ -298,13 +296,9 @@ float coastlineComputer(float2 texelCoord)
 
             float inputTexelColor = inputTexture[cellCoords];
             float distanceAtTexel = outputTexture[cellCoords];
-
+            
             //"lake" formation
-            if (!texelIsWhiteForLake(inputTexelColor))
-            {
-                // this texel was definitely considered 'black' when applying mask, and so the distance is zero
-                inputTexelColor = 0.0;
-            }
+            inputTexelColor *= (float)(texelIsWhiteForLake(inputTexelColor));
 
             // clamp goes here since we expect more 'noisy' features to appear where tectonic processes were the most porminent - at mountains
             outputTexture[cellCoords] = distanceAtTexel + inputTexelColor * clamp(distanceAtTexel, 0.45, 1.0);

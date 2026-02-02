@@ -8,6 +8,7 @@ RWTexture2D<float> Result;
 uniform int threadDomainTexelWidth;
 uniform int texelWidthDivided;
 uniform uint texelWidthDivisionFactor; // 1,2,4,8...
+uniform uint2 targetDimensions;        // so as not to GetDimensions() every time
 
 uniform uint threadSubdomainsX;
 uniform uint threadSubdomainsY;
@@ -30,14 +31,15 @@ float sampleGaussianNoise(float2 noiseTextureIdx)
 
 float sampleNoise(float2 noiseTextureIdx)
 {
-    float randomCoord = sampleGaussianNoise(noiseTextureIdx);
-    return snoise(randomCoord * perlinFrequency); // domain warping
+    return snoise(sampleGaussianNoise(noiseTextureIdx) * perlinFrequency); // domain warping
 }
 
 float sampleWorleyNoise(float2 noiseTextureIdx)
 {
 #define RANGE_THRSH_CEIL 0.6
 #define RANGE_THRSH_FLOOR 0.35
+// EFFECTIVE_RANGE = RANGE_THRSH_CEIL - RANGE_THRSH_FLOOR
+#define EFFECTIVE_RANGE 0.25
 #define EPSILON 3.0e-2
 #define RIDGE_FALLOF_SPEED 0.5
 
@@ -52,49 +54,31 @@ float sampleWorleyNoise(float2 noiseTextureIdx)
     {
         return f1_f2.x;
     }
-    else if (f1_f2.x <= RANGE_THRSH_FLOOR)
-    {
-        return 0.0;
-    }
-    else
-    {
-        return ((f1_f2.x - RANGE_THRSH_FLOOR) * RIDGE_FALLOF_SPEED) / (RANGE_THRSH_CEIL - RANGE_THRSH_FLOOR);
-    }
+
+    return (max(f1_f2.x - RANGE_THRSH_FLOOR, 0.0) * RIDGE_FALLOF_SPEED) / EFFECTIVE_RANGE;
 }
 
-
 // these end up normalized and uniformly distributed
-float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimensions)
+float2 computeNoiseCoordinates(uint2 targetTextureCoordinates)
 {
-    float maxLinearIdx = targetDimensions.x * targetDimensions.x;
-    float linearX = targetTextureCoordinates.y * targetDimensions.x + targetTextureCoordinates.x;
-    float linearY = targetTextureCoordinates.x * targetDimensions.y + targetTextureCoordinates.y;
-    uint seed = seedFromXYPass(linearX, linearY, texelWidthDivided);
+    uint seed = seedFromXYPass(targetTextureCoordinates.x, targetTextureCoordinates.y, texelWidthDivided);
     float u1 = u01FromUint(pcgHash(seed));
     float u2 = u01FromUint(pcgHash(seed ^ 0x68BC21EBu));
     return float2(u1, u2);
 }
 
 #pragma kernel IntializeTexture
-[numthreads(4, 4, 1)] void IntializeTexture(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+[numthreads(16, 16, 1)] void IntializeTexture(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
-    uint2 targetDimensions;
-    Result.GetDimensions(targetDimensions.x, targetDimensions.y);
-
     uint2 topLeftCellIdx = globalId.xy * threadDomainTexelWidth;
 
     float2 worleyCoordinates = (topLeftCellIdx / (float2)targetDimensions) * worleyFrequency + noiseDisplacement * worleyFrequency;
     Result[topLeftCellIdx.xy] = sampleWorleyNoise(worleyCoordinates) * octaveAmplitude;
-    // float2 testCoords = computeNoiseCoordinates(topLeftCellIdx, targetDimensions);
-    // Result[topLeftCellIdx] = sampleNoise(computeNoiseCoordinates(topLeftCellIdx, targetDimensions)) * octaveAmplitude;
 }
 
 #pragma kernel AddExtraNoise
-    [numthreads(4, 4, 1)] void AddExtraNoise(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+    [numthreads(16, 16, 1)] void AddExtraNoise(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
-    uint2 targetDimensions;
-    Result.GetDimensions(targetDimensions.x, targetDimensions.y);
-
     uint2 topLeftCellIdx = globalId.xy * threadDomainTexelWidth;
 
     for (int x = 0; x < threadDomainTexelWidth; ++x)
@@ -102,17 +86,14 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimen
         for (int y = 0; y < threadDomainTexelWidth; ++y)
         {
             uint2 targetIdx = topLeftCellIdx + uint2(x, y);
-            Result[targetIdx] = Result[targetIdx] + sampleGaussianNoise(computeNoiseCoordinates(targetIdx, targetDimensions)) * octaveAmplitude;
+            Result[targetIdx] = Result[targetIdx] + sampleGaussianNoise(computeNoiseCoordinates(targetIdx)) * octaveAmplitude;
         }
     }
 }
 
 #pragma kernel Transition12
-[numthreads(4, 4, 1)] void Transition12(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+[numthreads(16, 16, 1)] void Transition12(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
-    uint2 targetDimensions;
-    Result.GetDimensions(targetDimensions.x, targetDimensions.y);
-
     uint2 topLeftCellIdx = globalId.xy * threadDomainTexelWidth;
 
     for (int x = 0; x < texelWidthDivisionFactor; ++x)
@@ -129,17 +110,14 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimen
                  Result[terrainWrap(subdivisionIdx + int2(-texelWidthDivided, -texelWidthDivided), targetDimensions)]) /
                 4.0;
 
-            Result[subdivisionIdx] = averageNeighbors + sampleNoise(computeNoiseCoordinates(subdivisionIdx, targetDimensions)) * octaveAmplitude;
+            Result[subdivisionIdx] = averageNeighbors + sampleNoise(computeNoiseCoordinates(subdivisionIdx)) * octaveAmplitude;
         }
     }
 }
 
 #pragma kernel Transition21
-    [numthreads(4, 4, 1)] void Transition21(uint3 localID : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+[numthreads(16, 16, 1)] void Transition21(uint3 localID : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
-    uint2 targetDimensions;
-    Result.GetDimensions(targetDimensions.x, targetDimensions.y);
-
     uint2 topLeftCellIdx = globalId.xy * threadDomainTexelWidth;
 
     int numYPasses = pow(2, texelWidthDivisionFactor);
@@ -188,7 +166,7 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates, uint2 targetDimen
                                    neighborTop +
                                    neighborBottom) /
                                   numberValid) +
-                                 sampleNoise(computeNoiseCoordinates(diamondIdx, targetDimensions)) * octaveAmplitude;
+                                 sampleNoise(computeNoiseCoordinates(diamondIdx)) * octaveAmplitude;
         }
     }
 }

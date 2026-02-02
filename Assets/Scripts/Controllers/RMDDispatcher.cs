@@ -27,7 +27,7 @@ public class RMDDispatcher : MultiFormatPipelineStep
     [Range(0.01f, 10.0f)]
     public float perlinFrequency;
 
-    private const int groupSize = 4;
+    private const int groupSize = 16;
 
     private static readonly int PID_threadDomainTexelWidth = Shader.PropertyToID("threadDomainTexelWidth");
     private static readonly int PID_threadSubdomainsX = Shader.PropertyToID("threadSubdomainsX");
@@ -39,6 +39,7 @@ public class RMDDispatcher : MultiFormatPipelineStep
     private static readonly int PID_texelWidthDivisionFactor = Shader.PropertyToID("texelWidthDivisionFactor");
     private static readonly int PID_texelWidthDivided = Shader.PropertyToID("texelWidthDivided");
     private static readonly int PID_Result = Shader.PropertyToID("Result");
+    private static readonly int PID_targetDimensions = Shader.PropertyToID("targetDimensions");
 
     public override void StepInitialization(PipelineContext pipelineContext) { }
 
@@ -77,6 +78,7 @@ public class RMDDispatcher : MultiFormatPipelineStep
         pipelineContext.SetUniformInt(shaderToDispatch, PID_threadSubdomainsY, numLinearThreads);
         pipelineContext.SetUniformFloat(shaderToDispatch, PID_worleyFrequency, worleyFrequency);
         pipelineContext.SetUniformFloat(shaderToDispatch, PID_perlinFrequency, perlinFrequency);
+        pipelineContext.SetUniformInts(shaderToDispatch, PID_targetDimensions, new int[] { textureSize, textureSize });
 
         float octaveAmplitude = 1.0f;
         pipelineContext.SetUniformFloat(shaderToDispatch, PID_octaveAmplitude, octaveAmplitude);
