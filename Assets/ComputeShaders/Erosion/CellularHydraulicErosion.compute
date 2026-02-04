@@ -1,9 +1,14 @@
 #include "../Common/Utilities.hlsl"
 
+RWStructuredBuffer<float> waterLevel;
 RWTexture2D<float> resultHeightmap;
-uniform int2 heightmapDimensions; // so as not to GetDimensions() every time
 
+uniform int2 heightmapDimensions; // so as not to GetDimensions() every time
 uniform int texelsPerThread;
+uniform float solubilityConstant;
+uniform float evaporationConstant;
+
+uniform float2 noiseDisplacement;
 
 #pragma kernel RainDropper
 [numthreads(32, 32, 1)] void RainDropper(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
@@ -15,7 +20,76 @@ uniform int texelsPerThread;
         for (int y = 0; y < texelsPerThread; ++y)
         {
             uint2 processedTexel = topLeftCorner + uint2(x, y);
-            resultHeightmap[processedTexel] = pinkNoise2D(processedTexel);
+            float extraRainWater = pinkNoise2D(processedTexel + noiseDisplacement * heightmapDimensions);
+            waterLevel[index2dTo1d(heightmapDimensions, processedTexel)] += extraRainWater; // step 1
+            resultHeightmap[processedTexel] -= extraRainWater * solubilityConstant;         // step 2.
+        }
+    }
+}
+
+struct WaterDistributionFromTexel
+{
+    float waterSpreadValue[3][3];
+};
+
+WaterDistributionFromTexel computeHeightDistribution(int2 processedTexel)
+{
+    WaterDistributionFromTexel nInfo;
+
+    float waterLevelAtTexel = waterLevel[index2dTo1d(heightmapDimensions, processedTexel)];
+    float texelHeight = resultHeightmap[processedTexel] + waterLevelAtTexel;
+
+    float exceedingSum = 1.0e-5;
+    int numCriticalNeighbors = 0;
+    {
+        for (int x = -1; x < 2; ++x)
+        {
+            for (int y = -1; y < 2; ++y)
+            {
+                uint2 neighborIndex = terrainWrap(processedTexel + int2(x, y), heightmapDimensions);
+                float d = texelHeight - (resultHeightmap[neighborIndex] + waterLevel[index2dTo1d(heightmapDimensions, neighborIndex)]);
+                if (d > 0.0)
+                {
+                    numCriticalNeighbors++;
+                }
+                else
+                {
+                    d = 0.0;
+                }
+
+                exceedingSum += d;
+                nInfo.waterSpreadValue[y + 1][x + 1] = d;
+            }
+        }
+    }
+
+    float totalWaterLost = min(waterLevelAtTexel, texelHeight - (((float)numCriticalNeighbors * texelHeight - exceedingSum) / numCriticalNeighbors));
+
+    {
+        for (int x = -1; x < 2; ++x)
+        {
+            for (int y = -1; y < 2; ++y)
+            {
+                float d = nInfo.waterSpreadValue[y + 1][x + 1];
+                nInfo.waterSpreadValue[y + 1][x + 1] = (totalWaterLost * d) / exceedingSum;
+            }
+        }
+    }
+
+    // how much water the central texel loses
+    nInfo.waterSpreadValue[1][1] = -totalWaterLost;
+    return nInfo;
+}
+
+void applyKernel(uint2 processedTexel)
+{
+    WaterDistributionFromTexel distributionAtTexel = computeHeightDistribution(processedTexel); // step 3
+
+    for (int i = -1; i < 2; ++i)
+    {
+        for (int j = -1; j < 2; ++j)
+        {
+            waterLevel[index2dTo1d(heightmapDimensions, processedTexel)] += distributionAtTexel.waterSpreadValue[j + 1][i + 1];
         }
     }
 }
@@ -23,9 +97,88 @@ uniform int texelsPerThread;
 #pragma kernel HydraulicCoreEroder
 [numthreads(32, 32, 1)] void HydraulicCoreEroder(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
+    int2 topLeftCorner = globalId.xy * texelsPerThread;
 
+    {
+        for (int x = 2; x < texelsPerThread; ++x)
+        {
+            for (int y = 2 + (x % 2); y < texelsPerThread; y += 2)
+            {
+                uint2 processedTexel = topLeftCorner + uint2(x, y);
+                applyKernel(processedTexel);
+            }
+        }
+    }
+
+    {
+        for (int x = 2; x < texelsPerThread; ++x)
+        {
+            for (int y = 3 - (x % 2); y < texelsPerThread; y += 2)
+            {
+                uint2 processedTexel = topLeftCorner + uint2(x, y);
+                applyKernel(processedTexel);
+            }
+        }
+    }
 }
 
 #pragma kernel HydraulicBorderEroder
-[numthreads(32, 32, 1)] void HydraulicBorderEroder(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID){}
+    [numthreads(32, 32, 1)] void HydraulicBorderEroder(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 
+{
+    int2 topLeftCorner = globalId.xy * texelsPerThread;
+
+    // horizontal strip
+    {
+        for (uint x_h = 0; x_h < texelsPerThread; ++x_h)
+        {
+            uint y_h = (x_h % 2);
+            uint2 processedTexel = topLeftCorner + uint2(x_h, y_h);
+            applyKernel(processedTexel);
+        }
+    }
+
+    {
+        for (uint x_h = 0; x_h < texelsPerThread; ++x_h)
+        {
+            uint y_h = 1 - (x_h % 2);
+            uint2 processedTexel = topLeftCorner + uint2(x_h, y_h);
+            applyKernel(processedTexel);
+        }
+    }
+
+    // vertical strip
+    {
+        for (uint y_v = 2; y_v < texelsPerThread; ++y_v)
+        {
+            uint x_v = (y_v % 2);
+            uint2 processedTexel = topLeftCorner + uint2(x_v, y_v);
+            applyKernel(processedTexel);
+        }
+    }
+
+    {
+        for (uint y_v = 2; y_v < texelsPerThread; ++y_v)
+        {
+            uint x_v = 1 - (y_v % 2);
+            uint2 processedTexel = topLeftCorner + uint2(x_v, y_v);
+            applyKernel(processedTexel);
+        }
+    }
+}
+
+#pragma kernel WaterEvaporator
+[numthreads(32, 32, 1)] void WaterEvaporator(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+{
+    int2 topLeftCorner = globalId.xy * texelsPerThread;
+
+    for (int x = 0; x < texelsPerThread; ++x)
+    {
+        for (int y = 0; y < texelsPerThread; ++y)
+        {
+            uint2 processedTexel = topLeftCorner + uint2(x, y);
+            // TODO: verify that we can't end up with negative water levels
+            resultHeightmap[processedTexel] += waterLevel[index2dTo1d(heightmapDimensions, processedTexel)] * (1.0 - evaporationConstant) * solubilityConstant * (1.0 - solubilityConstant); // step 2
+        }
+    }
+}

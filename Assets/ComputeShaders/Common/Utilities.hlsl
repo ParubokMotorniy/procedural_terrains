@@ -5,6 +5,11 @@ int2 terrainWrap(int2 a, int2 b)
     return (a % b + b) % b;
 }
 
+uint index2dTo1d(uint2 gridDimensions, uint2 index2D)
+{
+    return index2D.x * gridDimensions.y + index2D.y;
+}
+
 float sampleGaussBoxMuller(float2 u)
 {
     const float a = sqrt(-2.0f * log(1.0f - u.x));
@@ -34,7 +39,6 @@ uint seedFromXYPass(uint x, uint y, int passId)
 }
 
 //https://www.shadertoy.com/view/lXjGRw
-
 // return value 0~1 but tends toward central values
 float pinkNoise2D(uint2 x)
 {
