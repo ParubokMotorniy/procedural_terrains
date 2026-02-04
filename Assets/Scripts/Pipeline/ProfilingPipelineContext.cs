@@ -15,7 +15,7 @@ namespace GenerationPipeline
 
         public ProfilingPipelineContext(RenderTexture passHeightmap) : base(passHeightmap)
         {
-            Debug.Log("System supports fences ? :" +  SystemInfo.supportsGraphicsFence);
+            Debug.Log("System supports fences ? :" + SystemInfo.supportsGraphicsFence);
 
             pipelineStartFence = terrainPipelineCMD.CreateGraphicsFence(UnityEngine.Rendering.GraphicsFenceType.CPUSynchronisation, UnityEngine.Rendering.SynchronisationStageFlags.AllGPUOperations);
 
@@ -27,6 +27,7 @@ namespace GenerationPipeline
 
         public override async Task ExecuteBuffer()
         {
+
             pipelineEndFence = terrainPipelineCMD.CreateGraphicsFence(UnityEngine.Rendering.GraphicsFenceType.CPUSynchronisation, UnityEngine.Rendering.SynchronisationStageFlags.AllGPUOperations);
 
             long millisecondsAtStart = 0;
@@ -45,6 +46,7 @@ namespace GenerationPipeline
             long gpuMilliseconds = millisecondsAtEnd - millisecondsAtStart;
 
             //TODO: prettify these for belivable benchmarking
+            //TODO: add routines for measurement of erosion scores at the end. For example, with async read of the texture
             Debug.Log("CPU housekeeping time (ms): " + cpuMilliseconds + ". Ticks: " + cpuProfilingStopwatch.ElapsedTicks);
             Debug.Log("GPU processing time (ms): " + gpuMilliseconds);
         }

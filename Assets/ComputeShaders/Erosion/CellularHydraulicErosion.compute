@@ -1,0 +1,31 @@
+#include "../Common/Utilities.hlsl"
+
+RWTexture2D<float> resultHeightmap;
+uniform int2 heightmapDimensions; // so as not to GetDimensions() every time
+
+uniform int texelsPerThread;
+
+#pragma kernel RainDropper
+[numthreads(32, 32, 1)] void RainDropper(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+{
+    int2 topLeftCorner = globalId.xy * texelsPerThread;
+
+    for (int x = 0; x < texelsPerThread; ++x)
+    {
+        for (int y = 0; y < texelsPerThread; ++y)
+        {
+            uint2 processedTexel = topLeftCorner + uint2(x, y);
+            resultHeightmap[processedTexel] = pinkNoise2D(processedTexel);
+        }
+    }
+}
+
+#pragma kernel HydraulicCoreEroder
+[numthreads(32, 32, 1)] void HydraulicCoreEroder(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+{
+
+}
+
+#pragma kernel HydraulicBorderEroder
+[numthreads(32, 32, 1)] void HydraulicBorderEroder(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID){}
+

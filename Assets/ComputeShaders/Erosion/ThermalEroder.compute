@@ -16,8 +16,13 @@ static const float heightDistributionDistanceCoefficients[3][3] =
         {1.0, 0.0, 1.0},
         {0.85, 1.0, 0.85}};
 
-// TODO: first, let's stick to the reference implementation. The boundary reads/writes can be resolved with atomics without the need for an extra texture. The reliance on compute shaders allows to experiment with Moore neighborhood and scale the material transition by distance to cells. I'll probably have to keep a map of  two reads and sub VS two reads -> useless
-// TODO: the goal is to address grid updtaes. Perfectly, I'd need to isloate 3x3 grid from other threads on the boundary. I need to serialize operations on the boundary.
+// first, let's stick to the reference implementation. The boundary reads/writes can be resolved with atomics without the need for an extra texture. The reliance on compute shaders allows to experiment with Moore neighborhood and scale the material transition by distance to cells. I'll probably have to keep a map of  two reads and sub VS two reads -> useless
+// the goal is to address grid updtaes. Perfectly, I'd need to isloate 3x3 grid from other threads on the boundary. I need to serialize operations on the boundary.
+
+//TODO: I believe there must be a way to get rid of two dispatches. I just need to either: 
+// a) guarantee atomicity for 3x3 areas 
+// b) weaken the assumptions and granurarly allow races
+// c) get rid of the need for atomicity at all?   
 
 struct TexelHeightDistribution
 {
