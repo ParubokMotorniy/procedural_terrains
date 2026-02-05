@@ -17,13 +17,18 @@ namespace GenerationPipeline
         [Range(0.001f, 32.0f)]
         public float terrainScale = 1.0f;
 
+        [SerializeField]
+        bool enableProfiling = false;
+
 #if UNITY_EDITOR
         [SerializeField]
         bool dumpTextures = false;
-#endif
 
         [SerializeField]
-        bool enableProfiling = false;
+        bool useTestTexture = false;
+
+        public Texture2D testTexture;
+#endif
 
         public List<MonoPipelineStep> pipelineSteps;
 
@@ -37,7 +42,6 @@ namespace GenerationPipeline
         [ContextMenu("Regenerate terrain")]
         async void RegenerateTerrain()
         {
-
             int textureSize = (int)math.pow(2, terrainSize);
 
             { //intermediate heightmap creation
@@ -77,14 +81,23 @@ namespace GenerationPipeline
             augmentedPipeline.Add(normalizer);
             augmentedPipeline.Add(finalizer);
 
-            //executes the complete pipeline
-            foreach (PipelineStep step in augmentedPipeline)
+#if UNITY_EDITOR
+            if (useTestTexture)
             {
-                step.ExecuteStep(currentContext);
+                currentContext.AppendTextureCopyToCommandBuffer(testTexture, intermediateHeightmap);
             }
+#endif
+
+            if (useTestTexture)
+
+                //executes the complete pipeline
+                foreach (PipelineStep step in augmentedPipeline)
+                {
+                    step.ExecuteStep(currentContext);
+                }
 
             await currentContext.ExecuteBuffer();
-            
+
 #if UNITY_EDITOR
             if (dumpTextures)
             {
