@@ -8,9 +8,9 @@ uniform float distributionCoefficient; // this parameter now controls how "sturd
 uniform float talusThreshold;
 uniform float2 noiseDisplacement;
 
-uniform int permuteA;
+uniform uint permuteA;
 
-static const float MAX_FLOAT = 0xFFFFFFF;
+static const float BIG_FLOAT = 3.402823466e+38f;
 
 // diagonal texels are further away from the kernel center, and so we assume they receive less material than direct neighbors
 static const float heightDistributionDistanceCoefficients[3][3] =
@@ -39,12 +39,15 @@ TexelHeightDistribution computeHeightDistribution(int2 processedTexel)
     float exceedingSum = 1.0e-5;
     float maxHeightDistance = 0.0;
     int numCriticalNeighbors = 0;
-    float minHeightDistance = MAX_FLOAT;
+    float minHeightDistance = BIG_FLOAT;
+
     for (int x = -1; x < 2; ++x)
     {
         for (int y = -1; y < 2; ++y)
         {
-            float d = texelHeight - resultHeightmap[terrainWrap(processedTexel + int2(x, y), heightmapDimensions)];
+            int2 ncoord = terrainWrap(processedTexel + int2(x, y), heightmapDimensions);
+            float d = texelHeight - resultHeightmap[ncoord];
+
             if (d > talusThreshold)
             {
                 maxHeightDistance = max(maxHeightDistance, d);
@@ -61,18 +64,24 @@ TexelHeightDistribution computeHeightDistribution(int2 processedTexel)
         }
     }
 
-    // the smaller the distance betweem the lowest and highest neighbors -> the more prominent is the effect of "avalanche" -> the higher is the distribution coefficient (i.e. the fraction of the height difference distributed)
-    float avalancheRatio = 1.0 - (maxHeightDistance - minHeightDistance) / maxHeightDistance;
+    float avalancheRatio = 0.0;
+    if (numCriticalNeighbors > 0 && maxHeightDistance > 1.0e-8)
+    {
+        // the smaller the distance betweem the lowest and highest neighbors -> the more prominent "avalanche"
+        avalancheRatio = 1.0 - (maxHeightDistance - minHeightDistance) / maxHeightDistance;
+    }
+
     uint seed = seedFromXYPass(processedTexel.x, processedTexel.y, numCriticalNeighbors);
     float u1 = u01FromUint(pcgHash(seed));
+
     // zero-mean gaussian is shifted to the estimated ratio. u2 is kept at zero to ensure sigma=1
     float dynamicDistributionCoefficient = clamp((sampleGaussBoxMuller(float2(u1, 0.0)) + avalancheRatio), 1.0e-2, 1.0) * distributionCoefficient;
 
-    float totalHeightRemoved = numCriticalNeighbors > 0 ? dynamicDistributionCoefficient * (maxHeightDistance - talusThreshold) : 0.0;
+    float totalHeightRemoved = (numCriticalNeighbors > 0) ? (dynamicDistributionCoefficient * (maxHeightDistance - talusThreshold)) : 0.0;
 
     // to make sure the central texel does not end up higher than its closest neighbor
     float heightConsistencyThreshold = (minHeightDistance * exceedingSum) / (minHeightDistance + exceedingSum + 1.0e-5);
-    totalHeightRemoved = totalHeightRemoved <= heightConsistencyThreshold ? totalHeightRemoved : heightConsistencyThreshold;
+    totalHeightRemoved = (totalHeightRemoved <= heightConsistencyThreshold) ? totalHeightRemoved : heightConsistencyThreshold;
 
     for (int x = -1; x < 2; ++x)
     {
@@ -89,7 +98,7 @@ TexelHeightDistribution computeHeightDistribution(int2 processedTexel)
     return nInfo;
 }
 
-void applyKernel(uint2 processedTexel)
+void applyKernel(int2 processedTexel)
 {
     TexelHeightDistribution distributionAtTexel = computeHeightDistribution(processedTexel);
 
@@ -97,7 +106,8 @@ void applyKernel(uint2 processedTexel)
     {
         for (int j = -1; j < 2; ++j)
         {
-            resultHeightmap[terrainWrap(processedTexel + int2(i, j), heightmapDimensions)] += distributionAtTexel.heightSpreadValue[j + 1][i + 1];
+            int2 p = terrainWrap(processedTexel + int2(i, j), heightmapDimensions);
+            resultHeightmap[p] += distributionAtTexel.heightSpreadValue[j + 1][i + 1];
         }
     }
 }
@@ -106,24 +116,27 @@ void applyKernel(uint2 processedTexel)
 #pragma kernel ThermalCoreEroder
 [numthreads(32, 32, 1)] void ThermalCoreEroder(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
-    int2 topLeftCorner = globalId.xy * texelsPerThread;
-    int totalTexelsPerThread = (texelsPerThread - 2) * (texelsPerThread - 2);
+    int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
 
-    int permuteB = (globalId.x + globalId.y + groupId.x + groupId.y) % totalTexelsPerThread;
+    int innerSide = texelsPerThread - 2;
+    int totalTexelsPerThread = innerSide * innerSide;
 
-    // iterates obver the grid in a permuted order
-    for (int idx = 0; idx < totalTexelsPerThread; ++idx)
+    uint N = (uint)totalTexelsPerThread;
+    uint permuteB = (uint)((globalId.x + globalId.y + groupId.x + groupId.y) % N);
+
+    // iterates over the grid in a permuted order
+    for (uint idx = 0; idx < N; ++idx)
     {
-        // modular affine permutation
-        int permutedIdx = (permuteA * idx + permuteB) % totalTexelsPerThread;
+        uint permutedIdx = (permuteA * idx + permuteB) % N;
 
-        int x = permutedIdx / texelsPerThread;
-        int y = permutedIdx % texelsPerThread;
+        int x = (int)(permutedIdx / (uint)innerSide);
+        int y = (int)(permutedIdx % (uint)innerSide);
 
-        uint2 processedTexel = topLeftCorner + uint2(x, y) + uint2(2, 2);
+        int2 processedTexel = topLeftCorner + int2(x, y) + int2(2, 2);
 
         applyKernel(processedTexel);
-        AllMemoryBarrier(); // so that a thread can read back what it has just written
+
+        AllMemoryBarrier();
     }
 }
 
@@ -131,41 +144,47 @@ void applyKernel(uint2 processedTexel)
 #pragma kernel ThermalBorderEroder
     [numthreads(32, 32, 1)] void ThermalBorderEroder(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
-    uint2 topLeftCorner = globalId.xy * texelsPerThread;
+    int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
+
     int stepMultiplier = 1 - (texelsPerThread % 2);
 
     { // horizontal strip
         int totalTexelsPerThreadHorizontal = texelsPerThread * 2;
-        int permuteBHorizontal = (globalId.x + globalId.y + groupId.x + groupId.y) % totalTexelsPerThreadHorizontal;
-        for (int idx = 0; idx < permuteBHorizontal; ++idx)
+
+        uint N = (uint)totalTexelsPerThreadHorizontal;
+        uint permuteBHorizontal = (uint)((globalId.x + globalId.y + groupId.x + groupId.y) % N);
+
+        for (uint idx = 0; idx < N; ++idx)
         {
-            int permutedIdx = (permuteA * idx + permuteBHorizontal) % totalTexelsPerThreadHorizontal;
+            uint permutedIdx = (permuteA * idx + permuteBHorizontal) % N;
 
-            int x = permutedIdx % texelsPerThread;
-            int y = (permutedIdx + (permutedIdx / texelsPerThread) * stepMultiplier) % 2;
-
-            uint2 processedTexel = topLeftCorner + uint2(x, y);
+            int x = (int)(permutedIdx % (uint)texelsPerThread);
+            int y = ((int)permutedIdx + (permutedIdx / texelsPerThread) * stepMultiplier) % 2;
+            int2 processedTexel = topLeftCorner + int2(x, y);
 
             applyKernel(processedTexel);
-            AllMemoryBarrier(); // so that a thread can read back what it has just written
+            AllMemoryBarrier();
         }
     }
 
     { // vertical strip
         int truncatedTexelsPerThread = texelsPerThread - 2;
         int totalTexelsPerThreadVertical = truncatedTexelsPerThread * 2;
-        int permuteBVertical = (globalId.x + globalId.y + groupId.x + groupId.y) % totalTexelsPerThreadVertical;
-        for (int idx = 0; idx < permuteBVertical; ++idx)
-        {
-            int permutedIdx = (permuteA * idx + permuteBVertical) % totalTexelsPerThreadVertical;
 
-            int y = permutedIdx % truncatedTexelsPerThread;
+        uint N = (uint)totalTexelsPerThreadVertical;
+        uint permuteBVertical = (uint)((globalId.x + globalId.y + groupId.x + groupId.y) % N);
+
+        for (uint idx = 0; idx < N; ++idx)
+        {
+            uint permutedIdx = (permuteA * idx + permuteBVertical) % N;
+
+            int y = (int)(permutedIdx % (uint)truncatedTexelsPerThread);
             int x = (permutedIdx + (permutedIdx / truncatedTexelsPerThread) * stepMultiplier) % 2;
 
-            uint2 processedTexel = topLeftCorner + uint2(x, y) + uint2(0, 2); // offset the truncated strip
+            int2 processedTexel = topLeftCorner + int2(x, y) + int2(0, 2);
 
             applyKernel(processedTexel);
-            AllMemoryBarrier(); // so that a thread can read back what it has just written
+            AllMemoryBarrier();
         }
     }
 }
