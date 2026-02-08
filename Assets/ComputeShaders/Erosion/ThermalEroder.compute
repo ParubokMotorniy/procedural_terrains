@@ -16,13 +16,7 @@ static const float heightDistributionDistanceCoefficients[3][3] =
         {1.0, 0.0, 1.0},
         {0.85, 1.0, 0.85}};
 
-// first, let's stick to the reference implementation. The boundary reads/writes can be resolved with atomics without the need for an extra texture. The reliance on compute shaders allows to experiment with Moore neighborhood and scale the material transition by distance to cells. I'll probably have to keep a map of  two reads and sub VS two reads -> useless
-// the goal is to address grid updtaes. Perfectly, I'd need to isloate 3x3 grid from other threads on the boundary. I need to serialize operations on the boundary.
-
-//TODO: I believe there must be a way to get rid of two dispatches. I just need to either: 
-// a) guarantee atomicity for 3x3 areas 
-// b) weaken the assumptions and granurarly allow races
-// c) get rid of the need for atomicity at all?   
+// TODO: get rid of (mitigate) lattice artifacts. The order of thread execution is decisive, and so this goal is tightly coupled with the optimization taks above.
 
 struct TexelHeightDistribution
 {
@@ -116,6 +110,7 @@ void applyKernel(uint2 processedTexel)
         {
             uint2 processedTexel = topLeftCorner + uint2(x, y);
             applyKernel(processedTexel);
+            AllMemoryBarrier(); //so that a thread can read back what it has just written
         }
     }
 
@@ -125,6 +120,7 @@ void applyKernel(uint2 processedTexel)
         {
             uint2 processedTexel = topLeftCorner + uint2(x, y);
             applyKernel(processedTexel);
+            AllMemoryBarrier(); //so that a thread can read back what it has just written
         }
     }
 }
@@ -140,6 +136,7 @@ void applyKernel(uint2 processedTexel)
         uint y_h = (x_h % 2);
         uint2 processedTexel = topLeftCorner + uint2(x_h, y_h);
         applyKernel(processedTexel);
+        AllMemoryBarrier(); //so that a thread can read back what it has just written
     }
 
     for (uint x_h = 0; x_h < texelsPerThread; ++x_h)
@@ -147,6 +144,7 @@ void applyKernel(uint2 processedTexel)
         uint y_h = 1 - (x_h % 2);
         uint2 processedTexel = topLeftCorner + uint2(x_h, y_h);
         applyKernel(processedTexel);
+        AllMemoryBarrier(); //so that a thread can read back what it has just written
     }
 
     // vertical strip
@@ -155,6 +153,7 @@ void applyKernel(uint2 processedTexel)
         uint x_v = (y_v % 2);
         uint2 processedTexel = topLeftCorner + uint2(x_v, y_v);
         applyKernel(processedTexel);
+        AllMemoryBarrier(); //so that a thread can read back what it has just written
     }
 
     for (uint y_v = 2; y_v < texelsPerThread; ++y_v)
@@ -162,5 +161,6 @@ void applyKernel(uint2 processedTexel)
         uint x_v = 1 - (y_v % 2);
         uint2 processedTexel = topLeftCorner + uint2(x_v, y_v);
         applyKernel(processedTexel);
+        AllMemoryBarrier(); //so that a thread can read back what it has just written
     }
 }

@@ -3,6 +3,8 @@ RWTexture2D<float> Result;
 uniform int texelsPerThread; // how many texels a single thread processes
 uniform float desiredMaxHeight; //makes sense as long as <= 1 or the texture is not Normalized
 
+//TODO: consider whether it can be rewritten with waveactive stuff
+
 groupshared float globalMin = 0;
 groupshared float globalMax = 0;
 groupshared float heightSpan = 0;
