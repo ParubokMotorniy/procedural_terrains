@@ -87,14 +87,11 @@ namespace GenerationPipeline
                 currentContext.AppendTextureCopyToCommandBuffer(testTexture, intermediateHeightmap);
             }
 #endif
-
-            if (useTestTexture)
-
-                //executes the complete pipeline
-                foreach (PipelineStep step in augmentedPipeline)
-                {
-                    step.ExecuteStep(currentContext);
-                }
+            //executes the complete pipeline
+            foreach (PipelineStep step in augmentedPipeline)
+            {
+                step.ExecuteStep(currentContext);
+            }
 
             await currentContext.ExecuteBuffer();
 

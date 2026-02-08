@@ -40,6 +40,8 @@ public class SDFDispatcher : MultiFormatPipelineStep
         int numGroups = (int)math.pow(2, groupScaleFactor);
         int numLinearThreads = groupSize * numGroups;
 
+        Assert.IsTrue(textureSize % numLinearThreads == 0, "Texels must be distributed among threads evenly!");
+
         // TODO: the texture can actually be reworked to be a computebuffer
         RenderTexture coastlineTexture = new RenderTexture(textureSize, textureSize, 0)
         {
@@ -49,8 +51,10 @@ public class SDFDispatcher : MultiFormatPipelineStep
             filterMode = FilterMode.Bilinear,
             wrapMode = TextureWrapMode.Clamp
         };
-        {coastlineTexture.Create();
-        Assert.IsTrue(coastlineTexture.IsCreated());}
+        {
+            coastlineTexture.Create();
+            Assert.IsTrue(coastlineTexture.IsCreated());
+        }
 
         ComputeBuffer buffer1 = new ComputeBuffer(textureSize * textureSize * 2, sizeof(float));
         Assert.IsTrue(buffer1.IsValid());

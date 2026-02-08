@@ -622,9 +622,10 @@ MonoBehaviour:
   terrainScale: 0.25
   enableProfiling: 1
   dumpTextures: 0
-  useTestTexture: 1
+  useTestTexture: 0
   testTexture: {fileID: 2800000, guid: 14fa032c7256704c8a0ead7b71566301, type: 3}
   pipelineSteps:
+  - {fileID: 852555921}
   - {fileID: 1412956747}
   - {fileID: 1778127573}
 --- !u!4 &385078007
@@ -818,7 +819,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _HeightMap:
-        m_Texture: {fileID: 1387449385}
+        m_Texture: {fileID: 1287511782}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _Heightmap:
@@ -995,7 +996,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MidpointDisplacementController
   shaderToDispatch: {fileID: 7200000, guid: 2da1ab904200f97c69eeb6b358aa73d3, type: 3}
   groupScaleFactor: 1
-  numSubdivisions: 4
+  numSubdivisions: 3
   H: 0.2
   addExtraNoise: 1
   worleyFrequency: 4
@@ -1064,7 +1065,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!84 &1387449385
+--- !u!84 &1287511782
 RenderTexture:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -1181,8 +1182,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CellularHydraulicErosionDispatcher
   erosionComputeShader: {fileID: 7200000, guid: 4ed1628a5a942d083b9081ea5e46e44b, type: 3}
   groupScaleFactor: 3
-  erosionIterationLimit: 45
-  solubilityConstant: 0.01
+  erosionIterationLimit: 10
+  solubilityConstant: 0.007
   evaporationConstant: 0.01
 --- !u!4 &1778127574
 Transform:

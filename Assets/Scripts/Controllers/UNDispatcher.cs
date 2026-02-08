@@ -48,6 +48,8 @@ public class UNDispatcher : MultiFormatPipelineStep
         int numGroups = (int)math.pow(2, groupScaleFactor);
         int numLinearThreads = groupSize * numGroups;
 
+        Assert.IsTrue(textureSize % numLinearThreads == 0, "Texels must be distributed among threads evenly!");
+
         int kernelIdx = shaderToDispatch.FindKernel("UberNoiseTerrainGenerator");
 
         pipelineContext.BindTexture(shaderToDispatch, kernelIdx, PID_Result, pipelineContext.intermediateHeightmap);
