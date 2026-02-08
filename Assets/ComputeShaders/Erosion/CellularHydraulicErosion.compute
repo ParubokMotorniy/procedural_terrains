@@ -13,6 +13,7 @@ uniform float2 noiseDisplacement;
 uniform uint permuteA;
 
 static const float EPS = 1.0e-6;
+static const float HEIGHT_EPS = 1.0e-4; // texels differing by less are assumed to be at the same level
 
 #pragma kernel RainDropper
 [numthreads(32, 32, 1)] void RainDropper(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
@@ -27,10 +28,15 @@ static const float EPS = 1.0e-6;
             uint2 processedTexel = (uint2)processedTexel_i;
             uint lin = index2dTo1d(heightmapDimensions, processedTexel);
 
+            float currentWaterLevel = waterLevel[lin];
+            float currentHeight = resultHeightmap[processedTexel_i];
+            float maxAllowedWater = currentHeight / solubilityConstant;
+
             float extraRainWater = pinkNoise2D((float2)processedTexel + noiseDisplacement * (float2)heightmapDimensions);
 
-            waterLevel[lin] += extraRainWater;                                        // step 1
-            resultHeightmap[processedTexel_i] -= extraRainWater * solubilityConstant; // step 2
+            // this can break assumption that water always contain the same concentration of sediment (if more water falls than there is sediment to be fit into that volume). Thus clamping is needed.
+            waterLevel[lin] = min(extraRainWater + currentWaterLevel, maxAllowedWater);                                            // step 1
+            resultHeightmap[processedTexel_i] = max(resultHeightmap[processedTexel_i] - extraRainWater * solubilityConstant, 0.0); // step 2
         }
     }
 }
@@ -63,7 +69,7 @@ WaterDistributionFromTexel computeWaterDistribution(int2 processedTexel)
                 float neighborWater = waterLevel[nLin];
 
                 float d = texelHeight - (resultHeightmap[neighborCoord] + neighborWater);
-                if (d > 0.0)
+                if (d > HEIGHT_EPS)
                 {
                     numCriticalNeighbors++;
                 }
@@ -230,7 +236,7 @@ void applyKernel(int2 processedTexel)
             float sedimentationValue = removedWater * solubilityConstant;
 
             // step 4
-            waterLevel[lin] = newWaterLevel;
+            waterLevel[lin] = max(newWaterLevel, 0.0);
             resultHeightmap[processedTexel_i] += sedimentationValue;
         }
     }
