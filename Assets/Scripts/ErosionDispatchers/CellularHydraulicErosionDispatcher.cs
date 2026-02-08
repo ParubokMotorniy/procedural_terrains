@@ -14,16 +14,17 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
     [Range(1, 100)]
     public int erosionIterationLimit = 25;
 
-    [Range(0.01f, 1.0f)]
+    [Range(0.001f, 1.0f)]
     public float solubilityConstant;
 
-    [Range(0.01f, 1.0f)]
+    [Range(0.001f, 1.0f)]
     public float evaporationConstant;
 
     private const int groupSize = 32;
 
     private static readonly int PID_resultHeightmap = Shader.PropertyToID("resultHeightmap");
     private static readonly int PID_waterLevel = Shader.PropertyToID("waterLevel");
+    private static readonly int PID_permuteA = Shader.PropertyToID("permuteA");
     private static readonly int PID_texelsPerThread = Shader.PropertyToID("texelsPerThread");
     private static readonly int PID_solubilityConstant = Shader.PropertyToID("solubilityConstant");
     private static readonly int PID_evaporationConstant = Shader.PropertyToID("evaporationConstant");
@@ -41,6 +42,28 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
         int numGroups = (int)math.pow(2, groupScaleFactor);
         int numLinearThreads = groupSize * numGroups;
 
+        Assert.IsTrue(textureSize % numLinearThreads == 0, "Texels must be distributed among threads evenly!");
+
+        int texelsPerThreadSquared = (int)math.pow(textureSize / numLinearThreads, 2);
+        int permuteA = 5;
+        while (true)
+        {
+            permuteA += 2; //only odd numbers have a chance
+            int gcd = 0;
+            for (gcd = permuteA; gcd > 0; --gcd)
+            {
+                if ((texelsPerThreadSquared % gcd) == 0 && (permuteA % gcd) == 0)
+                {
+                    //largest so far, no need to seek further
+                    break;
+                }
+            }
+            if (gcd == 1)
+            {
+                break;
+            }
+        }
+
         int rainDropKernelIdx = erosionComputeShader.FindKernel("RainDropper");
         int coreKernelIdx = erosionComputeShader.FindKernel("HydraulicCoreEroder");
         int borderKernelIdx = erosionComputeShader.FindKernel("HydraulicBorderEroder");
@@ -56,6 +79,7 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
         }
 
         pipelineContext.SetUniformInt(erosionComputeShader, PID_texelsPerThread, textureSize / numLinearThreads);
+        pipelineContext.SetUniformInt(erosionComputeShader, PID_permuteA, permuteA);
         pipelineContext.SetUniformInts(erosionComputeShader, PID_heightmapDimensions, new int[2] { textureSize, textureSize });
         pipelineContext.SetUniformFloat(erosionComputeShader, PID_evaporationConstant, evaporationConstant);
         pipelineContext.SetUniformFloat(erosionComputeShader, PID_solubilityConstant, solubilityConstant);

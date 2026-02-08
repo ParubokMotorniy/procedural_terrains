@@ -67,8 +67,6 @@ public class ThermalErosionDispatcher : MultiFormatPipelineStep
             }
         }
 
-        Debug.Log("Squared texels: " + texelsPerThreadSquared + ". PermuteA: " + permuteA);
-
         foreach (int kernelIdx in new[] { coreKernelIdx, borderKernelIdx })
         {
             pipelineContext.BindTexture(erosionComputeShader, kernelIdx, PID_resultHeightmap, pipelineContext.intermediateHeightmap);
