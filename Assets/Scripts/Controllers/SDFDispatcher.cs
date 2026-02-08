@@ -16,6 +16,8 @@ public class SDFDispatcher : MultiFormatPipelineStep
     public float baseSimplexFrequency = 1.0f;
 
     private const int groupSize = 32;
+    private ComputeBuffer buffer1;
+    private ComputeBuffer buffer2;
 
     private static readonly int PID_buffer1 = Shader.PropertyToID("buffer1");
     private static readonly int PID_buffer2 = Shader.PropertyToID("buffer2");
@@ -56,10 +58,9 @@ public class SDFDispatcher : MultiFormatPipelineStep
             Assert.IsTrue(coastlineTexture.IsCreated());
         }
 
-        ComputeBuffer buffer1 = new ComputeBuffer(textureSize * textureSize * 2, sizeof(float));
+        buffer1 = new ComputeBuffer(textureSize * textureSize * 2, sizeof(float));
         Assert.IsTrue(buffer1.IsValid());
-
-        ComputeBuffer buffer2 = new ComputeBuffer(textureSize * textureSize * 2, sizeof(float));
+        buffer2 = new ComputeBuffer(textureSize * textureSize * 2, sizeof(float));
         Assert.IsTrue(buffer2.IsValid());
 
         int maskToSeedBufferKernelIdx = shaderToDispatch.FindKernel("MaskToSeedBuffer");

@@ -21,6 +21,7 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
     public float evaporationConstant;
 
     private const int groupSize = 32;
+    private ComputeBuffer waterLevelBuffer;
 
     private static readonly int PID_resultHeightmap = Shader.PropertyToID("resultHeightmap");
     private static readonly int PID_waterLevel = Shader.PropertyToID("waterLevel");
@@ -69,7 +70,7 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
         int borderKernelIdx = erosionComputeShader.FindKernel("HydraulicBorderEroder");
         int waterEvaporatorKernelIdx = erosionComputeShader.FindKernel("WaterEvaporator");
 
-        ComputeBuffer waterLevelBuffer = new ComputeBuffer(textureSize * textureSize, sizeof(float));
+        waterLevelBuffer = new ComputeBuffer(textureSize * textureSize, sizeof(float));
         Assert.IsTrue(waterLevelBuffer.IsValid());
 
         foreach (int kernelIdx in new[] { rainDropKernelIdx, coreKernelIdx, borderKernelIdx, waterEvaporatorKernelIdx })
