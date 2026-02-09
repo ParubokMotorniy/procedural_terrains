@@ -13,11 +13,16 @@ uniform float fractalDimension;
 #define PASS_ID_1 0xDEADBEEF
 #define PASS_ID_2 0xDEADBABE
 
+static const float EPS = 1.0e-7;
+
 float2 computeUniformRandomCoordinates(uint2 targetTextureCoordinates, int passId)
 {
     uint seed = seedFromXYPass(targetTextureCoordinates.x, targetTextureCoordinates.y, passId);
     float u1 = u01FromUint(pcgHash(seed));
     float u2 = u01FromUint(pcgHash(seed ^ 0x68BC21EBu));
+
+    u1 = max(u1, EPS);
+
     return float2(u1, u2);
 }
 
@@ -30,7 +35,8 @@ float2 computeUniformRandomCoordinates(uint2 targetTextureCoordinates, int passI
         {
             for (int tY = 0; tY < invTexelsPerThread; ++tY)
             {
-                uint baseCoordinate = index2dTo1d(heightmapDimensions, corner + uint2(tX, tY));
+                uint2 coord = corner + uint2(tX, tY);
+                uint baseCoordinate = index2dTo1d(heightmapDimensions, coord);
                 coefficients[baseCoordinate] = float2(0.0, 0.0);
             }
         }
@@ -48,17 +54,24 @@ float2 computeUniformRandomCoordinates(uint2 targetTextureCoordinates, int passI
             for (int tY = 0; tY < texelsPerThread; ++tY)
             {
                 uint2 coefficientCoordinates = threadTopLeftCorner + uint2(tX, tY);
+
+                if (coefficientCoordinates.x >= (uint)heightmapDimensions.x || coefficientCoordinates.y >= (uint)heightmapDimensions.y)
+                    continue;
+
                 float2 randomUniform = computeUniformRandomCoordinates(coefficientCoordinates, PASS_ID_1);
-                // float2 randomUniform = float2(1.0, 1.0f);
                 float randomGaussian = sampleGaussBoxMuller(randomUniform);
-                // float randomGaussian = 1.0f;
 
                 // computing the coefficient
                 float randomPhase = TWO_PI * randomUniform.x;
                 float randomMagnitude = 0.0;
-                if (tX != tY)
+
+                if (coefficientCoordinates.x != 0 || coefficientCoordinates.y != 0)
                 {
-                    float d2 = dot(coefficientCoordinates, coefficientCoordinates);
+                    float2 c = (float2)coefficientCoordinates;
+                    float d2 = dot(c, c);
+
+                    d2 = max(d2, EPS);
+
                     randomMagnitude = pow(d2, -(fractalDimension + 1.0) / 2.0) * randomGaussian;
                 }
 
@@ -68,10 +81,13 @@ float2 computeUniformRandomCoordinates(uint2 targetTextureCoordinates, int passI
                 coefficients[index2dTo1d(heightmapDimensions, coefficientCoordinates)] = baseCoefficient;
 
                 // symmetrical coordinates
-                uint mX = coefficientCoordinates.x == 0 ? 0 : heightmapDimensions.x - coefficientCoordinates.x;
-                uint mY = coefficientCoordinates.y == 0 ? 0 : heightmapDimensions.y - coefficientCoordinates.y;
+                uint mX = (coefficientCoordinates.x == 0) ? 0 : (uint)heightmapDimensions.x - coefficientCoordinates.x;
+                uint mY = (coefficientCoordinates.y == 0) ? 0 : (uint)heightmapDimensions.y - coefficientCoordinates.y;
 
-                coefficients[index2dTo1d(heightmapDimensions, uint2(mX, mY))] = float2(baseCoefficient.x, -baseCoefficient.y);
+                if (mX < (uint)heightmapDimensions.x && mY < (uint)heightmapDimensions.y)
+                {
+                    coefficients[index2dTo1d(heightmapDimensions, uint2(mX, mY))] = float2(baseCoefficient.x, -baseCoefficient.y);
+                }
             }
         }
     }
@@ -82,26 +98,40 @@ float2 computeUniformRandomCoordinates(uint2 targetTextureCoordinates, int passI
             for (int tY = 0; tY < texelsPerThread; ++tY)
             {
                 uint2 coefficientCoordinates = threadTopLeftCorner + uint2(tX, tY) + uint2(1, 1);
+
+                if (coefficientCoordinates.x >= (uint)heightmapDimensions.x || coefficientCoordinates.y >= (uint)heightmapDimensions.y)
+                    continue;
+
                 float2 randomUniform = computeUniformRandomCoordinates(coefficientCoordinates, PASS_ID_2);
-                // float2 randomUniform = float2(1.0f, 1.0f);
                 float randomGaussian = sampleGaussBoxMuller(randomUniform);
-                // float randomGaussian = 1.0f;
 
                 // computing the coefficient
                 float randomPhase = TWO_PI * randomUniform.x;
-                float randomMagnitude = 0.0;
-                float d2 = dot(coefficientCoordinates, coefficientCoordinates);
-                randomMagnitude = pow(d2, -(fractalDimension + 1.0) / 2.0) * randomGaussian;
+
+                float2 c = (float2)coefficientCoordinates;
+                float d2 = max(dot(c, c), EPS);
+
+                float randomMagnitude = pow(d2, -(fractalDimension + 1.0) / 2.0) * randomGaussian;
 
                 float2 baseCoefficient = randomMagnitude * float2(cos(randomPhase), sin(randomPhase));
 
                 // base coefficient
-                uint baseCoordinate = index2dTo1d(heightmapDimensions, uint2(coefficientCoordinates.x, heightmapDimensions.y - coefficientCoordinates.y));
-                coefficients[baseCoordinate] = baseCoefficient;
+                uint2 baseCoord2D = uint2(coefficientCoordinates.x, (uint)heightmapDimensions.y - coefficientCoordinates.y);
+
+                if (baseCoord2D.x < (uint)heightmapDimensions.x && baseCoord2D.y < (uint)heightmapDimensions.y)
+                {
+                    uint baseCoordinate = index2dTo1d(heightmapDimensions, baseCoord2D);
+                    coefficients[baseCoordinate] = baseCoefficient;
+                }
 
                 // symmetrical coordinates
-                uint symmetricCoordinate = index2dTo1d(heightmapDimensions, uint2(heightmapDimensions.x - coefficientCoordinates.x, coefficientCoordinates.y));
-                coefficients[symmetricCoordinate] = float2(baseCoefficient.x, -baseCoefficient.y);
+                uint2 symCoord2D = uint2((uint)heightmapDimensions.x - coefficientCoordinates.x, coefficientCoordinates.y);
+
+                if (symCoord2D.x < (uint)heightmapDimensions.x && symCoord2D.y < (uint)heightmapDimensions.y)
+                {
+                    uint symmetricCoordinate = index2dTo1d(heightmapDimensions, symCoord2D);
+                    coefficients[symmetricCoordinate] = float2(baseCoefficient.x, -baseCoefficient.y);
+                }
             }
         }
     }
@@ -112,17 +142,17 @@ float2 computeUniformRandomCoordinates(uint2 targetTextureCoordinates, int passI
     if (globalId.x == 0 && globalId.y == 0)
     {
         {
-            uint coord1 = index2dTo1d(heightmapDimensions, uint2(halfHeightmapDimensions.x, 0));
+            uint coord1 = index2dTo1d(heightmapDimensions, uint2((uint)halfHeightmapDimensions.x, 0));
             coefficients[coord1] = float2(coefficients[coord1].x, 0.0);
         }
 
         {
-            uint coord2 = index2dTo1d(heightmapDimensions, uint2(0, halfHeightmapDimensions.y));
+            uint coord2 = index2dTo1d(heightmapDimensions, uint2(0, (uint)halfHeightmapDimensions.y));
             coefficients[coord2] = float2(coefficients[coord2].x, 0.0);
         }
 
         {
-            uint coord3 = index2dTo1d(heightmapDimensions, halfHeightmapDimensions);
+            uint coord3 = index2dTo1d(heightmapDimensions, (uint2)halfHeightmapDimensions);
             coefficients[coord3] = float2(coefficients[coord3].x, 0.0);
         }
     }
@@ -138,6 +168,10 @@ float2 computeUniformRandomCoordinates(uint2 targetTextureCoordinates, int passI
         for (int y = 0; y < invTexelsPerThread; ++y)
         {
             uint2 testCoord = threadTopLeftCorner + uint2(x, y);
+
+            if (testCoord.x >= (uint)heightmapDimensions.x || testCoord.y >= (uint)heightmapDimensions.y)
+                continue;
+
             resultHeightmap[testCoord] = length(coefficients[index2dTo1d(heightmapDimensions, testCoord)]);
         }
     }
