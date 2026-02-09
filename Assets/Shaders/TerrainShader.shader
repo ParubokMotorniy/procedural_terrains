@@ -11,7 +11,7 @@ Shader "Custom/TerrainShader"
     {
         Tags { "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" "Queue" = "Geometry" }
         //TODO: add runtime wiremesh rendering. Probably with geometry shaders for I don't want to waste bandwidht of GPU passing extra vertex attributes around.
-        //TODO: try to alter the color based on gradient
+        //TODO: try to alter the color based on gradient (steeper <=> less grassy)
 
         Pass
         {

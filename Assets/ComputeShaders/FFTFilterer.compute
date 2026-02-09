@@ -1,0 +1,144 @@
+#include "./Common/Utilities.hlsl"
+
+RWTexture2D<float> resultHeightmap;
+RWStructuredBuffer<float2> coefficients;
+uniform int2 heightmapDimensions; // so as not to GetDimensions() every time
+uniform int2 halfHeightmapDimensions;
+
+uniform int texelsPerThread;    // what fraction of the coefficients plane a thread processes
+uniform int invTexelsPerThread; // what fraction of the coefficients plane a thread processes
+
+uniform float fractalDimension;
+
+#define PASS_ID_1 0xDEADBEEF
+#define PASS_ID_2 0xDEADBABE
+
+float2 computeUniformRandomCoordinates(uint2 targetTextureCoordinates, int passId)
+{
+    uint seed = seedFromXYPass(targetTextureCoordinates.x, targetTextureCoordinates.y, passId);
+    float u1 = u01FromUint(pcgHash(seed));
+    float u2 = u01FromUint(pcgHash(seed ^ 0x68BC21EBu));
+    return float2(u1, u2);
+}
+
+#pragma kernel Clearer
+[numthreads(32, 32, 1)] void Clearer(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+{
+    {
+        uint2 corner = globalId.xy * invTexelsPerThread;
+        for (int tX = 0; tX < invTexelsPerThread; ++tX)
+        {
+            for (int tY = 0; tY < invTexelsPerThread; ++tY)
+            {
+                uint baseCoordinate = index2dTo1d(heightmapDimensions, corner + uint2(tX, tY));
+                coefficients[baseCoordinate] = float2(0.0, 0.0);
+            }
+        }
+    }
+}
+
+#pragma kernel CoefficientGenerator
+    [numthreads(32, 32, 1)] void CoefficientGenerator(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+{
+    uint2 threadTopLeftCorner = globalId.xy * texelsPerThread;
+
+    {
+        for (int tX = 0; tX < texelsPerThread; ++tX)
+        {
+            for (int tY = 0; tY < texelsPerThread; ++tY)
+            {
+                uint2 coefficientCoordinates = threadTopLeftCorner + uint2(tX, tY);
+                float2 randomUniform = computeUniformRandomCoordinates(coefficientCoordinates, PASS_ID_1);
+                // float2 randomUniform = float2(1.0, 1.0f);
+                float randomGaussian = sampleGaussBoxMuller(randomUniform);
+                // float randomGaussian = 1.0f;
+
+                // computing the coefficient
+                float randomPhase = TWO_PI * randomUniform.x;
+                float randomMagnitude = 0.0;
+                if (tX != tY)
+                {
+                    float d2 = dot(coefficientCoordinates, coefficientCoordinates);
+                    randomMagnitude = pow(d2, -(fractalDimension + 1.0) / 2.0) * randomGaussian;
+                }
+
+                float2 baseCoefficient = randomMagnitude * float2(cos(randomPhase), sin(randomPhase));
+
+                // base coefficient
+                coefficients[index2dTo1d(heightmapDimensions, coefficientCoordinates)] = baseCoefficient;
+
+                // symmetrical coordinates
+                uint mX = coefficientCoordinates.x == 0 ? 0 : heightmapDimensions.x - coefficientCoordinates.x;
+                uint mY = coefficientCoordinates.y == 0 ? 0 : heightmapDimensions.y - coefficientCoordinates.y;
+
+                coefficients[index2dTo1d(heightmapDimensions, uint2(mX, mY))] = float2(baseCoefficient.x, -baseCoefficient.y);
+            }
+        }
+    }
+
+    {
+        for (int tX = 0; tX < texelsPerThread; ++tX)
+        {
+            for (int tY = 0; tY < texelsPerThread; ++tY)
+            {
+                uint2 coefficientCoordinates = threadTopLeftCorner + uint2(tX, tY) + uint2(1, 1);
+                float2 randomUniform = computeUniformRandomCoordinates(coefficientCoordinates, PASS_ID_2);
+                // float2 randomUniform = float2(1.0f, 1.0f);
+                float randomGaussian = sampleGaussBoxMuller(randomUniform);
+                // float randomGaussian = 1.0f;
+
+                // computing the coefficient
+                float randomPhase = TWO_PI * randomUniform.x;
+                float randomMagnitude = 0.0;
+                float d2 = dot(coefficientCoordinates, coefficientCoordinates);
+                randomMagnitude = pow(d2, -(fractalDimension + 1.0) / 2.0) * randomGaussian;
+
+                float2 baseCoefficient = randomMagnitude * float2(cos(randomPhase), sin(randomPhase));
+
+                // base coefficient
+                uint baseCoordinate = index2dTo1d(heightmapDimensions, uint2(coefficientCoordinates.x, heightmapDimensions.y - coefficientCoordinates.y));
+                coefficients[baseCoordinate] = baseCoefficient;
+
+                // symmetrical coordinates
+                uint symmetricCoordinate = index2dTo1d(heightmapDimensions, uint2(heightmapDimensions.x - coefficientCoordinates.x, coefficientCoordinates.y));
+                coefficients[symmetricCoordinate] = float2(baseCoefficient.x, -baseCoefficient.y);
+            }
+        }
+    }
+
+    DeviceMemoryBarrierWithGroupSync();
+
+    // TODO: this shit sucks and needs optimization
+    if (globalId.x == 0 && globalId.y == 0)
+    {
+        {
+            uint coord1 = index2dTo1d(heightmapDimensions, uint2(halfHeightmapDimensions.x, 0));
+            coefficients[coord1] = float2(coefficients[coord1].x, 0.0);
+        }
+
+        {
+            uint coord2 = index2dTo1d(heightmapDimensions, uint2(0, halfHeightmapDimensions.y));
+            coefficients[coord2] = float2(coefficients[coord2].x, 0.0);
+        }
+
+        {
+            uint coord3 = index2dTo1d(heightmapDimensions, halfHeightmapDimensions);
+            coefficients[coord3] = float2(coefficients[coord3].x, 0.0);
+        }
+    }
+}
+
+#pragma kernel InverseFFT
+[numthreads(32, 32, 1)] void InverseFFT(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+{
+    // currently just copies the coefficients
+    uint2 threadTopLeftCorner = globalId.xy * invTexelsPerThread;
+    for (int x = 0; x < invTexelsPerThread; ++x)
+    {
+        for (int y = 0; y < invTexelsPerThread; ++y)
+        {
+            uint2 testCoord = threadTopLeftCorner + uint2(x, y);
+            resultHeightmap[testCoord] = length(coefficients[index2dTo1d(heightmapDimensions, testCoord)]);
+        }
+    }
+}

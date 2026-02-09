@@ -1,3 +1,5 @@
+
+#define PI 3.141592654
 #define TWO_PI 6.283185307
 
 int2 terrainWrap(int2 a, int2 b)
@@ -10,6 +12,7 @@ uint index2dTo1d(uint2 gridDimensions, uint2 index2D)
     return index2D.x * gridDimensions.y + index2D.y;
 }
 
+//samples from normal distribution. u must be uniformly distributed, though.
 float sampleGaussBoxMuller(float2 u)
 {
     const float a = sqrt(-2.0f * log(1.0f - u.x));
