@@ -7,10 +7,13 @@ uniform int2 halfHeightmapDimensions;
 
 uniform int texelsPerThread;    // what fraction of the coefficients plane a thread processes
 uniform int invTexelsPerThread; // what fraction of the coefficients plane a thread processes
+uniform int numCoefficientsLimit;
 
 uniform float fractalDimension;
 
-#define PASS_ID_1 0xDEADBEEF
+uniform int2 randomSeeds;
+
+#define PASS_ID_1 0xDEADBEAF
 #define PASS_ID_2 0xDEADBABE
 
 static const float EPS = 1.0e-7;
@@ -27,7 +30,7 @@ float2 computeUniformRandomCoordinates(uint2 targetTextureCoordinates, int passI
 }
 
 #pragma kernel Clearer
-[numthreads(32, 32, 1)] void Clearer(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+[numthreads(16, 16, 1)] void Clearer(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     {
         uint2 corner = globalId.xy * invTexelsPerThread;
@@ -44,7 +47,7 @@ float2 computeUniformRandomCoordinates(uint2 targetTextureCoordinates, int passI
 }
 
 #pragma kernel CoefficientGenerator
-    [numthreads(32, 32, 1)] void CoefficientGenerator(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+    [numthreads(16, 16, 1)] void CoefficientGenerator(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     uint2 threadTopLeftCorner = globalId.xy * texelsPerThread;
 
@@ -58,7 +61,7 @@ float2 computeUniformRandomCoordinates(uint2 targetTextureCoordinates, int passI
                 if (coefficientCoordinates.x >= (uint)heightmapDimensions.x || coefficientCoordinates.y >= (uint)heightmapDimensions.y)
                     continue;
 
-                float2 randomUniform = computeUniformRandomCoordinates(coefficientCoordinates, PASS_ID_1);
+                float2 randomUniform = computeUniformRandomCoordinates(coefficientCoordinates, randomSeeds.x);
                 float randomGaussian = sampleGaussBoxMuller(randomUniform);
 
                 // computing the coefficient
@@ -102,7 +105,7 @@ float2 computeUniformRandomCoordinates(uint2 targetTextureCoordinates, int passI
                 if (coefficientCoordinates.x >= (uint)heightmapDimensions.x || coefficientCoordinates.y >= (uint)heightmapDimensions.y)
                     continue;
 
-                float2 randomUniform = computeUniformRandomCoordinates(coefficientCoordinates, PASS_ID_2);
+                float2 randomUniform = computeUniformRandomCoordinates(coefficientCoordinates, randomSeeds.y);
                 float randomGaussian = sampleGaussBoxMuller(randomUniform);
 
                 // computing the coefficient
@@ -158,10 +161,12 @@ float2 computeUniformRandomCoordinates(uint2 targetTextureCoordinates, int passI
     }
 }
 
+//TODO: find a smart way to distribute partial computations of a single height vale among threads of a group
+//TODO: figure out whether I can increase the density of the detail without a)reducing the fractal dimension 
+
 #pragma kernel InverseFFT
-[numthreads(32, 32, 1)] void InverseFFT(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+[numthreads(16, 16, 1)] void InverseFFT(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
-    // currently just copies the coefficients
     uint2 threadTopLeftCorner = globalId.xy * invTexelsPerThread;
     for (int x = 0; x < invTexelsPerThread; ++x)
     {
@@ -172,7 +177,22 @@ float2 computeUniformRandomCoordinates(uint2 targetTextureCoordinates, int passI
             if (testCoord.x >= (uint)heightmapDimensions.x || testCoord.y >= (uint)heightmapDimensions.y)
                 continue;
 
-            resultHeightmap[testCoord] = length(coefficients[index2dTo1d(heightmapDimensions, testCoord)]);
+            float finalHeight = 0.0;
+
+            for (int cX = 0; cX < numCoefficientsLimit; ++cX)
+            {
+                for (int cY = 0; cY < numCoefficientsLimit; ++cY)
+                {
+                    float2 coefficient = coefficients[index2dTo1d(heightmapDimensions, uint2(cX, cY))];
+                    float ePower = TWO_PI * ((float)(cX * testCoord.x) / heightmapDimensions.x + (float)(cY * testCoord.y) / heightmapDimensions.y);
+                    float2 complexExponent = float2(cos(ePower), sin(ePower));
+
+                    float product = coefficient.x * complexExponent.x - coefficient.y * complexExponent.y;
+                    finalHeight += product;
+                }
+            }
+
+            resultHeightmap[testCoord] = finalHeight;
         }
     }
 }

@@ -14,14 +14,19 @@ public class FFTDispatcher : MultiFormatPipelineStep
 
     [Range(0, 3)]
     public int groupScaleFactor = 0;
+
     [Range(0.01f, 5.0f)]
     public float fractalDimension = 0.1f;
 
-    private const int groupSize = 32;
+    [Range(0.01f, 1.0f)]
+    public float fracCoefficientsConsidered = 0.01f;
+
+    private const int groupSize = 16;
     private ComputeBuffer coefficientsBuffer;
 
     private static readonly int PID_resultHeightmap = Shader.PropertyToID("resultHeightmap");
     private static readonly int PID_coefficientsBuffer = Shader.PropertyToID("coefficients");
+    private static readonly int PID_numCoefficientsLimit = Shader.PropertyToID("numCoefficientsLimit");
     private static readonly int PID_heightmapDimensions = Shader.PropertyToID("heightmapDimensions");
     private static readonly int PID_halfHeightmapDimensions = Shader.PropertyToID("halfHeightmapDimensions");
 
@@ -29,6 +34,7 @@ public class FFTDispatcher : MultiFormatPipelineStep
     private static readonly int PID_invTexelsPerThread = Shader.PropertyToID("invTexelsPerThread");
 
     private static readonly int PID_fractalDimension = Shader.PropertyToID("fractalDimension");
+    private static readonly int PID_randomSeeds = Shader.PropertyToID("randomSeeds");
 
 
     public override void StepInitialization(PipelineContext pipelineContext) { }
@@ -46,13 +52,11 @@ public class FFTDispatcher : MultiFormatPipelineStep
 
         int coefficientGeneratorKernelIdx = shaderToDispatch.FindKernel("CoefficientGenerator");
         int inverseFFTKernelIdx = shaderToDispatch.FindKernel("InverseFFT");
-        // int clearerKernelIdx = shaderToDispatch.FindKernel("Clearer");
 
         int[] kernels =
         {
             coefficientGeneratorKernelIdx,
             inverseFFTKernelIdx,
-            // clearerKernelIdx
         };
 
         foreach (int kernelIdx in kernels)
@@ -61,22 +65,19 @@ public class FFTDispatcher : MultiFormatPipelineStep
             pipelineContext.BindComputeBuffer(shaderToDispatch, kernelIdx, PID_coefficientsBuffer, coefficientsBuffer);
         }
 
-        // Uniforms
+        // uniforms
         int invTexelsPerThread = textureSize / numLinearThreads;
         Assert.IsTrue(invTexelsPerThread % 2 == 0, "Coefficients texels must be distributed among threads evenly!");
         int texelsPerThread = invTexelsPerThread / 2;
-
-        Debug.Log(textureSize);
-        Debug.Log(invTexelsPerThread);
-        Debug.Log(texelsPerThread);
 
         pipelineContext.SetUniformInt(shaderToDispatch, PID_texelsPerThread, texelsPerThread);
         pipelineContext.SetUniformInt(shaderToDispatch, PID_invTexelsPerThread, invTexelsPerThread);
         pipelineContext.SetUniformInts(shaderToDispatch, PID_heightmapDimensions, new int[] { textureSize, textureSize });
         pipelineContext.SetUniformInts(shaderToDispatch, PID_halfHeightmapDimensions, new int[] { textureSize / 2, textureSize / 2 });
         pipelineContext.SetUniformFloat(shaderToDispatch, PID_fractalDimension, fractalDimension);
+        pipelineContext.SetUniformInt(shaderToDispatch, PID_numCoefficientsLimit, (int)(fracCoefficientsConsidered * textureSize));
+        pipelineContext.SetRandomInts(shaderToDispatch, PID_randomSeeds);
 
-        // pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, clearerKernelIdx, new Vector3(numGroups, numGroups, 1));
         pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, coefficientGeneratorKernelIdx, new Vector3(numGroups, numGroups, 1));
         pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, inverseFFTKernelIdx, new Vector3(numGroups, numGroups, 1));
     }

@@ -25,12 +25,13 @@ namespace GenerationPipeline
         protected CommandBuffer terrainPipelineCMD;
         protected Random randomGenerator;
         protected static float[] randomFloatsArray = new float[2];
+        protected static int[] randomIntsArray = new int[2];
 
-        public PipelineContext(RenderTexture passHeightmap)
+        public PipelineContext(RenderTexture passHeightmap, int seed)
         {
             intermediateHeightmap = passHeightmap;
             terrainPipelineCMD = new CommandBuffer();
-            randomGenerator = new System.Random();
+            randomGenerator = new System.Random(seed);
 
             finalHeightmap = new RenderTexture(intermediateHeightmap.width, intermediateHeightmap.height, 0)
             {
@@ -75,7 +76,12 @@ namespace GenerationPipeline
             randomFloatsArray[1] = (float)randomGenerator.NextDouble();
             terrainPipelineCMD.SetComputeFloatParams(shader, uniformId, randomFloatsArray);
         }
-
+        public void SetRandomInts(ComputeShader shader, int uniformId)
+        {
+            randomIntsArray[0] = randomGenerator.Next();
+            randomIntsArray[1] = randomGenerator.Next();
+            terrainPipelineCMD.SetComputeIntParams(shader, uniformId, randomIntsArray);
+        }
         public void BindTexture(ComputeShader shader, int kernelIdx, int uniformId, Texture texToBind)
         {
             terrainPipelineCMD.SetComputeTextureParam(shader, kernelIdx, uniformId, texToBind);

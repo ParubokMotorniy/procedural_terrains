@@ -20,6 +20,9 @@ namespace GenerationPipeline
         [SerializeField]
         bool enableProfiling = false;
 
+        [SerializeField]
+        int generatorSeed = 1;
+
 #if UNITY_EDITOR
         [SerializeField]
         bool dumpTextures = false;
@@ -62,7 +65,7 @@ namespace GenerationPipeline
                 Assert.IsTrue(intermediateHeightmap.IsCreated());
             }
 
-            PipelineContext currentContext = enableProfiling ? new ProfilingPipelineContext(intermediateHeightmap) : new PipelineContext(intermediateHeightmap);
+            PipelineContext currentContext = enableProfiling ? new ProfilingPipelineContext(intermediateHeightmap, generatorSeed) : new PipelineContext(intermediateHeightmap, generatorSeed);
 
             GetComponent<Renderer>().sharedMaterial.SetTexture("_HeightMap", currentContext.finalHeightmap);
             GetComponent<Renderer>().sharedMaterial.SetFloat("_HeightScale", terrainScale);

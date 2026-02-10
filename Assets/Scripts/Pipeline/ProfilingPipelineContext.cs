@@ -17,7 +17,7 @@ namespace GenerationPipeline
 
         private List<Action<Texture2D>> metricsList = new List<Action<Texture2D>>();
 
-        public ProfilingPipelineContext(RenderTexture passHeightmap) : base(passHeightmap)
+        public ProfilingPipelineContext(RenderTexture passHeightmap, int seed) : base(passHeightmap, seed)
         {
             Debug.Log("System supports fences ? :" + SystemInfo.supportsGraphicsFence);
 
