@@ -9,9 +9,6 @@ public class RMDDispatcher : MultiFormatPipelineStep
     [SerializeField]
     private ComputeShader shaderToDispatch;
 
-    [Range(1, 3)]
-    public int groupScaleFactor = 0;
-
     [Range(1, 16)]
     public uint numSubdivisions = 2;
 
@@ -45,23 +42,13 @@ public class RMDDispatcher : MultiFormatPipelineStep
 
     public override void StepBody(PipelineContext pipelineContext)
     {
+        int textureSize = pipelineContext.GetHeightmapSize();
         int texelsPerThreadDomain = (int)math.pow(2, numSubdivisions);
-        int numGroups = (int)math.pow(2, groupScaleFactor);
-        int numLinearThreads = groupSize * numGroups;
-        int textureSize = numLinearThreads * texelsPerThreadDomain;
+        int numLinearThreads = textureSize / texelsPerThreadDomain;
+        int numGroups = numLinearThreads / groupSize;
 
-        Assert.IsTrue(textureSize <= pipelineContext.GetHeightmapSize(), "RMD heightmap can lose detail when downsampled into a smaller target texture.");
-
-        var noiseRenderTexture = new RenderTexture(textureSize, textureSize, 0)
-        {
-            graphicsFormat = UnityEngine.Experimental.Rendering.GraphicsFormat.R32_SFloat,
-            useMipMap = false,
-            enableRandomWrite = true,
-            filterMode = FilterMode.Bilinear,
-            wrapMode = TextureWrapMode.Clamp
-        };
-        noiseRenderTexture.Create();
-        Assert.IsTrue(noiseRenderTexture.IsCreated());
+        Assert.IsTrue(numLinearThreads % groupSize == 0, "Underoccupied groups requested!");
+        Assert.IsTrue(textureSize % texelsPerThreadDomain == 0, "Can't fit integer number of domains into the texture!");
 
         int initializationKernelIdx = shaderToDispatch.FindKernel("IntializeTexture");
         int transition12KernelIdx = shaderToDispatch.FindKernel("Transition12");
@@ -70,7 +57,7 @@ public class RMDDispatcher : MultiFormatPipelineStep
 
         foreach (int kernelIdx in new[] { initializationKernelIdx, transition12KernelIdx, transition21KernelIdx, extraNoiseKernelIdx })
         {
-            pipelineContext.BindTexture(shaderToDispatch, kernelIdx, PID_Result, noiseRenderTexture);
+            pipelineContext.BindTexture(shaderToDispatch, kernelIdx, PID_Result, pipelineContext.intermediateHeightmap);
         }
 
         pipelineContext.SetUniformInt(shaderToDispatch, PID_threadDomainTexelWidth, texelsPerThreadDomain);
@@ -116,9 +103,6 @@ public class RMDDispatcher : MultiFormatPipelineStep
                 pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, extraNoiseKernelIdx, new Vector3(numGroups, numGroups, 1));
             }
         }
-
-        // Interpolate/transfer into the pipeline's target heightmap.
-        pipelineContext.AppendTextureCopyToCommandBuffer(noiseRenderTexture, pipelineContext.intermediateHeightmap);
     }
 
     public override void StepConclusion(PipelineContext pipelineContext) { }
