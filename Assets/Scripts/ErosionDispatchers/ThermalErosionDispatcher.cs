@@ -22,7 +22,6 @@ public class ThermalErosionDispatcher : MultiFormatPipelineStep
 
     private const int groupSize = 32;
 
-    // Property IDs (cached)
     private static readonly int PID_resultHeightmap = Shader.PropertyToID("resultHeightmap");
     private static readonly int PID_permuteA = Shader.PropertyToID("permuteA");
     private static readonly int PID_texelsPerThread = Shader.PropertyToID("texelsPerThread");

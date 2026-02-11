@@ -47,12 +47,13 @@ Shader "Custom/TerrainShader"
                 float3 normal      : TEXCOORD3;
             };
 
-            static const float3 levelColoring[6] = {
+            static const float3 levelColoring[7] = {
+                float3(0.0, 0.0, 0.0),
                 float3(0.6, 0.271, 0),
                 float3(0.173, 0.729, 0.016),
                 float3(0.98, 0.894, 0.329),
                 float3(0.737, 0.749, 0.733),
-                float3(0.9, 0.9, 0.95),
+                float3(0.9, 0.9, 0.9),
                 float3(1.0, 1.0, 1.0)
             };
             static const float isoColorStep = 0.2;
@@ -131,7 +132,11 @@ Shader "Custom/TerrainShader"
                     return float4(0.8,0.8,0.8,1.0);
                 }
 
-                float isoColorLevel = IN.vertexHeight / isoColorStep;
+                float3 actualNormal = normalize(IN.normal);
+
+                float normalDot = max(0.0, dot(actualNormal, float3(0.0, 1.0, 0.0)));
+                float isoColorLevel = (1.0 - normalDot) < 1.0e-4 ? 0.0 : ((max(exp(-normalDot * 2.0), 0.4) * IN.vertexHeight) / isoColorStep) + 1.0;
+
                 float3 bottomColor = levelColoring[(int)floor(isoColorLevel)]; 
                 float3 topColor = levelColoring[(int)ceil(isoColorLevel)];
                 float3 vertexColorAtLevel = lerp(bottomColor, topColor, colorInterpolationRemap(frac(isoColorLevel)));
@@ -141,7 +146,6 @@ Shader "Custom/TerrainShader"
                 
                 float3 lightDirection = -GetMainLight().direction;
                 half3 lightColor = GetMainLight().color;
-                float3 actualNormal = normalize(IN.normal);
 
                 half3 diffuseComponent = LightingLambert(lightColor, lightDirection, actualNormal);
                 half3 specularComponent = LightingSpecular(lightColor, lightDirection, actualNormal, GetWorldSpaceNormalizeViewDir(IN.positionWS), _Specular.xxxx, _Smoothness.xxxx); 
