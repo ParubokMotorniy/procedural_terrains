@@ -33,6 +33,7 @@ public class SDFDispatcher : MultiFormatPipelineStep
 
     private static readonly int PID_currentSourceBuffer = Shader.PropertyToID("currentSourceBuffer");
     private static readonly int PID_floodStepSize = Shader.PropertyToID("floodStepSize");
+    private static readonly int PID_randomFloats = Shader.PropertyToID("randomFloats");
 
     public override void StepInitialization(PipelineContext pipelineContext) { }
 
@@ -95,6 +96,7 @@ public class SDFDispatcher : MultiFormatPipelineStep
         pipelineContext.SetUniformFloat(shaderToDispatch, PID_shoreDistanceThreshold, textureSize * 0.1f);   // fix at 10%
         pipelineContext.SetUniformFloat(shaderToDispatch, PID_shoreBaseHeight, maxDistanceToSeed * 0.005f); // fix at 0.5%
         pipelineContext.SetUniformFloat(shaderToDispatch, PID_simplexFrequency, baseSimplexFrequency);
+        pipelineContext.SetRandomFloats(shaderToDispatch, PID_randomFloats);
 
         int currentReadBuffer = 1;
         int currentFloodStep = textureSize;
