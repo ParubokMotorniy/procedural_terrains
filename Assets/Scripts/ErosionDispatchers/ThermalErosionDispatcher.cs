@@ -14,7 +14,7 @@ public class ThermalErosionDispatcher : MultiFormatPipelineStep
     [Range(0.01f, 1.0f)]
     public float talusThreshold = 0.15f;
 
-    [Range(0, 3)]
+    [Range(1, 3)]
     public int groupScaleFactor = 0;
 
     [Range(1, 100)]

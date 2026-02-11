@@ -8,7 +8,7 @@ public class UNDispatcher : MultiFormatPipelineStep
     [SerializeField]
     private ComputeShader shaderToDispatch;
 
-    [Range(0, 3)]
+    [Range(1, 3)]
     public int groupScaleFactor = 0;
 
     [Range(0.001f, 2.0f)]

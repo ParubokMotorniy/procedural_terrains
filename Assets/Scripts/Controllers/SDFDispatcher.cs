@@ -9,8 +9,8 @@ public class SDFDispatcher : MultiFormatPipelineStep
     [SerializeField]
     private ComputeShader shaderToDispatch;
 
-    [Range(0, 3)]
-    public int groupScaleFactor = 0;
+    [Range(1, 3)]
+    public int groupScaleFactor = 1;
 
     [Range(0.025f, 4.0f)]
     public float baseSimplexFrequency = 1.0f;
@@ -39,8 +39,8 @@ public class SDFDispatcher : MultiFormatPipelineStep
     public override void StepBody(PipelineContext pipelineContext)
     {
         int textureSize = pipelineContext.GetHeightmapSize();
-        int numGroups = (int)math.pow(2, groupScaleFactor);
-        int numLinearThreads = groupSize * numGroups;
+        int numLinearGroups = (int)math.pow(2, groupScaleFactor);
+        int numLinearThreads = groupSize * numLinearGroups;
 
         Assert.IsTrue(textureSize % numLinearThreads == 0, "Texels must be distributed among threads evenly!");
 
@@ -105,7 +105,7 @@ public class SDFDispatcher : MultiFormatPipelineStep
             pipelineContext.SetUniformInt(shaderToDispatch, PID_currentSourceBuffer, currentReadBuffer);
         };
 
-        Vector3 dispatchGroups = new Vector3(numGroups, numGroups, 1);
+        Vector3 dispatchGroups = new Vector3(numLinearGroups, numLinearGroups, 1);
 
         pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, coastlineGeneratorKernel, dispatchGroups);
         pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, maskToSeedBufferKernelIdx, dispatchGroups);

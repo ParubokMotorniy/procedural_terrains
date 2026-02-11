@@ -12,7 +12,7 @@ public class FFTDispatcher : MultiFormatPipelineStep
     [SerializeField]
     private ComputeShader shaderToDispatch;
 
-    [Range(0, 3)]
+    [Range(1, 3)]
     public int groupScaleFactor = 0;
 
     [Range(4, 8)]

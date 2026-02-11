@@ -8,7 +8,7 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
     [SerializeField]
     public ComputeShader erosionComputeShader;
 
-    [Range(0, 3)]
+    [Range(1, 3)]
     public int groupScaleFactor = 0;
 
     [Range(1, 100)]
