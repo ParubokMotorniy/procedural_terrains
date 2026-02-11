@@ -11,7 +11,6 @@ Shader "Custom/TerrainShader"
     {
         Tags { "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" "Queue" = "Geometry" }
         //TODO: add runtime wiremesh rendering. Probably with geometry shaders for I don't want to waste bandwidht of GPU passing extra vertex attributes around.
-        //TODO: try to alter the color based on gradient (steeper <=> less grassy)
 
         Pass
         {
@@ -48,12 +47,14 @@ Shader "Custom/TerrainShader"
             };
 
             static const float3 levelColoring[7] = {
-                float3(0.0, 0.0, 0.0),
-                float3(0.6, 0.271, 0),
-                float3(0.173, 0.729, 0.016),
-                float3(0.98, 0.894, 0.329),
-                float3(0.737, 0.749, 0.733),
-                float3(0.9, 0.9, 0.9),
+                float3(0.81, 0.8, 0.31),
+
+                float3(0.529, 0.655, 0.449),
+                float3(0.373, 0.537, 0.3333),
+                float3(0.929, 0.867, 0.635),
+                float3(0.82, 0.624, 0.424),
+                float3(0.498, 0.525, 0.549),
+
                 float3(1.0, 1.0, 1.0)
             };
             static const float isoColorStep = 0.2;
@@ -135,11 +136,12 @@ Shader "Custom/TerrainShader"
                 float3 actualNormal = normalize(IN.normal);
 
                 float normalDot = max(0.0, dot(actualNormal, float3(0.0, 1.0, 0.0)));
-                float isoColorLevel = (1.0 - normalDot) < 1.0e-4 ? 0.0 : ((max(exp(-normalDot * 2.0), 0.4) * IN.vertexHeight) / isoColorStep) + 1.0;
+                float isoColorLevel = (1.0 - normalDot) < 1.0e-4 ? 0.0 : (IN.vertexHeight / isoColorStep) + 1.0;
+                float scaledFracPart = frac(isoColorLevel) * max(exp(-normalDot * 2.0), 0.1);
 
                 float3 bottomColor = levelColoring[(int)floor(isoColorLevel)]; 
                 float3 topColor = levelColoring[(int)ceil(isoColorLevel)];
-                float3 vertexColorAtLevel = lerp(bottomColor, topColor, colorInterpolationRemap(frac(isoColorLevel)));
+                float3 vertexColorAtLevel = lerp(bottomColor, topColor, colorInterpolationRemap(scaledFracPart));
                 
                 float4 shadowCoord = TransformWorldToShadowCoord(IN.positionWS);
                 half shadowValue = MainLightRealtimeShadow(shadowCoord);
