@@ -8,6 +8,7 @@ uniform int2 halfHeightmapDimensions;
 uniform int texelsPerThread;    // what fraction of the coefficients plane a thread processes
 uniform int invTexelsPerThread; // what fraction of the coefficients plane a thread processes
 uniform int numCoefficientsLimit;
+uniform int texelsPerInverseGroup;
 
 uniform float fractalDimension;
 
@@ -141,60 +142,56 @@ float2 computeUniformRandomCoordinates(uint2 targetTextureCoordinates, int passI
     }
 }
 
-// TODO: figure out whether I can increase the density of the detail without a)reducing the fractal dimension
-
-// the goal is to compute each of height values by multiple threads (i.e. each thread processes only a fraction of the coefficient grid and amkes its contribution to the final sum). For that purpose
-
-// TODO: use a manual mutex to add up float height values (then sync with a barrier)
-
-uint2 getTargetTexelCoordinates(uint2 groupsharedCoordinates, uint2 threadId)
-{
-    return groupsharedCoordinates + /*always zero*/ (clamp(threadId, uint2(0, 0), uint2(64, 64)) - threadId);
-}
-
 #pragma kernel InverseFFT
-groupshared int heightmapTexelMutex;
-[numthreads(8, 8, 1)] void InverseFFT(uint3 localId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+#define INV_GROUP_SIZE 16
+groupshared float localHeightContributions[INV_GROUP_SIZE][INV_GROUP_SIZE];
+[numthreads(INV_GROUP_SIZE, INV_GROUP_SIZE, 1)] void InverseFFT(uint3 localId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
 {
-    if(localId.x == 0 && localId.y == 0)
-    {
-        heightmapTexelMutex = 0;
-    }
-
-    GroupMemoryBarrierWithGroupSync();
-
     uint2 threadTopLeftCorner = localId.xy * invTexelsPerThread; // gives the top left corner in the texture space
-    uint2 targetHeightmapCoords = groupId.xy;                    // the heightmap texel to process as a group
+    uint2 groupTopLeftCorner = groupId.xy * texelsPerInverseGroup;
 
-    float finalHeight = 0.0;
-    for (int x = 0; x < invTexelsPerThread; ++x)
+    for (int tX = 0; tX < texelsPerInverseGroup; ++tX)
     {
-        for (int y = 0; y < invTexelsPerThread; ++y)
+        for (int tY = 0; tY < texelsPerInverseGroup; ++tY)
         {
-            uint2 coefficientCoords = threadTopLeftCorner + uint2(x, y);
+            GroupMemoryBarrierWithGroupSync();
 
-            float2 coefficient = coefficients[index2dTo1d(heightmapDimensions, coefficientCoords)];
-            float ePower = TWO_PI * ((float)(coefficientCoords.x * targetHeightmapCoords.x) / heightmapDimensions.x + (float)(coefficientCoords.y * targetHeightmapCoords.y) / heightmapDimensions.y);
-            float2 complexExponent = float2(cos(ePower), sin(ePower));
+            uint2 targetHeightmapCoords = groupTopLeftCorner + uint2(tX, tY); // the heightmap texel to process as a group
 
-            float product = coefficient.x * complexExponent.x - coefficient.y * complexExponent.y;
-            finalHeight += product;
+            float2 exponentRatioPrecompute = (float2)targetHeightmapCoords / (float2)heightmapDimensions;
+
+            float finalHeight = 0.0;
+            for (int x = 0; x < invTexelsPerThread; ++x)
+            {
+                for (int y = 0; y < invTexelsPerThread; ++y)
+                {
+                    uint2 coefficientCoords = threadTopLeftCorner + uint2(x, y);
+
+                    float2 coefficient = coefficients[index2dTo1d(heightmapDimensions, coefficientCoords)];
+                    float ePower = TWO_PI * ((float)coefficientCoords.x * exponentRatioPrecompute.x + (float)coefficientCoords.y * exponentRatioPrecompute.y);
+                    float2 complexExponent = float2(cos(ePower), sin(ePower));
+
+                    float product = coefficient.x * complexExponent.x - coefficient.y * complexExponent.y;
+                    finalHeight += product;
+                }
+            }
+            localHeightContributions[localId.x][localId.y] = finalHeight;
+
+            GroupMemoryBarrierWithGroupSync();
+
+            if (localId.x == 0 && localId.y == 0)
+            {
+                // TODO: I may want to employ a strategy of precision-preserving addition here
+                float finalTexelHeight = 0.0;
+                for (int x = 0; x < INV_GROUP_SIZE; ++x)
+                {
+                    for (int y = 0; y < INV_GROUP_SIZE; ++y)
+                    {
+                        finalTexelHeight += localHeightContributions[x][y];
+                    }
+                }
+                resultHeightmap[targetHeightmapCoords] = finalTexelHeight;
+            }
         }
     }
-
-    [loop] do
-    {
-        uint orig;
-        InterlockedCompareExchange(heightmapTexelMutex, 0, 1, orig);
-        if (orig == 0)
-            break;
-    }
-    while (1)
-        ;
-
-    resultHeightmap[getTargetTexelCoordinates(targetHeightmapCoords, localId)] += finalHeight;
-    AllMemoryBarrier();
-
-    uint dummy;
-    InterlockedCompareExchange(heightmapTexelMutex, 1, 0, dummy);
 }

@@ -42,6 +42,7 @@ namespace GenerationPipeline
         private readonly FormatFinalizer finalizer = new FormatFinalizer();
 
 
+        //TODO: instead of manually selecting the number of threads to dispatch, I may want to compile my compute shaders in multiple variants with unity-keywords system. However, that can be postponed I believe owing to the complexity of writing code with tons of defines
         [ContextMenu("Regenerate terrain")]
         async void RegenerateTerrain()
         {
