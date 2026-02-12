@@ -39,6 +39,8 @@ public class UNDispatcher : MultiFormatPipelineStep
     private static readonly int PID_perturbationStrength = Shader.PropertyToID("perturbationStrength");
     private static readonly int PID_numOctaves = Shader.PropertyToID("numOctaves");
     private static readonly int PID_persistence = Shader.PropertyToID("persistence");
+    private static readonly int PID_randomFloats = Shader.PropertyToID("randomFloats");
+    private static readonly int PID_textureDimensions = Shader.PropertyToID("textureDimensions");
 
     public override void StepInitialization(PipelineContext pipelineContext) { }
 
@@ -65,6 +67,8 @@ public class UNDispatcher : MultiFormatPipelineStep
             pipelineContext.SetUniformFloat(shaderToDispatch, PID_perturbationStrength, perturbationStrength);
             pipelineContext.SetUniformInt(shaderToDispatch, PID_numOctaves, numOctaves);
             pipelineContext.SetUniformFloat(shaderToDispatch, PID_persistence, persistence);
+            pipelineContext.SetRandomFloats(shaderToDispatch, PID_randomFloats);
+            pipelineContext.SetUniformInts(shaderToDispatch, PID_textureDimensions, new int[] { textureSize, textureSize });
         }
 
         pipelineContext.AppendDispatchToCommandBuffer(

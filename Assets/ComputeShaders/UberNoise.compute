@@ -1,6 +1,5 @@
 #include "../../3rdparty/hlsl_noise/ashima/psrdnoise2D.hlsl"
 
-
 uniform int texelsPerThread;
 uniform float noiseFrequency;
 
@@ -9,20 +8,8 @@ uniform float slopeErosion;
 uniform float perturbationStrength;
 uniform float persistence;
 uniform int numOctaves;
-
-// GLSL	                    HLSL
-// gl_GlobalInvocationID	SV_DispatchThreadID
-// gl_LocalInvocationID	    SV_GroupThreadID
-// gl_WorkGroupID	        SV_GroupID
-// gl_NumWorkGroups	        passed manually / constant buffer
-
-// uvec3	gl_NumWorkGroups	    number of work groups that have been dispatched set by glDispatchCompute()
-// uvec3	gl_WorkGroupSize	    size of the work group (local size) operated on defined with layout
-// uvec3	gl_WorkGroupID	        index of the work group currently being operated on
-// uvec3	gl_LocalInvocationID	index of the current work item in the work group
-// uvec3	gl_GlobalInvocationID	global index of the current work item (gl_WorkGroupID * gl_WorkGroupSize + gl_LocalInvocationID)
-// uint	    gl_LocalInvocationIndex	1d index representation of gl_LocalInvocationID (gl_LocalInvocationID.z * gl_WorkGroupSize.x * gl_WorkGroupSize.y + gl_LocalInvocationID.y * gl_WorkGroupSize.x + gl_LocalInvocationID.x)
-
+uniform uint2 textureDimensions; //to avoid GetDimensions()
+uniform float randomFloats;
 
 // TODO: when possible, I should use analytical derivatives of the resulting terrain
 RWTexture2D<float> Result;
@@ -33,13 +20,14 @@ RWTexture2D<float> Result;
 [numthreads(32, 32, 1)] void UberNoiseTerrainGenerator(uint3 id : SV_DispatchThreadID)
 {
     uint2 topLeftThreadCorner = id.xy * texelsPerThread;
+    float2 extraDisplacement = (float2)textureDimensions *  randomFloats;
 
     for (int i = 0; i < texelsPerThread; ++i)
     {
         for (int j = 0; j < texelsPerThread; ++j)
         {
             int2 actualTextureIdx = topLeftThreadCorner + uint2(i, j);
-            float2 floatIdx = (float2)actualTextureIdx;
+            float2 floatIdx = extraDisplacement + (float2)actualTextureIdx;
 
             float2 slopeErosionDerivativeSum = clamp(sdnoise(floatIdx).x, -0.15, 0.15).xx;
             float2 perturbDerivativeSum = float2(0.0, 0.0);
