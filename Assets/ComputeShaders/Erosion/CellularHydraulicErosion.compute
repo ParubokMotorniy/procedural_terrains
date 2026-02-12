@@ -15,6 +15,7 @@ uniform uint permuteA;
 static const float EPS = 1.0e-6;
 static const float HEIGHT_EPS = 1.0e-4; // texels differing by less are assumed to be at the same level
 
+// TODO: investigate why material loss is observed sometimes
 #pragma kernel RainDropper
 [numthreads(32, 32, 1)] void RainDropper(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
@@ -55,6 +56,8 @@ WaterDistributionFromTexel computeWaterDistribution(int2 processedTexel)
     float waterLevelAtTexel = waterLevel[centerLin];
     float texelHeight = resultHeightmap[processedTexel] + waterLevelAtTexel;
 
+    float sumError = 0.0;
+    float sumErrorOut = 0.0;
     float exceedingSum = EPS;
     int numCriticalNeighbors = 0;
 
@@ -78,11 +81,13 @@ WaterDistributionFromTexel computeWaterDistribution(int2 processedTexel)
                     d = 0.0;
                 }
 
-                exceedingSum += d;
+                exceedingSum = accurateSum(exceedingSum, d, sumErrorOut);
+                sumError += sumErrorOut;
                 nInfo.waterSpreadValue[y + 1][x + 1] = d;
             }
         }
     }
+    exceedingSum += sumError;
 
     if (numCriticalNeighbors == 0)
     {

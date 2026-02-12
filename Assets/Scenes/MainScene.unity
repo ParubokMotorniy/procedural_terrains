@@ -619,14 +619,16 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GenerationPipeline.TerrainGenerator
   terrainSize: 9
-  terrainScale: 1
-  enableProfiling: 0
-  generatorSeed: 58764
+  terrainScale: 0.25
+  enableProfiling: 1
+  generatorSeed: 3427327
   dumpTextures: 0
   useTestTexture: 0
   testTexture: {fileID: 2800000, guid: 14fa032c7256704c8a0ead7b71566301, type: 3}
   pipelineSteps:
   - {fileID: 1592727441}
+  - {fileID: 1412956747}
+  - {fileID: 1778127573}
 --- !u!4 &385078007
 Transform:
   m_ObjectHideFlags: 0
@@ -851,7 +853,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _HeightMap:
-        m_Texture: {fileID: 1255751474}
+        m_Texture: {fileID: 1474548181}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _Heightmap:
@@ -910,7 +912,7 @@ Material:
     - _GlossMapScale: 0
     - _Glossiness: 0
     - _GlossyReflections: 0
-    - _HeightScale: 1
+    - _HeightScale: 0.25
     - _Metallic: 0
     - _OcclusionStrength: 1
     - _Parallax: 0.005
@@ -1131,7 +1133,56 @@ Transform:
   - {fileID: 1592727440}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!84 &1255751474
+--- !u!1 &1412956746
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1412956748}
+  - component: {fileID: 1412956747}
+  m_Layer: 0
+  m_Name: ThermalErosionDispatcher
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1412956747
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1412956746}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c7cc9dd4177d33bb5a7fbefcdd4dffff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ThermalErosionDispatcher
+  erosionComputeShader: {fileID: 7200000, guid: fd1160cbc396f5665a006dc6a2d9b936, type: 3}
+  distributionCoefficient: 0.45
+  talusThreshold: 0.02
+  groupScaleFactor: 3
+  erosionIterationLimit: 10
+--- !u!4 &1412956748
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1412956746}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -22.98119, y: 0, z: -21.04102}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 471226916}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!84 &1474548181
 RenderTexture:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -1168,55 +1219,6 @@ RenderTexture:
   m_Dimension: 2
   m_VolumeDepth: 1
   m_ShadowSamplingMode: 2
---- !u!1 &1412956746
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1412956748}
-  - component: {fileID: 1412956747}
-  m_Layer: 0
-  m_Name: ThermalErosionDispatcher
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &1412956747
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1412956746}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c7cc9dd4177d33bb5a7fbefcdd4dffff, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ThermalErosionDispatcher
-  erosionComputeShader: {fileID: 7200000, guid: fd1160cbc396f5665a006dc6a2d9b936, type: 3}
-  distributionCoefficient: 0.45
-  talusThreshold: 0.02
-  groupScaleFactor: 3
-  erosionIterationLimit: 5
---- !u!4 &1412956748
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1412956746}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -22.98119, y: 0, z: -21.04102}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 471226916}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1592727439
 GameObject:
   m_ObjectHideFlags: 0
@@ -1265,7 +1267,7 @@ MonoBehaviour:
   groupScaleFactor: 2
   inverseGroupScaleFactor: 6
   fractalDimension: 1.6
-  fracCoefficientsConsidered: 0.166
+  fracCoefficientsConsidered: 0.3
 --- !u!1 &1778127572
 GameObject:
   m_ObjectHideFlags: 0

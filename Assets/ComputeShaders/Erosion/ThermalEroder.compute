@@ -36,6 +36,8 @@ TexelHeightDistribution computeHeightDistribution(int2 processedTexel)
 
     float texelHeight = resultHeightmap[processedTexel];
 
+    float sumError = 0.0;
+    float sumErrorOut = 0.0;
     float exceedingSum = 1.0e-5;
     float maxHeightDistance = 0.0;
     int numCriticalNeighbors = 0;
@@ -59,10 +61,13 @@ TexelHeightDistribution computeHeightDistribution(int2 processedTexel)
                 d = 0.0;
             }
 
-            exceedingSum += d;
+            exceedingSum = accurateSum(exceedingSum, d, sumErrorOut);
+            sumError += sumErrorOut;
             nInfo.heightSpreadValue[y + 1][x + 1] = d;
         }
     }
+    exceedingSum += sumError;
+
 
     float avalancheRatio = 0.0;
     if (numCriticalNeighbors > 0 && maxHeightDistance > 1.0e-8)

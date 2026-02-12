@@ -104,6 +104,8 @@ groupshared float localHeightContributions[INV_GROUP_SIZE][INV_GROUP_SIZE];
     float2 exponentRatioPrecompute = (float2)targetHeightmapCoords / (float2)heightmapDimensions;
 
     float finalHeight = 0.0;
+    float localErrorOut = 0.0;
+    float localError = 0.0;
     for (int x = 0; x < invTexelsPerThread; ++x)
     {
         for (int y = 0; y < invTexelsPerThread; ++y)
@@ -115,10 +117,11 @@ groupshared float localHeightContributions[INV_GROUP_SIZE][INV_GROUP_SIZE];
             float2 complexExponent = float2(cos(ePower), sin(ePower));
 
             float product = coefficient.x * complexExponent.x - coefficient.y * complexExponent.y;
-            finalHeight += product;
+            finalHeight = accurateSum(finalHeight, product, localErrorOut);
+            localError += localErrorOut;
         }
     }
-    localHeightContributions[localId.x][localId.y] = finalHeight;
+    localHeightContributions[localId.x][localId.y] = finalHeight + localError;
 
     // per-texel accumulation
     GroupMemoryBarrierWithGroupSync();
