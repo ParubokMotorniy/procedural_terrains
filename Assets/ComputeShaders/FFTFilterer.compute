@@ -4,10 +4,10 @@ RWTexture2D<float> resultHeightmap;
 RWStructuredBuffer<float2> coefficients;
 uniform int2 heightmapDimensions; // so as not to GetDimensions() every time
 uniform int2 coefficientmapDimensions;
-
 uniform int2 inverseDispatchGroupOffset;
 
-uniform int texelsPerThread;    // what fraction of the coefficients plane a thread processes
+uniform int2 texelsPerThread; // what fraction of the coefficients plane a thread processes
+
 uniform int invTexelsPerThread; // what fraction of the coefficients plane a thread processes
 uniform int texelsPerInverseGroup;
 
@@ -58,9 +58,9 @@ float getEffectiveCoefficient(uint2 mathematicalCoordinates)
     uint2 threadTopLeftCorner = globalId.xy * texelsPerThread;
 
     {
-        for (int tX = 0; tX < texelsPerThread; ++tX)
+        for (int tX = 0; tX < texelsPerThread.x; ++tX)
         {
-            for (int tY = 0; tY < texelsPerThread; ++tY)
+            for (int tY = 0; tY < texelsPerThread.y; ++tY)
             {
                 uint2 coefficientCoordinates = threadTopLeftCorner + uint2(tX, tY);
 
@@ -90,6 +90,7 @@ float getEffectiveCoefficient(uint2 mathematicalCoordinates)
     }
 }
 
+// in general, this thing wouldn't need multiple dispatches to complete. However, that would require thread barrier in a loop, which I find quite restrictive currently.
 #pragma kernel InverseFFT
 #define INV_GROUP_SIZE 16
 groupshared float localHeightContributions[INV_GROUP_SIZE][INV_GROUP_SIZE];
