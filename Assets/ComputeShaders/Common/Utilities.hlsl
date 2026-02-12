@@ -56,3 +56,12 @@ float pinkNoise2D(uint2 x)
     }
     return sum_y / sum_w;
 }
+
+float accurateSum(float a, float b, out float error)
+{
+    float sum = a + b;
+    float bs = sum - a;
+    float as = sum - bs;
+    error = (b - bs) + (sum - as);
+    return sum;
+}

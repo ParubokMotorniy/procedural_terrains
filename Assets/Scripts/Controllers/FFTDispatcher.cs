@@ -12,7 +12,7 @@ public class FFTDispatcher : MultiFormatPipelineStep
     [SerializeField]
     private ComputeShader shaderToDispatch;
 
-    [Range(1, 3)]
+    [Range(0, 3)]
     public int groupScaleFactor = 0;
 
     [Range(4, 8)]
@@ -24,7 +24,7 @@ public class FFTDispatcher : MultiFormatPipelineStep
     [Range(0.01f, 1.0f)]
     public float fracCoefficientsConsidered = 0.01f;
 
-    private const int generationGroupSize = 32;
+    private const int generationGroupSize = 16;
     private const int inverseGroupSize = 16;
 
     private ComputeBuffer coefficientsBuffer;
@@ -48,8 +48,9 @@ public class FFTDispatcher : MultiFormatPipelineStep
     public override void StepBody(PipelineContext pipelineContext)
     {
         int textureSize = pipelineContext.GetHeightmapSize();
+        int actualCoefficientsComputed = (int)math.pow(2, (int)math.floor(math.log2(fracCoefficientsConsidered * textureSize)));
 
-        coefficientsBuffer = new ComputeBuffer(textureSize * textureSize * 2, sizeof(float));
+        coefficientsBuffer = new ComputeBuffer(actualCoefficientsComputed * actualCoefficientsComputed * 2, sizeof(float));
         Assert.IsTrue(coefficientsBuffer.IsValid());
 
         int coefficientGeneratorKernelIdx = shaderToDispatch.FindKernel("CoefficientGenerator");
@@ -70,22 +71,23 @@ public class FFTDispatcher : MultiFormatPipelineStep
         // uniforms
         int numGenerationGroups = (int)math.pow(2, groupScaleFactor);
         int numLinearThreads = generationGroupSize * numGenerationGroups;
-        int texelsPerThread = (textureSize / 2) / numLinearThreads;
+        int texelsPerThread = (actualCoefficientsComputed / 2) / numLinearThreads;
 
         int numInverseGroups = (int)math.pow(2, inverseGroupScaleFactor);
-        int invTexelsPerThread = textureSize / inverseGroupSize;
+        int invTexelsPerThread = actualCoefficientsComputed / inverseGroupSize;
         int numTexelsPerInverseGroup = textureSize / numInverseGroups;
 
-        Assert.IsTrue(textureSize % numLinearThreads == 0 && texelsPerThread != 0, "Generation texels must be distributed among threads evenly!");
-        Assert.IsTrue(textureSize % inverseGroupSize == 0 && textureSize % numInverseGroups == 0 && invTexelsPerThread != 0, "Inverse texels must be distributed among threads evenly!");
+        Assert.IsTrue(actualCoefficientsComputed % numLinearThreads == 0 && texelsPerThread != 0, "Generation texels must be distributed among threads evenly!");
+        Assert.IsTrue(actualCoefficientsComputed % inverseGroupSize == 0 && textureSize % numInverseGroups == 0 && invTexelsPerThread != 0, "Inverse texels must be distributed among threads evenly!");
 
         pipelineContext.SetUniformInt(shaderToDispatch, PID_texelsPerThread, texelsPerThread);
         pipelineContext.SetUniformInt(shaderToDispatch, PID_invTexelsPerThread, invTexelsPerThread);
+        pipelineContext.SetUniformInt(shaderToDispatch, PID_texelsPerInverseGroup, numTexelsPerInverseGroup);
+
         pipelineContext.SetUniformInts(shaderToDispatch, PID_heightmapDimensions, new int[] { textureSize, textureSize });
         pipelineContext.SetUniformInts(shaderToDispatch, PID_halfHeightmapDimensions, new int[] { textureSize / 2, textureSize / 2 });
         pipelineContext.SetUniformFloat(shaderToDispatch, PID_fractalDimension, fractalDimension);
-        pipelineContext.SetUniformInt(shaderToDispatch, PID_numCoefficientsLimit, (int)(fracCoefficientsConsidered * textureSize));
-        pipelineContext.SetUniformInt(shaderToDispatch, PID_texelsPerInverseGroup, numTexelsPerInverseGroup);
+        pipelineContext.SetUniformInt(shaderToDispatch, PID_numCoefficientsLimit, actualCoefficientsComputed);
         pipelineContext.SetRandomInts(shaderToDispatch, PID_randomSeeds);
 
         pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, coefficientGeneratorKernelIdx, new Vector3(numGenerationGroups, numGenerationGroups, 1));

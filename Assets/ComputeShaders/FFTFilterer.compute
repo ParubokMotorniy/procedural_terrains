@@ -28,7 +28,7 @@ float2 computeUniformRandomCoordinates(uint2 targetTextureCoordinates, int passI
 }
 
 #pragma kernel CoefficientGenerator
-[numthreads(32, 32, 1)] void CoefficientGenerator(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+[numthreads(16, 16, 1)] void CoefficientGenerator(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     uint2 threadTopLeftCorner = globalId.xy * texelsPerThread;
 
@@ -122,7 +122,6 @@ float2 computeUniformRandomCoordinates(uint2 targetTextureCoordinates, int passI
 
     DeviceMemoryBarrierWithGroupSync();
 
-    // TODO: this shit sucks and needs optimization
     if (globalId.x == 0 && globalId.y == 0)
     {
         {
@@ -181,16 +180,19 @@ groupshared float localHeightContributions[INV_GROUP_SIZE][INV_GROUP_SIZE];
 
             if (localId.x == 0 && localId.y == 0)
             {
-                // TODO: I may want to employ a strategy of precision-preserving addition here
                 float finalTexelHeight = 0.0;
+                float errorOut = 0.0;
+                float error = 0.0;
                 for (int x = 0; x < INV_GROUP_SIZE; ++x)
                 {
                     for (int y = 0; y < INV_GROUP_SIZE; ++y)
                     {
-                        finalTexelHeight += localHeightContributions[x][y];
+                        finalTexelHeight = accurateSum(finalTexelHeight, localHeightContributions[x][y], errorOut);
+                        error += errorOut;
+                        // finalTexelHeight += localHeightContributions[x][y];
                     }
                 }
-                resultHeightmap[targetHeightmapCoords] = finalTexelHeight;
+                resultHeightmap[targetHeightmapCoords] = finalTexelHeight + error;
             }
         }
     }
