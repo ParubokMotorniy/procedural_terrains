@@ -3,11 +3,12 @@
 RWTexture2D<float> resultHeightmap;
 RWStructuredBuffer<float2> coefficients;
 uniform int2 heightmapDimensions; // so as not to GetDimensions() every time
-uniform int2 halfHeightmapDimensions;
+uniform int2 coefficientmapDimensions;
+
+uniform int2 inverseDispatchGroupOffset;
 
 uniform int texelsPerThread;    // what fraction of the coefficients plane a thread processes
 uniform int invTexelsPerThread; // what fraction of the coefficients plane a thread processes
-uniform int numCoefficientsLimit;
 uniform int texelsPerInverseGroup;
 
 uniform float fractalDimension;
@@ -27,6 +28,30 @@ float2 computeUniformRandomCoordinates(uint2 targetTextureCoordinates, int passI
     return float2(u1, u2);
 }
 
+float getEffectiveCoefficient(uint2 mathematicalCoordinates)
+{
+    if (mathematicalCoordinates.x < coefficientmapDimensions.x && mathematicalCoordinates.y < coefficientmapDimensions.y)
+    {
+        return coefficients[index2dTo1d(coefficientmapDimensions, mathematicalCoordinates)];
+    }
+
+    uint2 targetSymmetricalCoefficient = (heightmapDimensions - uint2(1, 1)) - mathematicalCoordinates;
+
+    if (mathematicalCoordinates.x == 0)
+    {
+        targetSymmetricalCoefficient.x = 0;
+    }
+
+    if (mathematicalCoordinates.y == 0)
+    {
+        targetSymmetricalCoefficient.y = 0;
+    }
+
+    float2 computedCoefficient = coefficients[index2dTo1d(coefficientmapDimensions, targetSymmetricalCoefficient)];
+
+    return float2(computedCoefficient.x, -computedCoefficient.y);
+}
+
 #pragma kernel CoefficientGenerator
 [numthreads(16, 16, 1)] void CoefficientGenerator(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
@@ -38,9 +63,6 @@ float2 computeUniformRandomCoordinates(uint2 targetTextureCoordinates, int passI
             for (int tY = 0; tY < texelsPerThread; ++tY)
             {
                 uint2 coefficientCoordinates = threadTopLeftCorner + uint2(tX, tY);
-
-                if (coefficientCoordinates.x >= (uint)heightmapDimensions.x || coefficientCoordinates.y >= (uint)heightmapDimensions.y)
-                    continue;
 
                 float2 randomUniform = computeUniformRandomCoordinates(coefficientCoordinates, randomSeeds.x);
                 float randomGaussian = sampleGaussBoxMuller(randomUniform);
@@ -62,81 +84,8 @@ float2 computeUniformRandomCoordinates(uint2 targetTextureCoordinates, int passI
                 float2 baseCoefficient = randomMagnitude * float2(cos(randomPhase), sin(randomPhase));
 
                 // base coefficient
-                coefficients[index2dTo1d(heightmapDimensions, coefficientCoordinates)] = baseCoefficient;
-
-                // symmetrical coordinates
-                uint mX = (coefficientCoordinates.x == 0) ? 0 : (uint)heightmapDimensions.x - coefficientCoordinates.x;
-                uint mY = (coefficientCoordinates.y == 0) ? 0 : (uint)heightmapDimensions.y - coefficientCoordinates.y;
-
-                if (mX < (uint)heightmapDimensions.x && mY < (uint)heightmapDimensions.y)
-                {
-                    coefficients[index2dTo1d(heightmapDimensions, uint2(mX, mY))] = float2(baseCoefficient.x, -baseCoefficient.y);
-                }
+                coefficients[index2dTo1d(coefficientmapDimensions, coefficientCoordinates)] = baseCoefficient;
             }
-        }
-    }
-
-    {
-        for (int tX = 0; tX < texelsPerThread; ++tX)
-        {
-            for (int tY = 0; tY < texelsPerThread; ++tY)
-            {
-                uint2 coefficientCoordinates = threadTopLeftCorner + uint2(tX, tY) + uint2(1, 1);
-
-                if (coefficientCoordinates.x >= (uint)heightmapDimensions.x || coefficientCoordinates.y >= (uint)heightmapDimensions.y)
-                    continue;
-
-                float2 randomUniform = computeUniformRandomCoordinates(coefficientCoordinates, randomSeeds.y);
-                float randomGaussian = sampleGaussBoxMuller(randomUniform);
-
-                // computing the coefficient
-                float randomPhase = TWO_PI * randomUniform.x;
-
-                float2 c = (float2)coefficientCoordinates;
-                float d2 = max(dot(c, c), EPS);
-
-                float randomMagnitude = pow(d2, -(fractalDimension + 1.0) / 2.0) * randomGaussian;
-
-                float2 baseCoefficient = randomMagnitude * float2(cos(randomPhase), sin(randomPhase));
-
-                // base coefficient
-                uint2 baseCoord2D = uint2(coefficientCoordinates.x, (uint)heightmapDimensions.y - coefficientCoordinates.y);
-
-                if (baseCoord2D.x < (uint)heightmapDimensions.x && baseCoord2D.y < (uint)heightmapDimensions.y)
-                {
-                    uint baseCoordinate = index2dTo1d(heightmapDimensions, baseCoord2D);
-                    coefficients[baseCoordinate] = baseCoefficient;
-                }
-
-                // symmetrical coordinates
-                uint2 symCoord2D = uint2((uint)heightmapDimensions.x - coefficientCoordinates.x, coefficientCoordinates.y);
-
-                if (symCoord2D.x < (uint)heightmapDimensions.x && symCoord2D.y < (uint)heightmapDimensions.y)
-                {
-                    uint symmetricCoordinate = index2dTo1d(heightmapDimensions, symCoord2D);
-                    coefficients[symmetricCoordinate] = float2(baseCoefficient.x, -baseCoefficient.y);
-                }
-            }
-        }
-    }
-
-    DeviceMemoryBarrierWithGroupSync();
-
-    if (globalId.x == 0 && globalId.y == 0)
-    {
-        {
-            uint coord1 = index2dTo1d(heightmapDimensions, uint2((uint)halfHeightmapDimensions.x, 0));
-            coefficients[coord1] = float2(coefficients[coord1].x, 0.0);
-        }
-
-        {
-            uint coord2 = index2dTo1d(heightmapDimensions, uint2(0, (uint)halfHeightmapDimensions.y));
-            coefficients[coord2] = float2(coefficients[coord2].x, 0.0);
-        }
-
-        {
-            uint coord3 = index2dTo1d(heightmapDimensions, (uint2)halfHeightmapDimensions);
-            coefficients[coord3] = float2(coefficients[coord3].x, 0.0);
         }
     }
 }
@@ -146,54 +95,46 @@ float2 computeUniformRandomCoordinates(uint2 targetTextureCoordinates, int passI
 groupshared float localHeightContributions[INV_GROUP_SIZE][INV_GROUP_SIZE];
 [numthreads(INV_GROUP_SIZE, INV_GROUP_SIZE, 1)] void InverseFFT(uint3 localId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
 {
-    uint2 threadTopLeftCorner = localId.xy * invTexelsPerThread; // gives the top left corner in the texture space
-    uint2 groupTopLeftCorner = groupId.xy * texelsPerInverseGroup;
+    uint2 threadTopLeftCorner = localId.xy * invTexelsPerThread;   // gives the top left corner in the coefficient map space
+    uint2 groupTopLeftCorner = groupId.xy * texelsPerInverseGroup; // gives the top left corner in the textures space, prtocessed by a group
 
-    for (int tX = 0; tX < texelsPerInverseGroup; ++tX)
+    uint2 targetHeightmapCoords = groupTopLeftCorner + inverseDispatchGroupOffset; // the heightmap texel to process as a group
+
+    float2 exponentRatioPrecompute = (float2)targetHeightmapCoords / (float2)heightmapDimensions;
+
+    float finalHeight = 0.0;
+    for (int x = 0; x < invTexelsPerThread; ++x)
     {
-        for (int tY = 0; tY < texelsPerInverseGroup; ++tY)
+        for (int y = 0; y < invTexelsPerThread; ++y)
         {
-            GroupMemoryBarrierWithGroupSync();
+            uint2 coefficientCoords = threadTopLeftCorner + uint2(x, y);
+            float2 coefficient = getEffectiveCoefficient(coefficientCoords);
 
-            uint2 targetHeightmapCoords = groupTopLeftCorner + uint2(tX, tY); // the heightmap texel to process as a group
+            float ePower = TWO_PI * ((float)coefficientCoords.x * exponentRatioPrecompute.x + (float)coefficientCoords.y * exponentRatioPrecompute.y);
+            float2 complexExponent = float2(cos(ePower), sin(ePower));
 
-            float2 exponentRatioPrecompute = (float2)targetHeightmapCoords / (float2)heightmapDimensions;
+            float product = coefficient.x * complexExponent.x - coefficient.y * complexExponent.y;
+            finalHeight += product;
+        }
+    }
+    localHeightContributions[localId.x][localId.y] = finalHeight;
 
-            float finalHeight = 0.0;
-            for (int x = 0; x < invTexelsPerThread; ++x)
+    // per-texel accumulation
+    GroupMemoryBarrierWithGroupSync();
+
+    if (localId.x == 0 && localId.y == 0)
+    {
+        float finalTexelHeight = 0.0;
+        float errorOut = 0.0;
+        float error = 0.0;
+        for (int x = 0; x < INV_GROUP_SIZE; ++x)
+        {
+            for (int y = 0; y < INV_GROUP_SIZE; ++y)
             {
-                for (int y = 0; y < invTexelsPerThread; ++y)
-                {
-                    uint2 coefficientCoords = threadTopLeftCorner + uint2(x, y);
-
-                    float2 coefficient = coefficients[index2dTo1d(heightmapDimensions, coefficientCoords)];
-                    float ePower = TWO_PI * ((float)coefficientCoords.x * exponentRatioPrecompute.x + (float)coefficientCoords.y * exponentRatioPrecompute.y);
-                    float2 complexExponent = float2(cos(ePower), sin(ePower));
-
-                    float product = coefficient.x * complexExponent.x - coefficient.y * complexExponent.y;
-                    finalHeight += product;
-                }
-            }
-            localHeightContributions[localId.x][localId.y] = finalHeight;
-
-            GroupMemoryBarrierWithGroupSync();
-
-            if (localId.x == 0 && localId.y == 0)
-            {
-                float finalTexelHeight = 0.0;
-                float errorOut = 0.0;
-                float error = 0.0;
-                for (int x = 0; x < INV_GROUP_SIZE; ++x)
-                {
-                    for (int y = 0; y < INV_GROUP_SIZE; ++y)
-                    {
-                        finalTexelHeight = accurateSum(finalTexelHeight, localHeightContributions[x][y], errorOut);
-                        error += errorOut;
-                        // finalTexelHeight += localHeightContributions[x][y];
-                    }
-                }
-                resultHeightmap[targetHeightmapCoords] = finalTexelHeight + error;
+                finalTexelHeight = accurateSum(finalTexelHeight, localHeightContributions[x][y], errorOut);
+                error += errorOut;
             }
         }
+        resultHeightmap[targetHeightmapCoords] = finalTexelHeight + error;
     }
 }
