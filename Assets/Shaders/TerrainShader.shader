@@ -11,6 +11,7 @@ Shader "Custom/TerrainShader"
     {
         Tags { "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" "Queue" = "Geometry" }
         //TODO: add runtime wiremesh rendering. Probably with geometry shaders for I don't want to waste bandwidht of GPU passing extra vertex attributes around.
+        //TODO: fix exploding specularity
 
         Pass
         {
@@ -57,6 +58,31 @@ Shader "Custom/TerrainShader"
 
                 float3(1.0, 1.0, 1.0)
             };
+
+            static const float levelSmoothness[7] = {
+                0.0,
+
+                0.8,
+                0.65,
+                0.9,
+                0.9,
+                0.45,
+
+                0.15
+            };
+
+            static const float levelSpecularity[7] = {
+                0.0,
+
+                0.15,
+                0.15,
+                0.4,
+                0.4,
+                0.8,
+
+                1.0
+            };
+
             static const float isoColorStep = 0.2;
             static const half3 ambientLight = half3(0.243, 0.388, 0.227);
             
@@ -139,9 +165,15 @@ Shader "Custom/TerrainShader"
                 float isoColorLevel = (1.0 - normalDot) < 1.0e-4 ? 0.0 : (IN.vertexHeight / isoColorStep) + 1.0;
                 float scaledFracPart = frac(isoColorLevel) * max(exp(-normalDot * 2.0), 0.1);
 
-                float3 bottomColor = levelColoring[(int)floor(isoColorLevel)]; 
-                float3 topColor = levelColoring[(int)ceil(isoColorLevel)];
+                int bottomLevel = (int)floor(isoColorLevel);
+                int topLevel = (int)ceil(isoColorLevel);
+
+                float3 bottomColor = levelColoring[bottomLevel]; 
+                float3 topColor = levelColoring[topLevel];
+
                 float3 vertexColorAtLevel = lerp(bottomColor, topColor, colorInterpolationRemap(scaledFracPart));
+                float vertexSmoothnessAtLevel = levelSmoothness[bottomLevel] * _Smoothness;
+                float vertexSpecularityAtLevel = levelSpecularity[bottomLevel] * _Specular;
                 
                 float4 shadowCoord = TransformWorldToShadowCoord(IN.positionWS);
                 half shadowValue = MainLightRealtimeShadow(shadowCoord);
@@ -150,7 +182,7 @@ Shader "Custom/TerrainShader"
                 half3 lightColor = GetMainLight().color;
 
                 half3 diffuseComponent = LightingLambert(lightColor, lightDirection, actualNormal);
-                half3 specularComponent = LightingSpecular(lightColor, lightDirection, actualNormal, GetWorldSpaceNormalizeViewDir(IN.positionWS), _Specular.xxxx, _Smoothness.xxxx); 
+                half3 specularComponent = LightingSpecular(lightColor, lightDirection, actualNormal, GetWorldSpaceNormalizeViewDir(IN.positionWS), vertexSpecularityAtLevel.xxxx, vertexSmoothnessAtLevel.xxxx); 
 
                 return half4( ambientLight * vertexColorAtLevel + (diffuseComponent + specularComponent) * vertexColorAtLevel * shadowValue, 1.0);
             }

@@ -117,6 +117,8 @@ void applyKernel(int2 processedTexel)
     }
 }
 
+//todo: maybe, extend the information with strudiness info
+
 // race-free update of quadrants' centers
 #pragma kernel ThermalCoreEroder
 [numthreads(32, 32, 1)] void ThermalCoreEroder(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
