@@ -54,7 +54,7 @@ float pinkNoise2D(uint2 x)
         sum_w += w;
         x = (x + 1u) / 2u; // offset for consistent variation per step
     }
-    return sum_y / sum_w;
+    return max(0.0, sum_y / sum_w);
 }
 
 float accurateSum(float a, float b, out float error)

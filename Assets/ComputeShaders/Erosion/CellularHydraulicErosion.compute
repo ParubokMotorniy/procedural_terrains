@@ -5,19 +5,39 @@ RWTexture2D<float> resultHeightmap;
 
 uniform int2 heightmapDimensions; // so as not to GetDimensions() every time
 uniform int texelsPerThread;
+uniform int iterationIdx;
 uniform float solubilityConstant;
 uniform float evaporationConstant;
 
 uniform float2 noiseDisplacement;
 
-uniform uint permuteA;
+uniform uint permuteACore;
+uniform uint permuteAStripH;
+uniform uint permuteAStripV;
 
 static const float EPS = 1.0e-6;
-static const float HEIGHT_EPS = 1.0e-4; // texels differing by less are assumed to be at the same level
+static const float HEIGHT_EPS = 1.0e-5; // texels differing by less are assumed to be at the same level
+
+// I don't want to perform CPU-side zeroing or change the render target (expensive)
+#pragma kernel ResourceInitializer
+[numthreads(32, 32, 1)] void ResourceInitializer(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+{
+    int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
+
+    for (int x = 0; x < texelsPerThread; ++x)
+    {
+        for (int y = 0; y < texelsPerThread; ++y)
+        {
+            int2 processedTexel = topLeftCorner + int2(x, y);
+            uint processedTexelLin = index2dTo1d(heightmapDimensions, processedTexel);
+            waterLevel[processedTexelLin] = pinkNoise2D((float2)processedTexel + noiseDisplacement * (float2)heightmapDimensions);
+        }
+    }
+}
 
 // TODO: investigate why material loss is observed sometimes
 #pragma kernel RainDropper
-[numthreads(32, 32, 1)] void RainDropper(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+    [numthreads(32, 32, 1)] void RainDropper(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
 
@@ -36,8 +56,9 @@ static const float HEIGHT_EPS = 1.0e-4; // texels differing by less are assumed 
             float extraRainWater = pinkNoise2D((float2)processedTexel + noiseDisplacement * (float2)heightmapDimensions);
 
             // this can break assumption that water always contain the same concentration of sediment (if more water falls than there is sediment to be fit into that volume). Thus clamping is needed.
-            waterLevel[lin] = min(extraRainWater + currentWaterLevel, maxAllowedWater);                                            // step 1
-            resultHeightmap[processedTexel_i] = max(resultHeightmap[processedTexel_i] - extraRainWater * solubilityConstant, 0.0); // step 2
+            float newWaterLevel = min(extraRainWater + currentWaterLevel, maxAllowedWater);
+            waterLevel[lin] = newWaterLevel;                                                                  // step 1
+            resultHeightmap[processedTexel_i] = max(currentHeight - newWaterLevel * solubilityConstant, 0.0); // step 2
         }
     }
 }
@@ -145,23 +166,23 @@ void applyKernel(int2 processedTexel)
 #pragma kernel HydraulicCoreEroder
 [numthreads(32, 32, 1)] void HydraulicCoreEroder(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
-    int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
+    int2 topLeftCorner = int2(2, 2) + (int2)globalId.xy * texelsPerThread; //+ int2(2, 2) to account for core iteration
 
     int innerSide = texelsPerThread - 2;
     int totalTexelsPerThread = innerSide * innerSide;
 
     uint N = (uint)totalTexelsPerThread;
-    uint permuteB = (uint)((globalId.x + globalId.y + groupId.x + groupId.y) % N);
+    uint permuteB = (uint)((globalId.x + globalId.y + groupId.x + groupId.y + iterationIdx) % N);
 
     // iterates over the grid in a permuted order
     for (uint idx = 0; idx < N; ++idx)
     {
-        uint permutedIdx = (permuteA * idx + permuteB) % N;
+        uint permutedIdx = (permuteACore * idx + permuteB) % N;
 
         int x = (int)(permutedIdx / (uint)innerSide);
         int y = (int)(permutedIdx % (uint)innerSide);
 
-        int2 processedTexel = topLeftCorner + int2(x, y) + int2(2, 2);
+        int2 processedTexel = topLeftCorner + int2(x, y);
 
         applyKernel(processedTexel);
 
@@ -180,11 +201,11 @@ void applyKernel(int2 processedTexel)
         int totalTexelsPerThreadHorizontal = texelsPerThread * 2;
 
         uint N = (uint)totalTexelsPerThreadHorizontal;
-        uint permuteBHorizontal = (uint)((globalId.x + globalId.y + groupId.x + groupId.y) % N);
+        uint permuteBHorizontal = (uint)((globalId.x + globalId.y + groupId.x + groupId.y + iterationIdx) % N);
 
         for (uint idx = 0; idx < N; ++idx)
         {
-            uint permutedIdx = (permuteA * idx + permuteBHorizontal) % N;
+            uint permutedIdx = (permuteAStripH * idx + permuteBHorizontal) % N;
 
             int x = (int)(permutedIdx % (uint)texelsPerThread);
             int y = ((int)permutedIdx + (permutedIdx / texelsPerThread) * stepMultiplier) % 2;
@@ -201,11 +222,11 @@ void applyKernel(int2 processedTexel)
         int totalTexelsPerThreadVertical = truncatedTexelsPerThread * 2;
 
         uint N = (uint)totalTexelsPerThreadVertical;
-        uint permuteBVertical = (uint)((globalId.x + globalId.y + groupId.x + groupId.y) % N);
+        uint permuteBVertical = (uint)((globalId.x + globalId.y + groupId.x + groupId.y + iterationIdx) % N);
 
         for (uint idx = 0; idx < N; ++idx)
         {
-            uint permutedIdx = (permuteA * idx + permuteBVertical) % N;
+            uint permutedIdx = (permuteAStripV * idx + permuteBVertical) % N;
 
             int y = (int)(permutedIdx % (uint)truncatedTexelsPerThread);
             int x = (permutedIdx + (permutedIdx / truncatedTexelsPerThread) * stepMultiplier) % 2;
