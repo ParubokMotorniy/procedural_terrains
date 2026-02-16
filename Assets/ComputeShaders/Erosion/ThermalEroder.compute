@@ -5,6 +5,7 @@ uniform int2 heightmapDimensions; // so as not to GetDimensions() every time
 
 uniform int texelsPerThread;
 uniform float distributionCoefficient; // this parameter now controls how "sturdy" the material constituting the terrain is
+uniform int iterationIdx;
 uniform float talusThreshold;
 uniform float2 noiseDisplacement;
 
@@ -13,6 +14,12 @@ uniform uint permuteAStripH;
 uniform uint permuteAStripV;
 
 static const float BIG_FLOAT = 3.402823466e+38f;
+
+float computeUniformFloat(uint2 targetTextureCoordinates, int passId)
+{
+    uint seed = seedFromXYPass(targetTextureCoordinates.x, targetTextureCoordinates.y, passId);
+    return u01FromUint(pcgHash(seed));
+}
 
 // diagonal texels are further away from the kernel center, and so we assume they receive less material than direct neighbors
 static const float heightDistributionDistanceCoefficients[3][3] =
@@ -126,12 +133,13 @@ void applyKernel(int2 processedTexel)
 [numthreads(32, 32, 1)] void ThermalCoreEroder(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
+    float randomUniform = computeUniformFloat(topLeftCorner, iterationIdx * (groupId.x + groupId.y));
 
     int innerSide = texelsPerThread - 2;
     int totalTexelsPerThread = innerSide * innerSide;
 
     uint N = (uint)totalTexelsPerThread;
-    uint permuteB = (uint)((globalId.x + globalId.y + groupId.x + groupId.y) % N);
+    uint permuteB = 1 + (int)(randomUniform * N);
 
     // iterates over the grid in a permuted order
     for (uint idx = 0; idx < N; ++idx)
@@ -154,6 +162,7 @@ void applyKernel(int2 processedTexel)
     [numthreads(32, 32, 1)] void ThermalBorderEroder(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
+    float randomUniform = computeUniformFloat(topLeftCorner, iterationIdx * (groupId.x + groupId.y));
 
     int stepMultiplier = 1 - (texelsPerThread % 2);
 
@@ -161,7 +170,7 @@ void applyKernel(int2 processedTexel)
         int totalTexelsPerThreadHorizontal = texelsPerThread * 2;
 
         uint N = (uint)totalTexelsPerThreadHorizontal;
-        uint permuteBHorizontal = (uint)((globalId.x + globalId.y + groupId.x + groupId.y) % N);
+        uint permuteBHorizontal = 1 + (int)(randomUniform * N);
 
         for (uint idx = 0; idx < N; ++idx)
         {
@@ -181,7 +190,7 @@ void applyKernel(int2 processedTexel)
         int totalTexelsPerThreadVertical = truncatedTexelsPerThread * 2;
 
         uint N = (uint)totalTexelsPerThreadVertical;
-        uint permuteBVertical = (uint)((globalId.x + globalId.y + groupId.x + groupId.y) % N);
+        uint permuteBVertical = 1 + (int)(randomUniform * N);
 
         for (uint idx = 0; idx < N; ++idx)
         {

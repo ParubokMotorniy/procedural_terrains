@@ -30,6 +30,7 @@ public class ThermalErosionDispatcher : MultiFormatPipelineStep
     private static readonly int PID_talusThreshold = Shader.PropertyToID("talusThreshold");
     private static readonly int PID_heightmapDimensions = Shader.PropertyToID("heightmapDimensions");
     private static readonly int PID_noiseDisplacement = Shader.PropertyToID("noiseDisplacement");
+    private static readonly int PID_iterationIdx = Shader.PropertyToID("iterationIdx");
 
     public override InputExpectations GetStepExpectations()
         => InputExpectations.HeightMapNormalized; // TODO: skip normalization by adjusting talus threshold to effective height range
@@ -41,7 +42,7 @@ public class ThermalErosionDispatcher : MultiFormatPipelineStep
         int textureSize = pipelineContext.GetHeightmapSize();
         int numGroups = (int)math.pow(2, groupScaleFactor);
         int numLinearThreads = groupSize * numGroups;
-        int texelsPerThread = textureSize / numLinearThreads; 
+        int texelsPerThread = textureSize / numLinearThreads;
 
         Assert.IsTrue(textureSize % numLinearThreads == 0, "Texels must be distributed among threads evenly!");
         Assert.IsTrue(texelsPerThread >= 4, "A thread must have at least 4 texels to porcess");
@@ -50,9 +51,9 @@ public class ThermalErosionDispatcher : MultiFormatPipelineStep
         int borderKernelIdx = erosionComputeShader.FindKernel("ThermalBorderEroder");
 
         int texelsPerThreadSquared = (int)math.pow(texelsPerThread - 2, 2);
-        int permuteACore = GenerationUtilities.ComputeCoprime(texelsPerThreadSquared, 3);
-        int permuteAStripH = GenerationUtilities.ComputeCoprime(2 * texelsPerThread, 7);
-        int permuteAStripV = GenerationUtilities.ComputeCoprime(2 * (texelsPerThread - 2), 11);
+        int permuteACore = GenerationUtilities.ComputeCoprime(texelsPerThreadSquared, 21);
+        int permuteAStripH = GenerationUtilities.ComputeCoprime(2 * texelsPerThread, 17);
+        int permuteAStripV = GenerationUtilities.ComputeCoprime(2 * (texelsPerThread - 2), 31);
 
         foreach (int kernelIdx in new[] { coreKernelIdx, borderKernelIdx })
         {
@@ -60,8 +61,9 @@ public class ThermalErosionDispatcher : MultiFormatPipelineStep
         }
 
         pipelineContext.SetUniformInt(erosionComputeShader, PID_texelsPerThread, texelsPerThread);
-        pipelineContext.SetUniformInt(erosionComputeShader, PID_permuteA, permuteA);
-        pipelineContext.SetUniformFloat(erosionComputeShader, PID_distributionCoefficient, distributionCoefficient);
+        pipelineContext.SetUniformInt(erosionComputeShader, PID_permuteACore, permuteACore);
+        pipelineContext.SetUniformInt(erosionComputeShader, PID_permuteAStripH, permuteAStripH);
+        pipelineContext.SetUniformInt(erosionComputeShader, PID_permuteAStripV, permuteAStripV); pipelineContext.SetUniformFloat(erosionComputeShader, PID_distributionCoefficient, distributionCoefficient);
         pipelineContext.SetUniformFloat(erosionComputeShader, PID_talusThreshold, talusThreshold);
 
         pipelineContext.SetUniformInts(erosionComputeShader, PID_heightmapDimensions, new int[2] { textureSize, textureSize });
@@ -70,6 +72,8 @@ public class ThermalErosionDispatcher : MultiFormatPipelineStep
         for (int i = 0; i < erosionIterationLimit; ++i)
         {
             pipelineContext.SetRandomFloats(erosionComputeShader, PID_noiseDisplacement);
+            pipelineContext.SetUniformInt(erosionComputeShader, PID_iterationIdx, i);
+
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, coreKernelIdx, dispatchGroups);
             pipelineContext.SetRandomFloats(erosionComputeShader, PID_noiseDisplacement);
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, borderKernelIdx, dispatchGroups);

@@ -9,7 +9,7 @@ uniform int iterationIdx;
 uniform float solubilityConstant;
 uniform float evaporationConstant;
 
-uniform float2 noiseDisplacement;
+uniform float2 randomSeeds;
 
 uniform uint permuteACore;
 uniform uint permuteAStripH;
@@ -18,7 +18,11 @@ uniform uint permuteAStripV;
 static const float EPS = 1.0e-6;
 static const float HEIGHT_EPS = 1.0e-5; // texels differing by less are assumed to be at the same level
 
-// TODO: investigate why material loss is observed sometimes
+float computeUniformFloat(uint2 targetTextureCoordinates, int passId)
+{
+    uint seed = seedFromXYPass(targetTextureCoordinates.x, targetTextureCoordinates.y, passId);
+    return u01FromUint(pcgHash(seed));
+}
 
 // I don't want to perform CPU-side zeroing or change the render target (expensive)
 #pragma kernel ResourceInitializer
@@ -54,7 +58,7 @@ static const float HEIGHT_EPS = 1.0e-5; // texels differing by less are assumed 
             float currentHeight = resultHeightmap[processedTexel_i];
             float maxAllowedExtraWater = currentHeight / solubilityConstant;
 
-            float extraRainWater = min(maxAllowedExtraWater, pinkNoise2D((float2)processedTexel + noiseDisplacement * (float2)heightmapDimensions));
+            float extraRainWater = min(maxAllowedExtraWater, pinkNoise2D((float2)processedTexel + randomSeeds * (float2)heightmapDimensions));
 
             // this can break assumption that water always contain the same concentration of sediment (if more water falls than there is sediment to be fit into that volume). Thus clamping is needed.
             waterLevel[lin] = extraRainWater + currentWaterLevel;                                              // step 1
@@ -167,12 +171,13 @@ void applyKernel(int2 processedTexel)
 [numthreads(32, 32, 1)] void HydraulicCoreEroder(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     int2 topLeftCorner = int2(2, 2) + (int2)globalId.xy * texelsPerThread; //+ int2(2, 2) to account for core iteration
+    float randomUniform = computeUniformFloat(topLeftCorner, iterationIdx * (groupId.x + groupId.y));
 
     int innerSide = texelsPerThread - 2;
     int totalTexelsPerThread = innerSide * innerSide;
 
     uint N = (uint)totalTexelsPerThread;
-    uint permuteB = (uint)((globalId.x + globalId.y + groupId.x + groupId.y + iterationIdx) % N);
+    uint permuteB = 1 + (int)(randomUniform * N);
 
     // iterates over the grid in a permuted order
     for (uint idx = 0; idx < N; ++idx)
@@ -193,6 +198,7 @@ void applyKernel(int2 processedTexel)
     [numthreads(32, 32, 1)] void HydraulicBorderEroder(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
+    float randomUniform = computeUniformFloat(topLeftCorner, iterationIdx * (groupId.x + groupId.y));
 
     int stepMultiplier = 1 - (texelsPerThread % 2);
 
@@ -200,7 +206,7 @@ void applyKernel(int2 processedTexel)
         int totalTexelsPerThreadHorizontal = texelsPerThread * 2;
 
         uint N = (uint)totalTexelsPerThreadHorizontal;
-        uint permuteBHorizontal = (uint)((globalId.x + globalId.y + groupId.x + groupId.y + iterationIdx) % N);
+        uint permuteBHorizontal = 1 + (int)(randomUniform * N);
 
         for (uint idx = 0; idx < N; ++idx)
         {
@@ -221,7 +227,7 @@ void applyKernel(int2 processedTexel)
         int totalTexelsPerThreadVertical = truncatedTexelsPerThread * 2;
 
         uint N = (uint)totalTexelsPerThreadVertical;
-        uint permuteBVertical = (uint)((globalId.x + globalId.y + groupId.x + groupId.y + iterationIdx) % N);
+        uint permuteBVertical = 1 + (int)(randomUniform * N);
 
         for (uint idx = 0; idx < N; ++idx)
         {

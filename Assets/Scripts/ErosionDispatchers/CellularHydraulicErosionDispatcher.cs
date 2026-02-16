@@ -21,6 +21,7 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
     public float evaporationConstant;
 
     private const int groupSize = 32;
+
     private ComputeBuffer waterLevelBuffer;
 
     private static readonly int PID_resultHeightmap = Shader.PropertyToID("resultHeightmap");
@@ -32,7 +33,7 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
     private static readonly int PID_solubilityConstant = Shader.PropertyToID("solubilityConstant");
     private static readonly int PID_evaporationConstant = Shader.PropertyToID("evaporationConstant");
     private static readonly int PID_heightmapDimensions = Shader.PropertyToID("heightmapDimensions");
-    private static readonly int PID_noiseDisplacement = Shader.PropertyToID("noiseDisplacement");
+    private static readonly int PID_randomSeeds = Shader.PropertyToID("randomSeeds");
     private static readonly int PID_iterationIdx = Shader.PropertyToID("iterationIdx");
 
     public override InputExpectations GetStepExpectations()
@@ -55,11 +56,6 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
         int permuteACore = GenerationUtilities.ComputeCoprime(texelsPerThreadSquared, 3);
         int permuteAStripH = GenerationUtilities.ComputeCoprime(2 * texelsPerThread, 7);
         int permuteAStripV = GenerationUtilities.ComputeCoprime(2 * (texelsPerThread - 2), 11);
-
-        Debug.Log("Texels per thread: " + texelsPerThread);
-        Debug.Log(texelsPerThreadSquared + " coprime with " + permuteACore);
-        Debug.Log((2 * texelsPerThread) + " coprime with " + permuteAStripH);
-        Debug.Log((2 * (texelsPerThread - 2)) + " coprime with " + permuteAStripV);
 
         int rainDropKernelIdx = erosionComputeShader.FindKernel("RainDropper");
         int coreKernelIdx = erosionComputeShader.FindKernel("HydraulicCoreEroder");
@@ -88,7 +84,7 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
         pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, resourceInitializerKernelIdx, dispatchGroups);
         for (int d = 0; d < erosionIterationLimit; ++d)
         {
-            pipelineContext.SetRandomFloats(erosionComputeShader, PID_noiseDisplacement);
+            pipelineContext.SetRandomFloats(erosionComputeShader, PID_randomSeeds);
             pipelineContext.SetUniformInt(erosionComputeShader, PID_iterationIdx, d);
 
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, rainDropKernelIdx, dispatchGroups);
@@ -96,7 +92,7 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, borderKernelIdx, dispatchGroups);
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, waterEvaporatorKernelIdx, dispatchGroups);
         }
-        // pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, finalWaterEvaporatorKernelIdx, dispatchGroups);
+        pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, finalWaterEvaporatorKernelIdx, dispatchGroups);
     }
 
     public override void StepConclusion(PipelineContext pipelineContext) { }
