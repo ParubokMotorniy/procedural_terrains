@@ -18,6 +18,8 @@ uniform uint permuteAStripV;
 static const float EPS = 1.0e-6;
 static const float HEIGHT_EPS = 1.0e-5; // texels differing by less are assumed to be at the same level
 
+// TODO: investigate why material loss is observed sometimes
+
 // I don't want to perform CPU-side zeroing or change the render target (expensive)
 #pragma kernel ResourceInitializer
 [numthreads(32, 32, 1)] void ResourceInitializer(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
@@ -30,12 +32,11 @@ static const float HEIGHT_EPS = 1.0e-5; // texels differing by less are assumed 
         {
             int2 processedTexel = topLeftCorner + int2(x, y);
             uint processedTexelLin = index2dTo1d(heightmapDimensions, processedTexel);
-            waterLevel[processedTexelLin] = pinkNoise2D((float2)processedTexel + noiseDisplacement * (float2)heightmapDimensions);
+            waterLevel[processedTexelLin] = 0.0;
         }
     }
 }
 
-// TODO: investigate why material loss is observed sometimes
 #pragma kernel RainDropper
     [numthreads(32, 32, 1)] void RainDropper(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
@@ -51,14 +52,13 @@ static const float HEIGHT_EPS = 1.0e-5; // texels differing by less are assumed 
 
             float currentWaterLevel = waterLevel[lin];
             float currentHeight = resultHeightmap[processedTexel_i];
-            float maxAllowedWater = currentHeight / solubilityConstant;
+            float maxAllowedExtraWater = currentHeight / solubilityConstant;
 
-            float extraRainWater = pinkNoise2D((float2)processedTexel + noiseDisplacement * (float2)heightmapDimensions);
+            float extraRainWater = min(maxAllowedExtraWater, pinkNoise2D((float2)processedTexel + noiseDisplacement * (float2)heightmapDimensions));
 
             // this can break assumption that water always contain the same concentration of sediment (if more water falls than there is sediment to be fit into that volume). Thus clamping is needed.
-            float newWaterLevel = min(extraRainWater + currentWaterLevel, maxAllowedWater);
-            waterLevel[lin] = newWaterLevel;                                                                  // step 1
-            resultHeightmap[processedTexel_i] = max(currentHeight - newWaterLevel * solubilityConstant, 0.0); // step 2
+            waterLevel[lin] = extraRainWater + currentWaterLevel;                                              // step 1
+            resultHeightmap[processedTexel_i] = max(currentHeight - extraRainWater * solubilityConstant, 0.0); // step 2
         }
     }
 }
@@ -79,7 +79,7 @@ WaterDistributionFromTexel computeWaterDistribution(int2 processedTexel)
 
     float sumError = 0.0;
     float sumErrorOut = 0.0;
-    float exceedingSum = EPS;
+    float exceedingSum = 0.0;
     int numCriticalNeighbors = 0;
 
     {
@@ -131,7 +131,7 @@ WaterDistributionFromTexel computeWaterDistribution(int2 processedTexel)
     totalWaterLost = min(waterLevelAtTexel, totalWaterLost);
 
     {
-        float invSum = 1.0 / max(exceedingSum, EPS);
+        float invSum = exceedingSum > 0 ? 1.0 / exceedingSum : 0.0;
 
         for (int x = -1; x < 2; ++x)
         {
@@ -263,6 +263,29 @@ void applyKernel(int2 processedTexel)
 
             // step 4
             waterLevel[lin] = max(newWaterLevel, 0.0);
+            resultHeightmap[processedTexel_i] += sedimentationValue;
+        }
+    }
+}
+
+// evaporates whatever water is left after the erosion process
+#pragma kernel FinalWaterEvaporator
+    [numthreads(32, 32, 1)] void FinalWaterEvaporator(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+{
+    int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
+
+    float evap = saturate(evaporationConstant);
+
+    for (int x = 0; x < texelsPerThread; ++x)
+    {
+        for (int y = 0; y < texelsPerThread; ++y)
+        {
+            int2 processedTexel_i = topLeftCorner + int2(x, y);
+            uint2 processedTexel = (uint2)processedTexel_i;
+
+            uint lin = index2dTo1d(heightmapDimensions, processedTexel);
+            float waterLevelAtTexel = waterLevel[lin];
+            float sedimentationValue = waterLevelAtTexel * solubilityConstant;
             resultHeightmap[processedTexel_i] += sedimentationValue;
         }
     }

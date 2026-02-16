@@ -65,11 +65,12 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
         int borderKernelIdx = erosionComputeShader.FindKernel("HydraulicBorderEroder");
         int waterEvaporatorKernelIdx = erosionComputeShader.FindKernel("WaterEvaporator");
         int resourceInitializerKernelIdx = erosionComputeShader.FindKernel("ResourceInitializer");
+        int finalWaterEvaporatorKernelIdx = erosionComputeShader.FindKernel("FinalWaterEvaporator");
 
         waterLevelBuffer = new ComputeBuffer(textureSize * textureSize, sizeof(float));
         Assert.IsTrue(waterLevelBuffer.IsValid());
 
-        foreach (int kernelIdx in new[] { rainDropKernelIdx, coreKernelIdx, borderKernelIdx, waterEvaporatorKernelIdx, resourceInitializerKernelIdx })
+        foreach (int kernelIdx in new[] { rainDropKernelIdx, coreKernelIdx, borderKernelIdx, waterEvaporatorKernelIdx, resourceInitializerKernelIdx, finalWaterEvaporatorKernelIdx })
         {
             pipelineContext.BindTexture(erosionComputeShader, kernelIdx, PID_resultHeightmap, pipelineContext.intermediateHeightmap);
             pipelineContext.BindComputeBuffer(erosionComputeShader, kernelIdx, PID_waterLevel, waterLevelBuffer);
@@ -83,7 +84,6 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
         pipelineContext.SetUniformFloat(erosionComputeShader, PID_evaporationConstant, evaporationConstant);
         pipelineContext.SetUniformFloat(erosionComputeShader, PID_solubilityConstant, solubilityConstant);
 
-        pipelineContext.SetRandomFloats(erosionComputeShader, PID_noiseDisplacement);
         pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, resourceInitializerKernelIdx, dispatchGroups);
         for (int d = 0; d < erosionIterationLimit; ++d)
         {
@@ -95,6 +95,7 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, borderKernelIdx, dispatchGroups);
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, waterEvaporatorKernelIdx, dispatchGroups);
         }
+        pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, finalWaterEvaporatorKernelIdx, dispatchGroups);
     }
 
     public override void StepConclusion(PipelineContext pipelineContext) { }
