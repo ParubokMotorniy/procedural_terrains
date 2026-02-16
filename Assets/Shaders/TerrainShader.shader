@@ -143,8 +143,6 @@ Shader "Custom/TerrainShader"
                     ).r;
                 dv /= 2.0 * _HeightMap_TexelSize.y;
 
-                // inCopy.normalOS = normalize(float3(-du, 1.0, -dv));
-
                 OUT.normal = TransformObjectToWorldNormal(float3(du, 1.0, dv));
                 OUT.positionHCS = TransformObjectToHClip(positionOS);
                 OUT.positionWS = TransformObjectToWorld(positionOS);
@@ -186,7 +184,6 @@ Shader "Custom/TerrainShader"
                 half3 specularComponent = LightingSpecular(lightColor, lightDirection, actualNormal, GetWorldSpaceNormalizeViewDir(IN.positionWS), vertexSpecularityAtLevel.xxxx, vertexSmoothnessAtLevel.xxxx); 
                 
                 half3 ambientComponent = ambientLight * vertexColorAtLevel; 
-                // half3 ambientComponent = half3(0.0, 0.0, 0.0); 
 
                 return half4( ambientComponent + (diffuseComponent + specularComponent) * vertexColorAtLevel * shadowValue, 1.0);
             }
@@ -285,7 +282,7 @@ Shader "Custom/TerrainShader"
                     ).r;
                 dv /= 2.0 * _HeightMap_TexelSize.y;
 
-                inCopy.normalOS = normalize(float3(-du, 1.0, -dv));
+                inCopy.normalOS = normalize(float3(du, 1.0, dv));
 
                 float height =
                     SAMPLE_TEXTURE2D_LOD(
