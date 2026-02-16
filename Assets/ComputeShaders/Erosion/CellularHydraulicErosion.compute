@@ -166,75 +166,73 @@ void applyKernel(int2 processedTexel)
 #pragma kernel HydraulicCoreEroder
 [numthreads(32, 32, 1)] void HydraulicCoreEroder(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
-    int2 topLeftCorner = globalId.xy * texelsPerThread;
+    int2 topLeftCorner = int2(2, 2) + (int2)globalId.xy * texelsPerThread; //+ int2(2, 2) to account for core iteration
 
-    {
-        for (int x = 2; x < texelsPerThread; ++x)
-        {
-            for (int y = 2 + (x % 2); y < texelsPerThread; y += 2)
-            {
-                uint2 processedTexel = topLeftCorner + uint2(x, y);
-                applyKernel(processedTexel);
-                AllMemoryBarrier();
-            }
-        }
-    }
+    int innerSide = texelsPerThread - 2;
+    int totalTexelsPerThread = innerSide * innerSide;
 
+    uint N = (uint)totalTexelsPerThread;
+    uint permuteB = (uint)((globalId.x + globalId.y + groupId.x + groupId.y + iterationIdx) % N);
+
+    // iterates over the grid in a permuted order
+    for (uint idx = 0; idx < N; ++idx)
     {
-        for (int x = 2; x < texelsPerThread; ++x)
-        {
-            for (int y = 3 - (x % 2); y < texelsPerThread; y += 2)
-            {
-                uint2 processedTexel = topLeftCorner + uint2(x, y);
-                applyKernel(processedTexel);
-                AllMemoryBarrier();
-            }
-        }
+        uint permutedIdx = (permuteACore * idx + permuteB) % N;
+
+        int x = (int)(permutedIdx / (uint)innerSide);
+        int y = (int)(permutedIdx % (uint)innerSide);
+
+        int2 processedTexel = topLeftCorner + int2(x, y);
+
+        applyKernel(processedTexel);
+
+        AllMemoryBarrier();
     }
 }
 
 #pragma kernel HydraulicBorderEroder
     [numthreads(32, 32, 1)] void HydraulicBorderEroder(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
-    int2 topLeftCorner = globalId.xy * texelsPerThread;
+    int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
 
-    // horizontal strip
-    {
-        for (uint x_h = 0; x_h < texelsPerThread; ++x_h)
+    int stepMultiplier = 1 - (texelsPerThread % 2);
+
+    { // horizontal strip
+        int totalTexelsPerThreadHorizontal = texelsPerThread * 2;
+
+        uint N = (uint)totalTexelsPerThreadHorizontal;
+        uint permuteBHorizontal = (uint)((globalId.x + globalId.y + groupId.x + groupId.y + iterationIdx) % N);
+
+        for (uint idx = 0; idx < N; ++idx)
         {
-            uint y_h = (x_h % 2);
-            uint2 processedTexel = topLeftCorner + uint2(x_h, y_h);
+            uint permutedIdx = (permuteAStripH * idx + permuteBHorizontal) % N;
+
+            int x = (int)(permutedIdx % (uint)texelsPerThread);
+            int y = ((int)permutedIdx + (permutedIdx / texelsPerThread) * stepMultiplier) % 2;
+
+            int2 processedTexel = topLeftCorner + int2(x, y);
+
             applyKernel(processedTexel);
             AllMemoryBarrier();
         }
     }
 
-    {
-        for (uint x_h = 0; x_h < texelsPerThread; ++x_h)
-        {
-            uint y_h = 1 - (x_h % 2);
-            uint2 processedTexel = topLeftCorner + uint2(x_h, y_h);
-            applyKernel(processedTexel);
-            AllMemoryBarrier();
-        }
-    }
+    { // vertical strip
+        int truncatedTexelsPerThread = texelsPerThread - 2;
+        int totalTexelsPerThreadVertical = truncatedTexelsPerThread * 2;
 
-    // vertical strip
-    {
-        for (uint y_v = 2; y_v < texelsPerThread; ++y_v)
-        {
-            uint x_v = (y_v % 2);
-            uint2 processedTexel = topLeftCorner + uint2(x_v, y_v);
-            applyKernel(processedTexel);
-            AllMemoryBarrier();
-        }
-    }
+        uint N = (uint)totalTexelsPerThreadVertical;
+        uint permuteBVertical = (uint)((globalId.x + globalId.y + groupId.x + groupId.y + iterationIdx) % N);
 
-    {
-        for (uint y_v = 2; y_v < texelsPerThread; ++y_v)
+        for (uint idx = 0; idx < N; ++idx)
         {
-            uint x_v = 1 - (y_v % 2);
-            uint2 processedTexel = topLeftCorner + uint2(x_v, y_v);
+            uint permutedIdx = (permuteAStripV * idx + permuteBVertical) % N;
+
+            int y = (int)(permutedIdx % (uint)truncatedTexelsPerThread);
+            int x = (permutedIdx + (permutedIdx / truncatedTexelsPerThread) * stepMultiplier) % 2;
+
+            int2 processedTexel = topLeftCorner + int2(x, y) + int2(0, 2);
+
             applyKernel(processedTexel);
             AllMemoryBarrier();
         }
