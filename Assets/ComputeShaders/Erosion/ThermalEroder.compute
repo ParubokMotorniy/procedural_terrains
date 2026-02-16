@@ -8,7 +8,9 @@ uniform float distributionCoefficient; // this parameter now controls how "sturd
 uniform float talusThreshold;
 uniform float2 noiseDisplacement;
 
-uniform uint permuteA;
+uniform uint permuteACore;
+uniform uint permuteAStripH;
+uniform uint permuteAStripV;
 
 static const float BIG_FLOAT = 3.402823466e+38f;
 
@@ -134,7 +136,7 @@ void applyKernel(int2 processedTexel)
     // iterates over the grid in a permuted order
     for (uint idx = 0; idx < N; ++idx)
     {
-        uint permutedIdx = (permuteA * idx + permuteB) % N;
+        uint permutedIdx = (permuteACore * idx + permuteB) % N;
 
         int x = (int)(permutedIdx / (uint)innerSide);
         int y = (int)(permutedIdx % (uint)innerSide);
@@ -163,7 +165,7 @@ void applyKernel(int2 processedTexel)
 
         for (uint idx = 0; idx < N; ++idx)
         {
-            uint permutedIdx = (permuteA * idx + permuteBHorizontal) % N;
+            uint permutedIdx = (permuteAStripH * idx + permuteBHorizontal) % N;
 
             int x = (int)(permutedIdx % (uint)texelsPerThread);
             int y = ((int)permutedIdx + (permutedIdx / texelsPerThread) * stepMultiplier) % 2;
@@ -183,7 +185,7 @@ void applyKernel(int2 processedTexel)
 
         for (uint idx = 0; idx < N; ++idx)
         {
-            uint permutedIdx = (permuteA * idx + permuteBVertical) % N;
+            uint permutedIdx = (permuteAStripV * idx + permuteBVertical) % N;
 
             int y = (int)(permutedIdx % (uint)truncatedTexelsPerThread);
             int x = (permutedIdx + (permutedIdx / truncatedTexelsPerThread) * stepMultiplier) % 2;

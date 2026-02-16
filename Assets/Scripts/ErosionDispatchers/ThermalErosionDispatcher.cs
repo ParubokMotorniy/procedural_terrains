@@ -23,8 +23,9 @@ public class ThermalErosionDispatcher : MultiFormatPipelineStep
     private const int groupSize = 32;
 
     private static readonly int PID_resultHeightmap = Shader.PropertyToID("resultHeightmap");
-    private static readonly int PID_permuteA = Shader.PropertyToID("permuteA");
-    private static readonly int PID_texelsPerThread = Shader.PropertyToID("texelsPerThread");
+    private static readonly int PID_permuteACore = Shader.PropertyToID("permuteACore");
+    private static readonly int PID_permuteAStripH = Shader.PropertyToID("permuteAStripH");
+    private static readonly int PID_permuteAStripV = Shader.PropertyToID("permuteAStripV"); private static readonly int PID_texelsPerThread = Shader.PropertyToID("texelsPerThread");
     private static readonly int PID_distributionCoefficient = Shader.PropertyToID("distributionCoefficient");
     private static readonly int PID_talusThreshold = Shader.PropertyToID("talusThreshold");
     private static readonly int PID_heightmapDimensions = Shader.PropertyToID("heightmapDimensions");
@@ -40,38 +41,25 @@ public class ThermalErosionDispatcher : MultiFormatPipelineStep
         int textureSize = pipelineContext.GetHeightmapSize();
         int numGroups = (int)math.pow(2, groupScaleFactor);
         int numLinearThreads = groupSize * numGroups;
+        int texelsPerThread = textureSize / numLinearThreads; 
 
         Assert.IsTrue(textureSize % numLinearThreads == 0, "Texels must be distributed among threads evenly!");
+        Assert.IsTrue(texelsPerThread >= 4, "A thread must have at least 4 texels to porcess");
 
         int coreKernelIdx = erosionComputeShader.FindKernel("ThermalCoreEroder");
         int borderKernelIdx = erosionComputeShader.FindKernel("ThermalBorderEroder");
 
-        int texelsPerThreadSquared = (int)math.pow(textureSize / numLinearThreads, 2);
-        int permuteA = 1;
-        while (true)
-        {
-            permuteA += 2; //only odd numbers have a chance
-            int gcd = 0;
-            for (gcd = permuteA; gcd > 0; --gcd)
-            {
-                if ((texelsPerThreadSquared % gcd) == 0 && (permuteA % gcd) == 0)
-                {
-                    //largest so far, no need to seek further
-                    break;
-                }
-            }
-            if (gcd == 1)
-            {
-                break;
-            }
-        }
+        int texelsPerThreadSquared = (int)math.pow(texelsPerThread - 2, 2);
+        int permuteACore = GenerationUtilities.ComputeCoprime(texelsPerThreadSquared, 3);
+        int permuteAStripH = GenerationUtilities.ComputeCoprime(2 * texelsPerThread, 7);
+        int permuteAStripV = GenerationUtilities.ComputeCoprime(2 * (texelsPerThread - 2), 11);
 
         foreach (int kernelIdx in new[] { coreKernelIdx, borderKernelIdx })
         {
             pipelineContext.BindTexture(erosionComputeShader, kernelIdx, PID_resultHeightmap, pipelineContext.intermediateHeightmap);
         }
 
-        pipelineContext.SetUniformInt(erosionComputeShader, PID_texelsPerThread, textureSize / numLinearThreads);
+        pipelineContext.SetUniformInt(erosionComputeShader, PID_texelsPerThread, texelsPerThread);
         pipelineContext.SetUniformInt(erosionComputeShader, PID_permuteA, permuteA);
         pipelineContext.SetUniformFloat(erosionComputeShader, PID_distributionCoefficient, distributionCoefficient);
         pipelineContext.SetUniformFloat(erosionComputeShader, PID_talusThreshold, talusThreshold);

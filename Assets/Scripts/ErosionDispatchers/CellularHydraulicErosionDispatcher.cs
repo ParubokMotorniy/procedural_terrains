@@ -56,6 +56,7 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
         int permuteAStripH = GenerationUtilities.ComputeCoprime(2 * texelsPerThread, 7);
         int permuteAStripV = GenerationUtilities.ComputeCoprime(2 * (texelsPerThread - 2), 11);
 
+        Debug.Log("Texels per thread: " + texelsPerThread);
         Debug.Log(texelsPerThreadSquared + " coprime with " + permuteACore);
         Debug.Log((2 * texelsPerThread) + " coprime with " + permuteAStripH);
         Debug.Log((2 * (texelsPerThread - 2)) + " coprime with " + permuteAStripV);
@@ -95,7 +96,7 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, borderKernelIdx, dispatchGroups);
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, waterEvaporatorKernelIdx, dispatchGroups);
         }
-        pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, finalWaterEvaporatorKernelIdx, dispatchGroups);
+        // pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, finalWaterEvaporatorKernelIdx, dispatchGroups);
     }
 
     public override void StepConclusion(PipelineContext pipelineContext) { }

@@ -185,7 +185,6 @@ void applyKernel(int2 processedTexel)
         int2 processedTexel = topLeftCorner + int2(x, y);
 
         applyKernel(processedTexel);
-
         AllMemoryBarrier();
     }
 }
