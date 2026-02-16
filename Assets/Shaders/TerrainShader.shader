@@ -11,7 +11,6 @@ Shader "Custom/TerrainShader"
     {
         Tags { "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" "Queue" = "Geometry" }
         //TODO: add runtime wiremesh rendering. Probably with geometry shaders for I don't want to waste bandwidht of GPU passing extra vertex attributes around.
-        //TODO: fix exploding specularity
 
         Pass
         {
@@ -84,7 +83,7 @@ Shader "Custom/TerrainShader"
             };
 
             static const float isoColorStep = 0.2;
-            static const half3 ambientLight = half3(0.243, 0.388, 0.227);
+            static const half3 ambientLight = half3(0.208, 0.251, 0.349);
             
             TEXTURE2D(_HeightMap);
             SAMPLER(sampler_HeightMap);
@@ -144,7 +143,9 @@ Shader "Custom/TerrainShader"
                     ).r;
                 dv /= 2.0 * _HeightMap_TexelSize.y;
 
-                OUT.normal = TransformObjectToWorldNormal(float3(-du, 1.0, -dv));
+                // inCopy.normalOS = normalize(float3(-du, 1.0, -dv));
+
+                OUT.normal = TransformObjectToWorldNormal(float3(du, 1.0, dv));
                 OUT.positionHCS = TransformObjectToHClip(positionOS);
                 OUT.positionWS = TransformObjectToWorld(positionOS);
                 OUT.uv = TRANSFORM_TEX(IN.uv, _HeightMap);
@@ -178,13 +179,16 @@ Shader "Custom/TerrainShader"
                 float4 shadowCoord = TransformWorldToShadowCoord(IN.positionWS);
                 half shadowValue = MainLightRealtimeShadow(shadowCoord);
                 
-                float3 lightDirection = -GetMainLight().direction;
+                float3 lightDirection = GetMainLight().direction;
                 half3 lightColor = GetMainLight().color;
 
                 half3 diffuseComponent = LightingLambert(lightColor, lightDirection, actualNormal);
                 half3 specularComponent = LightingSpecular(lightColor, lightDirection, actualNormal, GetWorldSpaceNormalizeViewDir(IN.positionWS), vertexSpecularityAtLevel.xxxx, vertexSmoothnessAtLevel.xxxx); 
+                
+                half3 ambientComponent = ambientLight * vertexColorAtLevel; 
+                // half3 ambientComponent = half3(0.0, 0.0, 0.0); 
 
-                return half4( ambientLight * vertexColorAtLevel + (diffuseComponent + specularComponent) * vertexColorAtLevel * shadowValue, 1.0);
+                return half4( ambientComponent + (diffuseComponent + specularComponent) * vertexColorAtLevel * shadowValue, 1.0);
             }
 
             ENDHLSL
