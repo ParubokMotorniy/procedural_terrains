@@ -1,0 +1,53 @@
+#include "../Common/Utilities.hlsl"
+
+struct ErosionParticle
+{
+    float2 pos;
+    float2 dir;
+    float2 vel;
+    float w;
+    float s;
+};
+
+RWTexture2D<float> resultHeightmap;
+RWStructuredBuffer<ErosionParticle> particlesBuffer;
+uniform uint2 heightmapDimensions;
+uniform uint particlesPerThread;
+
+float2 computeUniformRandomCoordinates(uint2 targetCoordinates, int nonce)
+{
+    uint seed = seedFromXYPass(targetCoordinates.x, targetCoordinates.y, nonce);
+    float u1 = u01FromUint(pcgHash(seed));
+    float u2 = u01FromUint(pcgHash(seed ^ 0x68BC21EBu));
+    return float2(u1, u2);
+}
+
+// TODO: add a kernel that would eliminate dead particles and spawn new ones in their place
+
+#pragma kernel ParticlesInitializer
+[numthreads(64, 1, 1)] void ParticlesInitializer(uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupThreadID)
+{
+    uint threadRangeStart = globalId.x * particlesPerThread;
+    for (uint idx = 0; idx < particlesPerThread; ++idx)
+    {
+        uint processedParticleIdx = threadRangeStart + idx;
+        float2 uniformCoefficients = computeUniformRandomCoordinates(uint2(globalId.x, processedParticleIdx), groupId.x);
+
+        particlesBuffer[processedParticleIdx].pos = uniformCoefficients * (float2)heightmapDimensions;
+        particlesBuffer[processedParticleIdx].dir = float2(0.0, 0.0);
+        particlesBuffer[processedParticleIdx].vel = float2(0.0, 0.0);
+        particlesBuffer[processedParticleIdx].w = 0.0;
+        particlesBuffer[processedParticleIdx].s = 0.0;
+    }
+}
+
+#pragma kernel Integrator
+    [numthreads(64, 1, 1)] void Integrator(uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupThreadID)
+{
+    uint threadRangeStart = globalId.x * particlesPerThread;
+    for (uint idx = 0; idx < particlesPerThread; ++idx)
+    {
+        uint processedParticleIdx = threadRangeStart + idx;
+        resultHeightmap[(uint2)particlesBuffer[processedParticleIdx].pos] = 1.0;
+    }
+}

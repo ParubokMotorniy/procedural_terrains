@@ -45,6 +45,8 @@ namespace GenerationPipeline
         //TODO: instead of manually selecting the number of threads to dispatch, I may want to compile my compute shaders in multiple variants with unity-keywords system. 
         // However, that can be postponed I believe owing to the complexity of writing code with tons of defines
 
+        //TODO: getting rid of two-step grid iteration in erosion algos improves appearance but introduces non-conservitivity and races
+
         //TODO: devise a scheme to reconcile different number of threads, groups and texture sizes
         [ContextMenu("Regenerate terrain")]
         async void RegenerateTerrain()

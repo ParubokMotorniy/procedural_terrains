@@ -8,6 +8,7 @@ uniform int texelsPerThread;
 uniform int iterationIdx;
 uniform float solubilityConstant;
 uniform float evaporationConstant;
+uniform float rainNoiseFrequency;
 
 uniform float2 randomSeeds;
 
@@ -17,6 +18,8 @@ uniform uint permuteAStripV;
 
 static const float EPS = 1.0e-6;
 static const float HEIGHT_EPS = 1.0e-5; // texels differing by less are assumed to be at the same level
+
+//TODO: try to adjust erosion by the slope value
 
 float computeUniformFloat(uint2 targetTextureCoordinates, int passId)
 {
@@ -58,7 +61,7 @@ float computeUniformFloat(uint2 targetTextureCoordinates, int passId)
             float currentHeight = resultHeightmap[processedTexel_i];
             float maxAllowedExtraWater = currentHeight / solubilityConstant;
 
-            float extraRainWater = min(maxAllowedExtraWater, pinkNoise2D((float2)processedTexel + randomSeeds * (float2)heightmapDimensions));
+            float extraRainWater = min(maxAllowedExtraWater, pinkNoise2D(((float2)processedTexel + randomSeeds * (float2)heightmapDimensions) * rainNoiseFrequency));
 
             // this can break assumption that water always contain the same concentration of sediment (if more water falls than there is sediment to be fit into that volume). Thus clamping is needed.
             waterLevel[lin] = extraRainWater + currentWaterLevel;                                              // step 1

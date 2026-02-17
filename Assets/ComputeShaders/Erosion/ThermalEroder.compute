@@ -21,6 +21,8 @@ float computeUniformFloat(uint2 targetTextureCoordinates, int passId)
     return u01FromUint(pcgHash(seed));
 }
 
+//TODO: try to itroduce hardness map
+
 // diagonal texels are further away from the kernel center, and so we assume they receive less material than direct neighbors
 static const float heightDistributionDistanceCoefficients[3][3] =
     {

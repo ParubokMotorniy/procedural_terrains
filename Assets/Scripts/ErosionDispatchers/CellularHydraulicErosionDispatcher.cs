@@ -20,6 +20,9 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
     [Range(0.001f, 1.0f)]
     public float evaporationConstant;
 
+    [Range(0.001f, 1.0f)]
+    public float rainNoiseFrequency = 0.25f;
+
     private const int groupSize = 32;
 
     private ComputeBuffer waterLevelBuffer;
@@ -35,6 +38,7 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
     private static readonly int PID_heightmapDimensions = Shader.PropertyToID("heightmapDimensions");
     private static readonly int PID_randomSeeds = Shader.PropertyToID("randomSeeds");
     private static readonly int PID_iterationIdx = Shader.PropertyToID("iterationIdx");
+    private static readonly int PID_rainNoiseFrequency = Shader.PropertyToID("rainNoiseFrequency");
 
     public override InputExpectations GetStepExpectations()
         => InputExpectations.HeightMapNormalized;
@@ -80,6 +84,8 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
         pipelineContext.SetUniformInts(erosionComputeShader, PID_heightmapDimensions, new int[2] { textureSize, textureSize });
         pipelineContext.SetUniformFloat(erosionComputeShader, PID_evaporationConstant, evaporationConstant);
         pipelineContext.SetUniformFloat(erosionComputeShader, PID_solubilityConstant, solubilityConstant);
+        pipelineContext.SetUniformFloat(erosionComputeShader, PID_rainNoiseFrequency, rainNoiseFrequency);
+    
 
         pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, resourceInitializerKernelIdx, dispatchGroups);
         for (int d = 0; d < erosionIterationLimit; ++d)
