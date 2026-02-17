@@ -15,8 +15,6 @@ uniform float fractalDimension;
 
 uniform int2 randomSeeds;
 
-static const float EPS = 1.0e-7;
-
 float2 computeUniformRandomCoordinates(uint2 targetTextureCoordinates, int passId)
 {
     uint seed = seedFromXYPass(targetTextureCoordinates.x, targetTextureCoordinates.y, passId);

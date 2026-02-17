@@ -1,6 +1,7 @@
 
 #define PI 3.141592654
 #define TWO_PI 6.283185307
+#define EPS 1.0e-7
 
 int2 terrainWrap(int2 a, int2 b)
 {

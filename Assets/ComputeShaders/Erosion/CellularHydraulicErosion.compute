@@ -16,7 +16,6 @@ uniform uint permuteACore;
 uniform uint permuteAStripH;
 uniform uint permuteAStripV;
 
-static const float EPS = 1.0e-6;
 static const float HEIGHT_EPS = 1.0e-5; // texels differing by less are assumed to be at the same level
 
 //TODO: try to adjust erosion by the slope value
