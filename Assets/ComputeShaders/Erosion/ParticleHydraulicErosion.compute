@@ -24,12 +24,16 @@ uniform float evaporation;
 uniform int erosionNeighborhood; // for 3x3 grid that would be 1, for 5x5 - 2
 uniform float erosionDistanceSumPrecompute;
 uniform int2 randomInts;
+uniform float waterDeathThreshold;
+
+// TODO: address thread conflicts (maybe, this is an opportunity for some kinf of change map)
+// TODO: add hardness parameter
 
 bool checkParticleIsValid(ErosionParticle particle)
 {
     float2 particlePos = particle.pos;
 
-    return (particlePos.x >= 0.0 && particlePos.y >= 0.0) && (particlePos.x < (float)heightmapDimensions.x && particlePos.y < (float)heightmapDimensions.y) && particle.w > 0.0;
+    return (particlePos.x >= 0.0 && particlePos.y >= 0.0) && (particlePos.x < (float)heightmapDimensions.x && particlePos.y < (float)heightmapDimensions.y) && particle.w > waterDeathThreshold;
 }
 
 float sampleHeightmapBilinear(float2 coord)
@@ -101,8 +105,31 @@ float2 computeUniformRandomCoordinates(uint2 targetCoordinates, int nonce)
     return float2(max(u1, EPS), max(u2, EPS));
 }
 
+#pragma kernel GarbageCollector
+[numthreads(64, 1, 1)] void GarbageCollector(uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupThreadID)
+{
+    uint threadRangeStart = globalId.x * particlesPerThread;
+
+    for (uint idx = 0; idx < particlesPerThread; ++idx)
+    {
+        uint processedParticleIdx = threadRangeStart + idx;
+        if (checkParticleIsValid(particlesBuffer[processedParticleIdx]))
+            continue;
+
+        // reinitialize a dead particle
+        float2 uniformCoefficients = computeUniformRandomCoordinates(uint2(globalId.x, processedParticleIdx), randomInts.x + randomInts.y);
+        float dropSize = abs(sampleGaussBoxMuller(uniformCoefficients));
+
+        particlesBuffer[processedParticleIdx].pos = uniformCoefficients * (float2)heightmapDimensions;
+        particlesBuffer[processedParticleIdx].dir = float2(0.0, 0.0);
+        particlesBuffer[processedParticleIdx].vel = dropSize;
+        particlesBuffer[processedParticleIdx].w = dropSize;
+        particlesBuffer[processedParticleIdx].s = 0.0;
+    }
+}
+
 #pragma kernel ParticlesInitializer
-[numthreads(64, 1, 1)] void ParticlesInitializer(uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupThreadID)
+    [numthreads(64, 1, 1)] void ParticlesInitializer(uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupThreadID)
 {
     uint threadRangeStart = globalId.x * particlesPerThread;
 
@@ -122,7 +149,7 @@ float2 computeUniformRandomCoordinates(uint2 targetCoordinates, int nonce)
 }
 
 #pragma kernel Integrator
-    [numthreads(64, 1, 1)] void Integrator(uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupThreadID)
+[numthreads(64, 1, 1)] void Integrator(uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupThreadID)
 {
     uint threadRangeStart = globalId.x * particlesPerThread;
 
