@@ -12,8 +12,8 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
     [Range(1, 3)]
     public int groupScaleFactor = 0;
 
-    [Range(100, 1000)]
-    public int numSimultaneousParticles = 0;
+    [Range(10, 32)]
+    public int numSimultaneousParticles = 10;
 
     [Range(0.01f, 1.0f)]
     public float inertia = 0.1f;
@@ -36,7 +36,7 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
     [Range(0.01f, 1.0f)]
     public float evaporation = 0.02f;
 
-    [Range(0, 3)]
+    [Range(1, 3)]
     public int erosionNeighborhood = 0;
 
     [Range(1, 1000)]
@@ -82,16 +82,17 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
         int textureSize = pipelineContext.GetHeightmapSize();
         int numGroups = (int)math.pow(2, groupScaleFactor);
         int numLinearThreads = groupSize * numGroups;
-        int particlesPerThread = numSimultaneousParticles / numLinearThreads;
+        int numActualParticles = (int)math.pow(2, numSimultaneousParticles);
+        int particlesPerThread = numActualParticles / numLinearThreads;
         var dispatchGroups = new Vector3(numGroups, 1, 1);
 
-        Assert.IsTrue(numSimultaneousParticles % numLinearThreads == 0, "Particles must be distributed among threads evenly!");
+        Assert.IsTrue(numActualParticles % numLinearThreads == 0, "Particles must be distributed among threads evenly!");
 
         int particlesInitializerKernelIdx = erosionComputeShader.FindKernel("ParticlesInitializer");
         int integratorKernelIdx = erosionComputeShader.FindKernel("Integrator");
 
         Debug.LogWarning("Size of a particle struct: " + Marshal.SizeOf<ErosionParticle>());
-        particlesBuffer = new ComputeBuffer(numSimultaneousParticles, Marshal.SizeOf<ErosionParticle>());
+        particlesBuffer = new ComputeBuffer(numActualParticles, Marshal.SizeOf<ErosionParticle>());
         Assert.IsTrue(particlesBuffer.IsValid());
 
         foreach (int kernelIdx in new[] { particlesInitializerKernelIdx, integratorKernelIdx })
@@ -101,11 +102,14 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
         }
 
         float erosionDistanceSumPrecompute = 0.0f;
-        for (int x = -erosionNeighborhood; x <= erosionNeighborhood; ++x)
         {
-            for (int y = -erosionNeighborhood; y <= erosionNeighborhood; ++y)
+            float actualNeighborRadius = 1.5f * erosionNeighborhood;
+            for (int x = -1 * erosionNeighborhood; x <= erosionNeighborhood; ++x)
             {
-                erosionDistanceSumPrecompute += erosionNeighborhood - math.sqrt(x * x + y * y);
+                for (int y = -1 * erosionNeighborhood; y <= erosionNeighborhood; ++y)
+                {
+                    erosionDistanceSumPrecompute += actualNeighborRadius - math.sqrt(x * x + y * y);
+                }
             }
         }
 
