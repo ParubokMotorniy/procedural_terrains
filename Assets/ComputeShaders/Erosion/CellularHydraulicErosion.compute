@@ -19,6 +19,7 @@ uniform uint permuteAStripV;
 static const float HEIGHT_EPS = 1.0e-5; // texels differing by less are assumed to be at the same level
 
 //TODO: try to adjust erosion by the slope value
+//TODO: try to threshold the amount of water added each step (< t -> =0)
 
 float computeUniformFloat(uint2 targetTextureCoordinates, int passId)
 {

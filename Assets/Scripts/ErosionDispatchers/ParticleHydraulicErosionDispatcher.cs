@@ -15,6 +15,33 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
     [Range(100, 1000)]
     public int numSimultaneousParticles = 0;
 
+    [Range(0.01f, 1.0f)]
+    public float inertia = 0.01f;
+
+    [Range(0.01f, 100.0f)]
+    public float capacity = 0.01f;
+
+    [Range(0.01f, 1.0f)]
+    public float minSlope = 0.01f;
+
+    [Range(0.01f, 1.0f)]
+    public float deposition = 0.01f;
+
+    [Range(0.01f, 1.0f)]
+    public float erosion = 0.01f;
+
+    [Range(0.01f, 1.0f)]
+    public float gravity = 0.01f;
+
+    [Range(0.01f, 1.0f)]
+    public float evaporation = 0.01f;
+    
+    [Range(0, 3)]
+    public int erosionNeighborhood = 0;
+
+    [Range(1, 1000)]
+    public int numSimulationSteps = 1;
+
     private const int groupSize = 64;
 
     //TODO: add extra field for limiting number of steps
@@ -23,7 +50,7 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
     {
         Vector2 pos;
         Vector2 dir;
-        Vector2 vel;
+        float vel;
         float w;
         float s;
     };
@@ -34,7 +61,16 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
     private static readonly int PID_particlesBuffer = Shader.PropertyToID("particlesBuffer");
     private static readonly int PID_particlesPerThread = Shader.PropertyToID("particlesPerThread");
     private static readonly int PID_heightmapDimensions = Shader.PropertyToID("heightmapDimensions");
-    private static readonly int PID_randomSeeds = Shader.PropertyToID("randomSeeds");
+    private static readonly int PID_inertia = Shader.PropertyToID("inertia");
+    private static readonly int PID_capacity = Shader.PropertyToID("capacity");
+    private static readonly int PID_minSlope = Shader.PropertyToID("minSlope");
+    private static readonly int PID_deposition = Shader.PropertyToID("deposition");
+    private static readonly int PID_erosion = Shader.PropertyToID("erosion");
+    private static readonly int PID_gravity = Shader.PropertyToID("gravity");
+    private static readonly int PID_evaporation = Shader.PropertyToID("evaporation");
+    private static readonly int PID_erosionNeighborhood = Shader.PropertyToID("erosionNeighborhood");
+    private static readonly int PID_erosionDistanceSumPrecompute = Shader.PropertyToID("erosionDistanceSumPrecompute");
+    // private static readonly int PID_randomSeeds = Shader.PropertyToID("randomSeeds");
 
     public override InputExpectations GetStepExpectations()
         => InputExpectations.HeightMapNormalized;
@@ -54,6 +90,7 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
         int particlesInitializerKernelIdx = erosionComputeShader.FindKernel("ParticlesInitializer");
         int integratorKernelIdx = erosionComputeShader.FindKernel("Integrator");
 
+        Debug.Log("Size of a particle struct: " + Marshal.SizeOf<ErosionParticle>());
         particlesBuffer = new ComputeBuffer(numSimultaneousParticles, Marshal.SizeOf<ErosionParticle>());
         Assert.IsTrue(particlesBuffer.IsValid());
 
@@ -63,11 +100,33 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
             pipelineContext.BindComputeBuffer(erosionComputeShader, kernelIdx, PID_particlesBuffer, particlesBuffer);
         }
 
+        float erosionDistanceSumPrecompute = 0.0f;
+        for (int x = -erosionNeighborhood; x <= erosionNeighborhood; ++x)
+        {
+            for (int y = -erosionNeighborhood; y <= erosionNeighborhood; ++y)
+            {
+                erosionDistanceSumPrecompute += erosionNeighborhood - math.sqrt(x * x + y * y);
+            }
+        }
+
         pipelineContext.SetUniformInt(erosionComputeShader, PID_particlesPerThread, particlesPerThread);
         pipelineContext.SetUniformInts(erosionComputeShader, PID_heightmapDimensions, new int[] { textureSize, textureSize });
 
+        pipelineContext.SetUniformFloat(erosionComputeShader, PID_inertia, inertia);
+        pipelineContext.SetUniformFloat(erosionComputeShader, PID_capacity, capacity);
+        pipelineContext.SetUniformFloat(erosionComputeShader, PID_minSlope, minSlope);
+        pipelineContext.SetUniformFloat(erosionComputeShader, PID_deposition, deposition);
+        pipelineContext.SetUniformFloat(erosionComputeShader, PID_erosion, erosion);
+        pipelineContext.SetUniformFloat(erosionComputeShader, PID_gravity, gravity);
+        pipelineContext.SetUniformFloat(erosionComputeShader, PID_evaporation, evaporation);
+        pipelineContext.SetUniformFloat(erosionComputeShader, PID_erosionNeighborhood, erosionNeighborhood);
+        pipelineContext.SetUniformFloat(erosionComputeShader, PID_erosionDistanceSumPrecompute, erosionDistanceSumPrecompute);
+
         pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, particlesInitializerKernelIdx, dispatchGroups);
-        pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, integratorKernelIdx, dispatchGroups);
+        for (int s = 0; s < numSimulationSteps; ++s)
+        {
+            pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, integratorKernelIdx, dispatchGroups);
+        }
     }
 
     public override void StepConclusion(PipelineContext pipelineContext) { }

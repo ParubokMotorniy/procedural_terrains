@@ -4,7 +4,7 @@ struct ErosionParticle
 {
     float2 pos;
     float2 dir;
-    float2 vel;
+    float vel;
     float w;
     float s;
 };
@@ -76,7 +76,7 @@ void depositSediment(int2 erosionCenter, float amountToDeposit)
         for (int y = -1; y <= 1; ++y)
         {
             uint2 affectedNeighborCoefficient = erosionCenter + int2(x, y);
-            resultHeightmap[affectedNeighborCoefficient] += !(x == y) * uniformWeight * amountToDeposit;
+            resultHeightmap[affectedNeighborCoefficient] += !(x == y && x != 0) * uniformWeight * amountToDeposit;
         }
     }
 }
@@ -101,11 +101,11 @@ float2 computeUniformRandomCoordinates(uint2 targetCoordinates, int nonce)
     {
         uint processedParticleIdx = threadRangeStart + idx;
         float2 uniformCoefficients = computeUniformRandomCoordinates(uint2(globalId.x, processedParticleIdx), groupId.x);
-        float dropSize = sampleGaussBoxMuller(uniformCoefficients);
+        float dropSize = abs(sampleGaussBoxMuller(uniformCoefficients));
 
         particlesBuffer[processedParticleIdx].pos = uniformCoefficients * (float2)heightmapDimensions;
         particlesBuffer[processedParticleIdx].dir = float2(0.0, 0.0);
-        particlesBuffer[processedParticleIdx].vel = float2(0.0, 0.0);
+        particlesBuffer[processedParticleIdx].vel = 0.0;
         particlesBuffer[processedParticleIdx].w = dropSize;
         particlesBuffer[processedParticleIdx].s = 0.0;
     }
@@ -119,17 +119,19 @@ float2 computeUniformRandomCoordinates(uint2 targetCoordinates, int nonce)
     {
         uint processedParticleIdx = threadRangeStart + idx;
 
+        // resultHeightmap[particlesBuffer[processedParticleIdx].pos] = particlesBuffer[processedParticleIdx].w; 
         if (!checkParticleIsValid(particlesBuffer[processedParticleIdx]))
             continue;
 
         float2 oldParticlePosition = particlesBuffer[processedParticleIdx].pos;
-        float2 oldParticleVelocity = particlesBuffer[processedParticleIdx].vel;
+        float oldParticleVelocity = particlesBuffer[processedParticleIdx].vel;
         float oldSedimentValue = particlesBuffer[processedParticleIdx].s;
+        float oldWaterValue = particlesBuffer[processedParticleIdx].w;
 
         uint2 floorOldParticlePosition = floor(oldParticlePosition);
         float2 interpolationCoefficients = frac(oldParticlePosition);
 
-        float2 currentGradient = float2((resultHeightmap[terrainWrap(heightmapDimensions, floorOldParticlePosition + uint2(1, 0))] - resultHeightmap[floorOldParticlePosition]) * (1 - interpolationCoefficients.x) + (resultHeightmap[terrainWrap(heightmapDimensions, floorOldParticlePosition + uint2(1, 1))] - resultHeightmap[terrainWrap(heightmapDimensions, floorOldParticlePosition + uint2(0, 1))]) * interpolationCoefficients.x, (resultHeightmap[terrainWrap(heightmapDimensions, floorOldParticlePosition + uint2(0, 1))] - resultHeightmap[floorOldParticlePosition]) * (1 - interpolationCoefficients.y) + (resultHeightmap[terrainWrap(heightmapDimensions, floorOldParticlePosition + uint2(1, 1))] - resultHeightmap[terrainWrap(heightmapDimensions, floorOldParticlePosition + uint2(1, 0))]) * interpolationCoefficients.y);
+        float2 currentGradient = float2((resultHeightmap[terrainWrap(heightmapDimensions, floorOldParticlePosition + uint2(1, 0))] - resultHeightmap[floorOldParticlePosition]) * (1 - interpolationCoefficients.y) + (resultHeightmap[terrainWrap(heightmapDimensions, floorOldParticlePosition + uint2(1, 1))] - resultHeightmap[terrainWrap(heightmapDimensions, floorOldParticlePosition + uint2(0, 1))]) * interpolationCoefficients.y, (resultHeightmap[terrainWrap(heightmapDimensions, floorOldParticlePosition + uint2(0, 1))] - resultHeightmap[floorOldParticlePosition]) * (1 - interpolationCoefficients.x) + (resultHeightmap[terrainWrap(heightmapDimensions, floorOldParticlePosition + uint2(1, 1))] - resultHeightmap[terrainWrap(heightmapDimensions, floorOldParticlePosition + uint2(1, 0))]) * interpolationCoefficients.x);
 
         float2 newParticleDirection = normalize(particlesBuffer[processedParticleIdx].dir * inertia - currentGradient * (1.0 - inertia));
         float2 newParticlePosition = oldParticlePosition + newParticleDirection;
@@ -148,7 +150,7 @@ float2 computeUniformRandomCoordinates(uint2 targetCoordinates, int nonce)
         }
         else
         {
-            float newCapacity = max(-heightDelta, minSlope) * oldParticleVelocity * particlesBuffer[processedParticleIdx].w * capacity;
+            float newCapacity = max(-heightDelta, minSlope) * oldParticleVelocity * oldWaterValue * capacity;
             if (oldSedimentValue > newCapacity)
             {
                 // TODO: drop sediment at old pos
@@ -165,14 +167,14 @@ float2 computeUniformRandomCoordinates(uint2 targetCoordinates, int nonce)
             }
         }
 
-        float2 newParticleVelocity = sqrt(oldParticleVelocity * oldParticleVelocity + heightDelta * gravity);
-        float newW = particlesBuffer[processedParticleIdx].w * (1 - evaporation);
+        float newParticleVelocity = sqrt(max(oldParticleVelocity * oldParticleVelocity - heightDelta * gravity, 0.0));
+        float newW = oldWaterValue * (1 - evaporation);
 
         // TODO: actually update all parameters of the particle
         particlesBuffer[processedParticleIdx].pos = newParticlePosition;
         particlesBuffer[processedParticleIdx].dir = newParticleDirection;
         particlesBuffer[processedParticleIdx].vel = newParticleVelocity;
         particlesBuffer[processedParticleIdx].w = newW;
-        particlesBuffer[processedParticleIdx].s = max(particlesBuffer[processedParticleIdx].s + sedimentValueUpdate, 0.0);
+        particlesBuffer[processedParticleIdx].s = max(oldSedimentValue + sedimentValueUpdate, 0.0);
     }
 }
