@@ -618,15 +618,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6a05cec52a91ddfa19dd37485cd50122, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GenerationPipeline.TerrainGenerator
-  terrainSize: 10
-  terrainScale: 0.25
+  terrainSize: 9
+  terrainScale: 1
   enableProfiling: 0
-  generatorSeed: 748674
-  dumpTextures: 0
+  generatorSeed: 2147483647
+  dumpTextures: 1
   useTestTexture: 0
   testTexture: {fileID: 2800000, guid: 14fa032c7256704c8a0ead7b71566301, type: 3}
   pipelineSteps:
-  - {fileID: 360891026}
+  - {fileID: 1592727441}
   - {fileID: 2081510694}
 --- !u!4 &385078007
 Transform:
@@ -853,7 +853,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _HeightMap:
-        m_Texture: {fileID: 1377267245}
+        m_Texture: {fileID: 1187630532}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _Heightmap:
@@ -912,7 +912,7 @@ Material:
     - _GlossMapScale: 0
     - _Glossiness: 0
     - _GlossyReflections: 0
-    - _HeightScale: 0.25
+    - _HeightScale: 1
     - _Metallic: 0
     - _OcclusionStrength: 1
     - _Parallax: 0.005
@@ -1133,7 +1133,7 @@ Transform:
   - {fileID: 1592727440}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!84 &1377267245
+--- !u!84 &1187630532
 RenderTexture:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -1145,8 +1145,8 @@ RenderTexture:
     Hash: 00000000000000000000000000000000
   m_IsAlphaChannelOptional: 0
   serializedVersion: 6
-  m_Width: 1024
-  m_Height: 1024
+  m_Width: 512
+  m_Height: 512
   m_AntiAliasing: 1
   m_MipCount: -1
   m_DepthStencilFormat: 0
@@ -1364,16 +1364,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ParticleHydraulicErosionDispatcher
   erosionComputeShader: {fileID: 7200000, guid: 9225322c08a776a9f920190d22c7f260, type: 3}
   groupScaleFactor: 2
-  numSimultaneousParticles: 512
-  inertia: 0.01
-  capacity: 0.01
-  minSlope: 0.01
-  deposition: 0.01
-  erosion: 0.01
-  gravity: 0.01
-  evaporation: 0.01
+  numSimultaneousParticles: 256
+  inertia: 0.1
+  capacity: 10
+  minSlope: 0.03
+  deposition: 0.7
+  erosion: 0.35
+  gravity: 0.4
+  evaporation: 0.02
   erosionNeighborhood: 0
-  numSimulationSteps: 100
+  numSimulationSteps: 10
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

@@ -16,25 +16,25 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
     public int numSimultaneousParticles = 0;
 
     [Range(0.01f, 1.0f)]
-    public float inertia = 0.01f;
+    public float inertia = 0.1f;
 
     [Range(0.01f, 100.0f)]
-    public float capacity = 0.01f;
+    public float capacity = 10.0f;
 
     [Range(0.01f, 1.0f)]
-    public float minSlope = 0.01f;
+    public float minSlope = 0.03f;
 
     [Range(0.01f, 1.0f)]
-    public float deposition = 0.01f;
+    public float deposition = 0.7f;
 
     [Range(0.01f, 1.0f)]
-    public float erosion = 0.01f;
+    public float erosion = 0.35f;
 
     [Range(0.01f, 1.0f)]
-    public float gravity = 0.01f;
+    public float gravity = 0.4f;
 
     [Range(0.01f, 1.0f)]
-    public float evaporation = 0.01f;
+    public float evaporation = 0.02f;
     
     [Range(0, 3)]
     public int erosionNeighborhood = 0;
@@ -90,7 +90,7 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
         int particlesInitializerKernelIdx = erosionComputeShader.FindKernel("ParticlesInitializer");
         int integratorKernelIdx = erosionComputeShader.FindKernel("Integrator");
 
-        Debug.Log("Size of a particle struct: " + Marshal.SizeOf<ErosionParticle>());
+        Debug.LogWarning("Size of a particle struct: " + Marshal.SizeOf<ErosionParticle>());
         particlesBuffer = new ComputeBuffer(numSimultaneousParticles, Marshal.SizeOf<ErosionParticle>());
         Assert.IsTrue(particlesBuffer.IsValid());
 
