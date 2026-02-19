@@ -41,7 +41,7 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
     public float waterDeathThreshold = 0.05f;
 
     [Range(1, 3)]
-    public int erosionNeighborhood = 0;
+    public int erosionNeighborhood = 1;
 
     [Range(1, 1000)]
     public int numSimulationSteps = 1;
@@ -164,6 +164,7 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
 
         {
             int garbageCollectorRunPeriod = (int)math.floor(math.log2(2 * waterDeathThreshold) / math.log2(1.0f - evaporation));
+            Assert.IsTrue(math.abs(evaporation) >= 1.0e-5 && math.abs(waterDeathThreshold - 0.5) >= 1.0e-5, "Broken GC period");
             Debug.LogWarning("GC period: " + garbageCollectorRunPeriod);
             for (int w = 0; w < numSimulationWaves; ++w)
             {

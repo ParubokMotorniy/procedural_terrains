@@ -25,6 +25,8 @@ static const uint2 pipeMap[7][7] =
         {uint2(1, 2), uint2(1, 2), uint2(0, 2), uint2(0, 1), uint2(0, 0), uint2(1, 0), uint2(1, 0)},
         {uint2(0, 2), uint2(0, 2), uint2(0, 1), uint2(0, 1), uint2(0, 1), uint2(0, 0), uint2(0, 0)},
         {uint2(0, 2), uint2(0, 2), uint2(0, 1), uint2(0, 1), uint2(0, 1), uint2(0, 0), uint2(0, 0)}};
+static const int pipeMapCenterCoord = 3;
+static const int PLAIN_HEIGHT_THRESHOLD = 1.0e-3;
 
 RWTexture2D<float> resultHeightmap;
 RWStructuredBuffer<ErosionParticle> particlesBuffer;
@@ -45,7 +47,6 @@ uniform float erosionDistanceSumPrecompute;
 uniform int2 randomInts;
 uniform float waterDeathThreshold;
 
-// TODO: address thread conflicts (maybe, this is an opportunity for some kinf of change map)
 // TODO: add hardness parameter
 
 bool checkParticleIsValid(ErosionParticle particle)
@@ -93,7 +94,7 @@ float removeSediment(int2 erosionCenter, float targetAmountToRemove)
 
             actualSedimentRemoved += localAmountRemoved;
 
-            uint2 targetOutPipe = pipeMap[x + erosionNeighborhood][y + erosionNeighborhood];
+            uint2 targetOutPipe = pipeMap[x + pipeMapCenterCoord][y + pipeMapCenterCoord];
             pipesBuffer[index2dTo1d(heightmapDimensions, affectedNeighborCoordinate)].outPipes[targetOutPipe.x][targetOutPipe.y] += localAmountRemoved;
 
             // resultHeightmap[affectedNeighborCoefficient] = max(0.0, currentTexeleHeight - localAmountRemoved);
@@ -113,7 +114,7 @@ void depositSediment(int2 erosionCenter, float amountToDeposit)
         {
             uint2 affectedNeighborCoordinates = terrainWrap(erosionCenter + int2(x, y), heightmapDimensions);
             float increment = ((x == y && x != 0) ? 0.0 : 1.0) * uniformWeight * amountToDeposit;
-            uint2 targetInPipe = pipeMap[x + 1][y + 1];
+            uint2 targetInPipe = pipeMap[x + pipeMapCenterCoord][y + pipeMapCenterCoord];
             pipesBuffer[index2dTo1d(heightmapDimensions, affectedNeighborCoordinates)].inPipes[targetInPipe.x][targetInPipe.y] += increment;
             // resultHeightmap[affectedNeighborCoordinates] += increment;
         }
@@ -161,6 +162,7 @@ float2 computeUniformRandomCoordinates(uint2 targetCoordinates, int nonce)
     {
         uint processedParticleIdx = threadRangeStart + idx;
 
+        // TODO: drop particles basing on pink noise
         float2 uniformCoefficients = computeUniformRandomCoordinates(uint2(globalId.x, processedParticleIdx), randomInts.x + randomInts.y);
         float dropSize = abs(sampleGaussBoxMuller(uniformCoefficients));
 
@@ -185,8 +187,8 @@ float2 computeUniformRandomCoordinates(uint2 targetCoordinates, int nonce)
             {
                 for (int pY = 0; pY < 3; ++pY)
                 {
-                    pipesBuffer[targetTexelLin].outPipes[x][y] = 0.0;
-                    pipesBuffer[targetTexelLin].inPipes[x][y] = 0.0;
+                    pipesBuffer[targetTexelLin].outPipes[pX][pY] = 0.0;
+                    pipesBuffer[targetTexelLin].inPipes[pX][pY] = 0.0;
                 }
             }
         }
@@ -243,12 +245,12 @@ float2 computeUniformRandomCoordinates(uint2 targetCoordinates, int nonce)
         float heightDelta = newHeight - oldHeight;
 
         float sedimentValueUpdate = 0.0;
-        if (heightDelta > EPS)
+        if (heightDelta > PLAIN_HEIGHT_THRESHOLD)
         {
             depositSediment(floorInt, oldSedimentValue);
             sedimentValueUpdate = -oldSedimentValue;
         }
-        else if (heightDelta < -EPS)
+        else if (heightDelta < -PLAIN_HEIGHT_THRESHOLD)
         {
             float newCapacity = max(-heightDelta, minSlope) * oldParticleVelocity * oldWaterValue * capacity;
             // resultHeightmap[(int2)floor(oldParticlePosition)] = newCapacity;
@@ -267,7 +269,7 @@ float2 computeUniformRandomCoordinates(uint2 targetCoordinates, int nonce)
             } // else the drop carries just enough sediment
         } // else the change of height is negligible
 
-        float newParticleVelocity = sqrt(max(oldParticleVelocity * oldParticleVelocity - heightDelta * gravity, 0.0));
+        float newParticleVelocity = sqrt(abs(oldParticleVelocity * oldParticleVelocity - heightDelta * gravity));
         float newW = max(oldWaterValue * (1 - evaporation), 0.0);
 
         particlesBuffer[processedParticleIdx].pos = newParticlePosition;
@@ -296,8 +298,8 @@ float2 computeUniformRandomCoordinates(uint2 targetCoordinates, int nonce)
             {
                 for (int pY = 0; pY < 3; ++pY)
                 {
-                    totalSedimentRemoved += pipesBuffer[targetTexelLin].outPipes[x][y];
-                    totalSedimentAdded += pipesBuffer[targetTexelLin].inPipes[x][y];
+                    totalSedimentRemoved += pipesBuffer[targetTexelLin].outPipes[pX][pY];
+                    totalSedimentAdded += pipesBuffer[targetTexelLin].inPipes[pX][pY];
                 }
             }
 

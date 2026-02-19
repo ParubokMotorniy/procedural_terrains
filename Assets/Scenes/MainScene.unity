@@ -623,10 +623,9 @@ MonoBehaviour:
   enableProfiling: 0
   generatorSeed: 576
   dumpTextures: 0
-  useTestTexture: 0
-  testTexture: {fileID: 2800000, guid: 14fa032c7256704c8a0ead7b71566301, type: 3}
+  useTestTexture: 1
+  testTexture: {fileID: 2800000, guid: b41b9ee7e6cd54a8a92533da387d527d, type: 3}
   pipelineSteps:
-  - {fileID: 1592727441}
   - {fileID: 2081510694}
 --- !u!4 &385078007
 Transform:
@@ -853,7 +852,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _HeightMap:
-        m_Texture: {fileID: 1948484823}
+        m_Texture: {fileID: 1319506455}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _Heightmap:
@@ -1133,6 +1132,43 @@ Transform:
   - {fileID: 1592727440}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!84 &1319506455
+RenderTexture:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: 
+  m_ImageContentsHash:
+    serializedVersion: 2
+    Hash: 00000000000000000000000000000000
+  m_IsAlphaChannelOptional: 0
+  serializedVersion: 6
+  m_Width: 512
+  m_Height: 512
+  m_AntiAliasing: 1
+  m_MipCount: -1
+  m_DepthStencilFormat: 0
+  m_ColorFormat: 21
+  m_MipMap: 0
+  m_GenerateMips: 1
+  m_SRGB: 1
+  m_UseDynamicScale: 0
+  m_UseDynamicScaleExplicit: 0
+  m_BindMS: 0
+  m_EnableCompatibleFormat: 1
+  m_EnableRandomWrite: 1
+  m_TextureSettings:
+    serializedVersion: 2
+    m_FilterMode: 1
+    m_Aniso: 1
+    m_MipBias: 0
+    m_WrapU: 1
+    m_WrapV: 1
+    m_WrapW: 1
+  m_Dimension: 2
+  m_VolumeDepth: 1
+  m_ShadowSamplingMode: 2
 --- !u!1 &1412956746
 GameObject:
   m_ObjectHideFlags: 0
@@ -1281,43 +1317,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 471226916}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!84 &1948484823
-RenderTexture:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: 
-  m_ImageContentsHash:
-    serializedVersion: 2
-    Hash: 00000000000000000000000000000000
-  m_IsAlphaChannelOptional: 0
-  serializedVersion: 6
-  m_Width: 512
-  m_Height: 512
-  m_AntiAliasing: 1
-  m_MipCount: -1
-  m_DepthStencilFormat: 0
-  m_ColorFormat: 21
-  m_MipMap: 0
-  m_GenerateMips: 1
-  m_SRGB: 1
-  m_UseDynamicScale: 0
-  m_UseDynamicScaleExplicit: 0
-  m_BindMS: 0
-  m_EnableCompatibleFormat: 1
-  m_EnableRandomWrite: 1
-  m_TextureSettings:
-    serializedVersion: 2
-    m_FilterMode: 1
-    m_Aniso: 1
-    m_MipBias: 0
-    m_WrapU: 1
-    m_WrapV: 1
-    m_WrapW: 1
-  m_Dimension: 2
-  m_VolumeDepth: 1
-  m_ShadowSamplingMode: 2
 --- !u!1 &2081510692
 GameObject:
   m_ObjectHideFlags: 0
@@ -1364,17 +1363,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ParticleHydraulicErosionDispatcher
   erosionComputeShader: {fileID: 7200000, guid: 9225322c08a776a9f920190d22c7f260, type: 3}
   groupScaleFactor: 1
-  numSimultaneousParticles: 11
+  numSimultaneousParticles: 10
   inertia: 0.1
   capacity: 5
   minSlope: 0.01
-  deposition: 0.3
+  deposition: 0.01
   erosion: 0.2
   gravity: 0.2
   evaporation: 0.02
   waterDeathThreshold: 0.1
   erosionNeighborhood: 1
-  numSimulationSteps: 250
+  numSimulationSteps: 55
   numSimulationWaves: 1
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
