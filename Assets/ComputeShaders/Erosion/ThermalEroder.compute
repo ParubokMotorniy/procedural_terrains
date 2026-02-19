@@ -7,7 +7,6 @@ uniform int texelsPerThread;
 uniform float distributionCoefficient; // this parameter now controls how "sturdy" the material constituting the terrain is
 uniform int iterationIdx;
 uniform float talusThreshold;
-uniform float2 noiseDisplacement;
 
 uniform uint permuteACore;
 uniform uint permuteAStripH;
@@ -21,7 +20,8 @@ float computeUniformFloat(uint2 targetTextureCoordinates, int passId)
     return u01FromUint(pcgHash(seed));
 }
 
-//TODO: try to itroduce hardness map
+// TODO: try to itroduce hardness map
+// TODO: maybe, extend the information with strudiness info
 
 // diagonal texels are further away from the kernel center, and so we assume they receive less material than direct neighbors
 static const float heightDistributionDistanceCoefficients[3][3] =
@@ -79,7 +79,6 @@ TexelHeightDistribution computeHeightDistribution(int2 processedTexel)
     }
     exceedingSum += sumError;
 
-
     float avalancheRatio = 0.0;
     if (numCriticalNeighbors > 0 && maxHeightDistance > 1.0e-8)
     {
@@ -128,20 +127,18 @@ void applyKernel(int2 processedTexel)
     }
 }
 
-//todo: maybe, extend the information with strudiness info
-
 // race-free update of quadrants' centers
 #pragma kernel ThermalCoreEroder
 [numthreads(32, 32, 1)] void ThermalCoreEroder(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
-    int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
+    int2 topLeftCorner = int2(2, 2) + (int2)globalId.xy * texelsPerThread;
     float randomUniform = computeUniformFloat(topLeftCorner, iterationIdx * (groupId.x + groupId.y));
 
     int innerSide = texelsPerThread - 2;
     int totalTexelsPerThread = innerSide * innerSide;
 
     uint N = (uint)totalTexelsPerThread;
-    uint permuteB = 1 + (int)(randomUniform * N);
+    uint permuteB = (1 + (int)(randomUniform * N)) % N;
 
     // iterates over the grid in a permuted order
     for (uint idx = 0; idx < N; ++idx)
@@ -151,10 +148,9 @@ void applyKernel(int2 processedTexel)
         int x = (int)(permutedIdx / (uint)innerSide);
         int y = (int)(permutedIdx % (uint)innerSide);
 
-        int2 processedTexel = topLeftCorner + int2(x, y) + int2(2, 2);
-
+        int2 processedTexel = topLeftCorner + int2(x, y);
+        // resultHeightmap[topLeftCorner + int2((int)(idx / (uint)innerSide), (int)(idx % (uint)innerSide))] = permutedIdx;
         applyKernel(processedTexel);
-
         AllMemoryBarrier();
     }
 }
@@ -172,7 +168,7 @@ void applyKernel(int2 processedTexel)
         int totalTexelsPerThreadHorizontal = texelsPerThread * 2;
 
         uint N = (uint)totalTexelsPerThreadHorizontal;
-        uint permuteBHorizontal = 1 + (int)(randomUniform * N);
+        uint permuteBHorizontal = (1 + (int)(randomUniform * N)) % N;
 
         for (uint idx = 0; idx < N; ++idx)
         {
@@ -182,6 +178,7 @@ void applyKernel(int2 processedTexel)
             int y = ((int)permutedIdx + (permutedIdx / texelsPerThread) * stepMultiplier) % 2;
             int2 processedTexel = topLeftCorner + int2(x, y);
 
+            // resultHeightmap[topLeftCorner + int2((int)(idx / (uint)texelsPerThread), ((int)idx + (idx / texelsPerThread) * stepMultiplier) % 2)] = permutedIdx;
             applyKernel(processedTexel);
             AllMemoryBarrier();
         }
@@ -192,7 +189,7 @@ void applyKernel(int2 processedTexel)
         int totalTexelsPerThreadVertical = truncatedTexelsPerThread * 2;
 
         uint N = (uint)totalTexelsPerThreadVertical;
-        uint permuteBVertical = 1 + (int)(randomUniform * N);
+        uint permuteBVertical = (1 + (int)(randomUniform * N)) % N;
 
         for (uint idx = 0; idx < N; ++idx)
         {
@@ -203,6 +200,7 @@ void applyKernel(int2 processedTexel)
 
             int2 processedTexel = topLeftCorner + int2(x, y) + int2(0, 2);
 
+            // resultHeightmap[topLeftCorner + int2((int)(idx % (uint)truncatedTexelsPerThread), (idx + (permutedIdx / truncatedTexelsPerThread) * stepMultiplier) % 2)] = permutedIdx;
             applyKernel(processedTexel);
             AllMemoryBarrier();
         }

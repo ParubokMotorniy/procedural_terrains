@@ -56,6 +56,9 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
         Assert.IsTrue(textureSize % numLinearThreads == 0, "Texels must be distributed among threads evenly!");
         Assert.IsTrue(texelsPerThread >= 4, "A thread must have at least 4 texels to porcess");
 
+        waterLevelBuffer = new ComputeBuffer(textureSize * textureSize, sizeof(float));
+        Assert.IsTrue(waterLevelBuffer.IsValid());
+
         int texelsPerThreadSquared = (int)math.pow(texelsPerThread - 2, 2);
         int permuteACore = GenerationUtilities.ComputeCoprime(texelsPerThreadSquared, 3);
         int permuteAStripH = GenerationUtilities.ComputeCoprime(2 * texelsPerThread, 7);
@@ -67,9 +70,6 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
         int waterEvaporatorKernelIdx = erosionComputeShader.FindKernel("WaterEvaporator");
         int resourceInitializerKernelIdx = erosionComputeShader.FindKernel("ResourceInitializer");
         int finalWaterEvaporatorKernelIdx = erosionComputeShader.FindKernel("FinalWaterEvaporator");
-
-        waterLevelBuffer = new ComputeBuffer(textureSize * textureSize, sizeof(float));
-        Assert.IsTrue(waterLevelBuffer.IsValid());
 
         foreach (int kernelIdx in new[] { rainDropKernelIdx, coreKernelIdx, borderKernelIdx, waterEvaporatorKernelIdx, resourceInitializerKernelIdx, finalWaterEvaporatorKernelIdx })
         {
@@ -85,13 +85,12 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
         pipelineContext.SetUniformFloat(erosionComputeShader, PID_evaporationConstant, evaporationConstant);
         pipelineContext.SetUniformFloat(erosionComputeShader, PID_solubilityConstant, solubilityConstant);
         pipelineContext.SetUniformFloat(erosionComputeShader, PID_rainNoiseFrequency, rainNoiseFrequency);
-    
 
         pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, resourceInitializerKernelIdx, dispatchGroups);
         for (int d = 0; d < erosionIterationLimit; ++d)
         {
             pipelineContext.SetRandomFloats(erosionComputeShader, PID_randomSeeds);
-            pipelineContext.SetUniformInt(erosionComputeShader, PID_iterationIdx, d);
+            pipelineContext.SetUniformInt(erosionComputeShader, PID_iterationIdx, d + 1);
 
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, rainDropKernelIdx, dispatchGroups);
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, coreKernelIdx, dispatchGroups);
