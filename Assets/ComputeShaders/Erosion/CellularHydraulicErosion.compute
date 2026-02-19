@@ -16,10 +16,11 @@ uniform uint permuteACore;
 uniform uint permuteAStripH;
 uniform uint permuteAStripV;
 
-static const float HEIGHT_EPS = 1.0e-5; // texels differing by less are assumed to be at the same level
-static const float MIN_WATER = 0.45;
+static const float HEIGHT_EPS = 1.0e-3; // texels differing by less are assumed to be at the same level
+static const float MIN_WATER = 0.4;
 
 // TODO: try to adjust erosion by the slope value
+//TODO: try to mitigate lattice artifacts even more by making the margin broader
 
 float computeUniformFloat(uint2 targetTextureCoordinates, int passId)
 {
@@ -98,9 +99,7 @@ WaterDistributionFromTexel computeWaterDistribution(int2 processedTexel)
                 int2 neighborCoord = terrainWrap(processedTexel + int2(x, y), heightmapDimensions);
 
                 uint nLin = index2dTo1d(heightmapDimensions, (uint2)neighborCoord);
-                float neighborWater = waterLevel[nLin];
-
-                float d = texelHeight - (resultHeightmap[neighborCoord] + neighborWater);
+                float d = texelHeight - (resultHeightmap[neighborCoord] + waterLevel[nLin]);
                 if (d > HEIGHT_EPS)
                 {
                     numCriticalNeighbors++;

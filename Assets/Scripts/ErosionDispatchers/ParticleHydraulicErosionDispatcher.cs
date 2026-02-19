@@ -49,9 +49,9 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
     [Range(1, 10)]
     public int numSimulationWaves = 1;
 
-    private const int groupSize = 64;
+    private const int integrateGroupSize = 64;
+    private const int resolveGroupSize = 32;
 
-    //TODO: add extra field for limiting number of steps
     [StructLayout(LayoutKind.Sequential)]
     private struct ErosionParticle
     {
@@ -64,9 +64,23 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
 
     private ComputeBuffer particlesBuffer;
 
+    struct TexelPipes
+    {
+        Vector3 inPipes1;
+        Vector3 inPipes2;
+        Vector3 inPipes3;
+        Vector3 outPipes1;
+        Vector3 outPipes2;
+        Vector3 outPipes3;
+    };
+
+    private ComputeBuffer pipesBuffer;
+
     private static readonly int PID_resultHeightmap = Shader.PropertyToID("resultHeightmap");
     private static readonly int PID_particlesBuffer = Shader.PropertyToID("particlesBuffer");
+    private static readonly int PID_pipesBuffer = Shader.PropertyToID("pipesBuffer");
     private static readonly int PID_particlesPerThread = Shader.PropertyToID("particlesPerThread");
+    private static readonly int PID_texelsPerThread = Shader.PropertyToID("texelsPerThread");
     private static readonly int PID_heightmapDimensions = Shader.PropertyToID("heightmapDimensions");
     private static readonly int PID_inertia = Shader.PropertyToID("inertia");
     private static readonly int PID_capacity = Shader.PropertyToID("capacity");
@@ -88,26 +102,40 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
     {
         int textureSize = pipelineContext.GetHeightmapSize();
         int numGroups = (int)math.pow(2, groupScaleFactor);
-        int numLinearThreads = groupSize * numGroups;
         int numActualParticles = (int)math.pow(2, numSimultaneousParticles);
-        int particlesPerThread = numActualParticles / numLinearThreads;
-        var dispatchGroups = new Vector3(numGroups, 1, 1);
+        int particlesPerThread = numActualParticles / (integrateGroupSize * numGroups);
+        int numTexelsPerThread = textureSize / (numGroups * resolveGroupSize);
 
-        Assert.IsTrue(numActualParticles % numLinearThreads == 0, "Particles must be distributed among threads evenly!");
+        var integrateDispatchGroups = new Vector3(numGroups, 1, 1);
+        var resolveDispatchGroups = new Vector3(numGroups, numGroups, 1);
+
+        Assert.IsTrue(numActualParticles % (integrateGroupSize * numGroups) == 0, "Particles must be distributed among threads evenly!");
+        Assert.IsTrue(textureSize % (numGroups * resolveGroupSize) == 0, "Texels must be distributed among threads evenly!");
 
         int particlesInitializerKernelIdx = erosionComputeShader.FindKernel("ParticlesInitializer");
+        int changeResolverKernelIdx = erosionComputeShader.FindKernel("ChangeResolver");
+        int pipesInitializerKernelIdx = erosionComputeShader.FindKernel("PipesInitializer");
         int integratorKernelIdx = erosionComputeShader.FindKernel("Integrator");
         int garbageCollectorKernelIdx = erosionComputeShader.FindKernel("GarbageCollector");
 
-        Debug.LogWarning("Size of a particle struct: " + Marshal.SizeOf<ErosionParticle>());
-        particlesBuffer = new ComputeBuffer(numActualParticles, Marshal.SizeOf<ErosionParticle>());
-        Assert.IsTrue(particlesBuffer.IsValid());
+        {
+            Debug.LogWarning("Size of a particle struct: " + Marshal.SizeOf<ErosionParticle>());
+            particlesBuffer = new ComputeBuffer(numActualParticles, Marshal.SizeOf<ErosionParticle>());
+            Assert.IsTrue(particlesBuffer.IsValid());
+        }
 
-        foreach (int kernelIdx in new[] { particlesInitializerKernelIdx, integratorKernelIdx, garbageCollectorKernelIdx })
+        {
+            Debug.LogWarning("Size of a pipe struct: " + Marshal.SizeOf<TexelPipes>());
+            pipesBuffer = new ComputeBuffer(textureSize * textureSize, Marshal.SizeOf<TexelPipes>());
+            Assert.IsTrue(pipesBuffer.IsValid());
+        }
+
+        foreach (int kernelIdx in new[] { pipesInitializerKernelIdx, particlesInitializerKernelIdx, integratorKernelIdx, garbageCollectorKernelIdx, changeResolverKernelIdx })
         {
             pipelineContext.BindComputeBuffer(erosionComputeShader, kernelIdx, PID_particlesBuffer, particlesBuffer);
+            pipelineContext.BindComputeBuffer(erosionComputeShader, kernelIdx, PID_pipesBuffer, pipesBuffer);
+            pipelineContext.BindTexture(erosionComputeShader, kernelIdx, PID_resultHeightmap, pipelineContext.intermediateHeightmap);
         }
-        pipelineContext.BindTexture(erosionComputeShader, integratorKernelIdx, PID_resultHeightmap, pipelineContext.intermediateHeightmap);
 
         float erosionDistanceSumPrecompute = 0.0f;
         {
@@ -122,6 +150,7 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
         }
 
         pipelineContext.SetUniformInt(erosionComputeShader, PID_particlesPerThread, particlesPerThread);
+        pipelineContext.SetUniformInt(erosionComputeShader, PID_texelsPerThread, numTexelsPerThread);
         pipelineContext.SetUniformInts(erosionComputeShader, PID_heightmapDimensions, new int[] { textureSize, textureSize });
         pipelineContext.SetUniformFloat(erosionComputeShader, PID_inertia, inertia);
         pipelineContext.SetUniformFloat(erosionComputeShader, PID_capacity, capacity);
@@ -139,17 +168,19 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
             for (int w = 0; w < numSimulationWaves; ++w)
             {
                 pipelineContext.SetRandomInts(erosionComputeShader, PID_randomInts);
-                pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, particlesInitializerKernelIdx, dispatchGroups);
+                pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, particlesInitializerKernelIdx, integrateDispatchGroups);
 
                 {
                     int gcRunInsertionPeriod = 0;
                     for (int s = 0; s < numSimulationSteps; ++s)
                     {
-                        pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, integratorKernelIdx, dispatchGroups);
+                        pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, pipesInitializerKernelIdx, resolveDispatchGroups);
+                        pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, integratorKernelIdx, integrateDispatchGroups);
+                        pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, changeResolverKernelIdx, resolveDispatchGroups);
                         if (s / garbageCollectorRunPeriod != gcRunInsertionPeriod)
                         {
                             pipelineContext.SetRandomInts(erosionComputeShader, PID_randomInts);
-                            pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, garbageCollectorKernelIdx, dispatchGroups);
+                            pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, garbageCollectorKernelIdx, integrateDispatchGroups);
                             gcRunInsertionPeriod = s / garbageCollectorRunPeriod;
                         }
                     }

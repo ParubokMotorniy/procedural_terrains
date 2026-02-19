@@ -9,10 +9,29 @@ struct ErosionParticle
     float s;
 };
 
+struct TexelPipes
+{
+    float inPipes[3][3];
+    float outPipes[3][3];
+};
+
+// the table only supports neighborhoods up to 3. Larger neighborhoods increase chances of races
+static const uint2 pipeMap[7][7] =
+    {
+        {uint2(2, 2), uint2(2, 2), uint2(2, 1), uint2(2, 1), uint2(2, 1), uint2(2, 0), uint2(2, 0)},
+        {uint2(2, 2), uint2(2, 2), uint2(2, 1), uint2(2, 1), uint2(2, 1), uint2(2, 0), uint2(2, 0)},
+        {uint2(1, 2), uint2(1, 2), uint2(2, 2), uint2(2, 1), uint2(2, 0), uint2(1, 0), uint2(1, 0)},
+        {uint2(1, 2), uint2(1, 2), uint2(1, 2), uint2(1, 1), uint2(1, 0), uint2(1, 0), uint2(1, 0)},
+        {uint2(1, 2), uint2(1, 2), uint2(0, 2), uint2(0, 1), uint2(0, 0), uint2(1, 0), uint2(1, 0)},
+        {uint2(0, 2), uint2(0, 2), uint2(0, 1), uint2(0, 1), uint2(0, 1), uint2(0, 0), uint2(0, 0)},
+        {uint2(0, 2), uint2(0, 2), uint2(0, 1), uint2(0, 1), uint2(0, 1), uint2(0, 0), uint2(0, 0)}};
+
 RWTexture2D<float> resultHeightmap;
 RWStructuredBuffer<ErosionParticle> particlesBuffer;
+RWStructuredBuffer<TexelPipes> pipesBuffer;
 uniform uint2 heightmapDimensions;
 uniform uint particlesPerThread;
+uniform uint texelsPerThread;
 
 uniform float inertia;
 uniform float capacity;
@@ -67,15 +86,17 @@ float removeSediment(int2 erosionCenter, float targetAmountToRemove)
 
             float weight = (actualNeighborRadius - sqrt(fx * fx + fy * fy)) / erosionDistanceSumPrecompute;
 
-            uint2 affectedNeighborCoefficient = terrainWrap(erosionCenter + int2(x, y), heightmapDimensions);
-
-            float currentTexeleHeight = resultHeightmap[affectedNeighborCoefficient];
+            uint2 affectedNeighborCoordinate = terrainWrap(erosionCenter + int2(x, y), heightmapDimensions);
+            float currentTexeleHeight = resultHeightmap[affectedNeighborCoordinate];
 
             float localAmountRemoved = min(currentTexeleHeight, weight * targetAmountToRemove);
 
             actualSedimentRemoved += localAmountRemoved;
 
-            resultHeightmap[affectedNeighborCoefficient] = max(0.0, currentTexeleHeight - localAmountRemoved);
+            uint2 targetOutPipe = pipeMap[x + erosionNeighborhood][y + erosionNeighborhood];
+            pipesBuffer[index2dTo1d(heightmapDimensions, affectedNeighborCoordinate)].outPipes[targetOutPipe.x][targetOutPipe.y] += localAmountRemoved;
+
+            // resultHeightmap[affectedNeighborCoefficient] = max(0.0, currentTexeleHeight - localAmountRemoved);
         }
     }
 
@@ -91,7 +112,10 @@ void depositSediment(int2 erosionCenter, float amountToDeposit)
         for (int y = -1; y <= 1; ++y)
         {
             uint2 affectedNeighborCoordinates = terrainWrap(erosionCenter + int2(x, y), heightmapDimensions);
-            resultHeightmap[affectedNeighborCoordinates] += ((x == y && x != 0) ? 0.0 : 1.0) * uniformWeight * amountToDeposit;
+            float increment = ((x == y && x != 0) ? 0.0 : 1.0) * uniformWeight * amountToDeposit;
+            uint2 targetInPipe = pipeMap[x + 1][y + 1];
+            pipesBuffer[index2dTo1d(heightmapDimensions, affectedNeighborCoordinates)].inPipes[targetInPipe.x][targetInPipe.y] += increment;
+            // resultHeightmap[affectedNeighborCoordinates] += increment;
         }
     }
 }
@@ -148,8 +172,29 @@ float2 computeUniformRandomCoordinates(uint2 targetCoordinates, int nonce)
     }
 }
 
+#pragma kernel PipesInitializer
+[numthreads(32, 32, 1)] void PipesInitializer(uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupThreadID)
+{
+    uint2 threadTopLfetIndex = globalId.xy * texelsPerThread;
+    for (int x = 0; x < texelsPerThread; ++x)
+    {
+        for (int y = 0; y < texelsPerThread; ++y)
+        {
+            uint targetTexelLin = index2dTo1d(heightmapDimensions, threadTopLfetIndex + uint2(x, y));
+            for (int pX = 0; pX < 3; ++pX)
+            {
+                for (int pY = 0; pY < 3; ++pY)
+                {
+                    pipesBuffer[targetTexelLin].outPipes[x][y] = 0.0;
+                    pipesBuffer[targetTexelLin].inPipes[x][y] = 0.0;
+                }
+            }
+        }
+    }
+}
+
 #pragma kernel Integrator
-[numthreads(64, 1, 1)] void Integrator(uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupThreadID)
+    [numthreads(64, 1, 1)] void Integrator(uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupThreadID)
 {
     uint threadRangeStart = globalId.x * particlesPerThread;
 
@@ -232,5 +277,31 @@ float2 computeUniformRandomCoordinates(uint2 targetCoordinates, int nonce)
         particlesBuffer[processedParticleIdx].s = max(oldSedimentValue + sedimentValueUpdate, 0.0);
 
         // resultHeightmap[(int2)floor(oldParticlePosition)] = heightDelta;
+    }
+}
+
+#pragma kernel ChangeResolver
+[numthreads(32, 32, 1)] void ChangeResolver(uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupThreadID)
+{
+    uint2 threadTopLeftIndex = globalId.xy * texelsPerThread;
+    for (int x = 0; x < texelsPerThread; ++x)
+    {
+        for (int y = 0; y < texelsPerThread; ++y)
+        {
+            uint2 targetTexel = threadTopLeftIndex + uint2(x, y);
+            uint targetTexelLin = index2dTo1d(heightmapDimensions, targetTexel);
+            float totalSedimentRemoved = 0.0;
+            float totalSedimentAdded = 0.0;
+            for (int pX = 0; pX < 3; ++pX)
+            {
+                for (int pY = 0; pY < 3; ++pY)
+                {
+                    totalSedimentRemoved += pipesBuffer[targetTexelLin].outPipes[x][y];
+                    totalSedimentAdded += pipesBuffer[targetTexelLin].inPipes[x][y];
+                }
+            }
+
+            resultHeightmap[targetTexel] = max(resultHeightmap[targetTexel] + totalSedimentAdded - totalSedimentRemoved, 0.0);
+        }
     }
 }
