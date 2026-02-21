@@ -7,6 +7,21 @@ int2 terrainWrap(int2 a, int2 b)
     return (a % b + b) % b;
 }
 
+// only makes sense if height is normalized. 
+float computeSoftnessCoefficient(float2 localGradient, float localHeight, float baseHardness)
+{
+    const static float heightWeight = 0.25;
+    const static float gradientWeight = 1.0 - heightWeight;
+    return clamp(1.0 - (localHeight * heightWeight) * (exp(-length(localGradient)) * gradientWeight), baseHardness, 1.0);
+}
+
+float2 computeGradientAtPoint(RWTexture2D<float> tex, uint2 dimensions, int2 texelOfInterest)
+{
+    float dX = (tex[terrainWrap(texelOfInterest + int2(1, 0), dimensions)] - tex[terrainWrap(texelOfInterest - int2(1, 0), dimensions)]) / 2.0;
+    float dZ = (tex[terrainWrap(texelOfInterest + int2(0, 1), dimensions)] - tex[terrainWrap(texelOfInterest - int2(0, 1), dimensions)]) / 2.0;
+    return float2(dX, dZ);
+}
+
 uint index2dTo1d(uint2 gridDimensions, uint2 index2D)
 {
     return index2D.x * gridDimensions.y + index2D.y;

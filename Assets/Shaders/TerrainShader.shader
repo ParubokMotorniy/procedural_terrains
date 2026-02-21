@@ -143,7 +143,7 @@ Shader "Custom/TerrainShader"
                     ).r;
                 dv /= 2.0 * _HeightMap_TexelSize.y;
 
-                OUT.normal = TransformObjectToWorldNormal(float3(du, 1.0, dv));
+                OUT.normal = TransformObjectToWorldNormal(normalize(float3(du, 1.0, dv)));
                 OUT.positionHCS = TransformObjectToHClip(positionOS);
                 OUT.positionWS = TransformObjectToWorld(positionOS);
                 OUT.uv = TRANSFORM_TEX(IN.uv, _HeightMap);

@@ -96,9 +96,10 @@ float removeSediment(int2 erosionCenter, float targetAmountToRemove)
             float weight = (actualNeighborRadius - dist) / max(erosionDistanceSumPrecompute, EPS);
 
             uint2 affectedNeighborCoordinate = terrainWrap(erosionCenter + int2(x, y), heightmapDimensions);
-            float currentTexeleHeight = resultHeightmap[affectedNeighborCoordinate];
+            float currentTexelHeight = resultHeightmap[affectedNeighborCoordinate];
 
-            float localAmountRemoved = min(currentTexeleHeight, max(weight, 0.0) * targetAmountToRemove);
+            float localSoftness = computeSoftnessCoefficient(computeGradientAtPoint(resultHeightmap, heightmapDimensions, affectedNeighborCoordinate), currentTexelHeight, 0.1);
+            float localAmountRemoved = min(currentTexelHeight, max(weight, 0.0) * targetAmountToRemove);
 
             actualSedimentRemoved += localAmountRemoved;
 

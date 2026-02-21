@@ -20,7 +20,7 @@ static const float HEIGHT_EPS = 1.0e-3; // texels differing by less are assumed 
 static const float MIN_WATER = 0.4;
 
 // TODO: try to adjust erosion by the slope value
-//TODO: try to mitigate lattice artifacts even more by making the margin broader
+//TODO: try to mitigate lattice artifacts even more by making the margin broader (?)
 
 float computeUniformFloat(uint2 targetTextureCoordinates, int passId)
 {

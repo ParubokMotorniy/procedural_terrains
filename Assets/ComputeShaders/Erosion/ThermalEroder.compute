@@ -21,7 +21,6 @@ float computeUniformFloat(uint2 targetTextureCoordinates, int passId)
 }
 
 // TODO: try to itroduce hardness map
-// TODO: maybe, extend the information with strudiness info
 
 // diagonal texels are further away from the kernel center, and so we assume they receive less material than direct neighbors
 static const float heightDistributionDistanceCoefficients[3][3] =
@@ -93,7 +92,8 @@ TexelHeightDistribution computeHeightDistribution(int2 processedTexel)
     // zero-mean gaussian is shifted to the estimated ratio. u2 is kept at zero to ensure sigma=1
     float dynamicDistributionCoefficient = clamp(sampleGaussBoxMuller(float2(u1, 0.0)) + avalancheRatio, 0.3, 1.0) * distributionCoefficient;
 
-    float totalHeightRemoved = (numCriticalNeighbors > 0) ? (dynamicDistributionCoefficient * (maxHeightDistance - talusThreshold)) : 0.0;
+    float localSoftness = computeSoftnessCoefficient(computeGradientAtPoint(resultHeightmap, heightmapDimensions, processedTexel), texelHeight, 0.1);
+    float totalHeightRemoved = (numCriticalNeighbors > 0) ? localSoftness * dynamicDistributionCoefficient * (maxHeightDistance - talusThreshold) : 0.0;
 
     // to make sure the central texel does not end up higher than its closest neighbor
     float heightConsistencyThreshold = (minHeightDistance * exceedingSum) / (minHeightDistance + exceedingSum + 1.0e-5);
@@ -117,7 +117,6 @@ TexelHeightDistribution computeHeightDistribution(int2 processedTexel)
 void applyKernel(int2 processedTexel)
 {
     TexelHeightDistribution distributionAtTexel = computeHeightDistribution(processedTexel);
-
     for (int i = -1; i < 2; ++i)
     {
         for (int j = -1; j < 2; ++j)

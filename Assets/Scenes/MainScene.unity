@@ -618,15 +618,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6a05cec52a91ddfa19dd37485cd50122, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GenerationPipeline.TerrainGenerator
-  terrainSize: 10
-  terrainScale: 0.5
+  terrainSize: 9
+  terrainScale: 1
   enableProfiling: 0
-  generatorSeed: 467
-  dumpTextures: 1
+  generatorSeed: 576
+  dumpTextures: 0
   useTestTexture: 0
   testTexture: {fileID: 2800000, guid: b41b9ee7e6cd54a8a92533da387d527d, type: 3}
   pipelineSteps:
-  - {fileID: 360891026}
+  - {fileID: 1592727441}
   - {fileID: 2081510694}
 --- !u!4 &385078007
 Transform:
@@ -804,43 +804,6 @@ Transform:
   - {fileID: 2081510693}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!84 &480809023
-RenderTexture:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: 
-  m_ImageContentsHash:
-    serializedVersion: 2
-    Hash: 00000000000000000000000000000000
-  m_IsAlphaChannelOptional: 0
-  serializedVersion: 6
-  m_Width: 1024
-  m_Height: 1024
-  m_AntiAliasing: 1
-  m_MipCount: -1
-  m_DepthStencilFormat: 0
-  m_ColorFormat: 21
-  m_MipMap: 0
-  m_GenerateMips: 1
-  m_SRGB: 1
-  m_UseDynamicScale: 0
-  m_UseDynamicScaleExplicit: 0
-  m_BindMS: 0
-  m_EnableCompatibleFormat: 1
-  m_EnableRandomWrite: 1
-  m_TextureSettings:
-    serializedVersion: 2
-    m_FilterMode: 1
-    m_Aniso: 1
-    m_MipBias: 0
-    m_WrapU: 1
-    m_WrapV: 1
-    m_WrapW: 1
-  m_Dimension: 2
-  m_VolumeDepth: 1
-  m_ShadowSamplingMode: 2
 --- !u!21 &812907298
 Material:
   serializedVersion: 8
@@ -890,7 +853,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _HeightMap:
-        m_Texture: {fileID: 480809023}
+        m_Texture: {fileID: 854984789}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _Heightmap:
@@ -949,7 +912,7 @@ Material:
     - _GlossMapScale: 0
     - _Glossiness: 0
     - _GlossyReflections: 0
-    - _HeightScale: 0.5
+    - _HeightScale: 1
     - _Metallic: 0
     - _OcclusionStrength: 1
     - _Parallax: 0.005
@@ -1071,6 +1034,43 @@ MonoBehaviour:
   addExtraNoise: 1
   worleyFrequency: 4
   perlinFrequency: 2.5
+--- !u!84 &854984789
+RenderTexture:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: 
+  m_ImageContentsHash:
+    serializedVersion: 2
+    Hash: 00000000000000000000000000000000
+  m_IsAlphaChannelOptional: 0
+  serializedVersion: 6
+  m_Width: 512
+  m_Height: 512
+  m_AntiAliasing: 1
+  m_MipCount: -1
+  m_DepthStencilFormat: 0
+  m_ColorFormat: 21
+  m_MipMap: 0
+  m_GenerateMips: 1
+  m_SRGB: 1
+  m_UseDynamicScale: 0
+  m_UseDynamicScaleExplicit: 0
+  m_BindMS: 0
+  m_EnableCompatibleFormat: 1
+  m_EnableRandomWrite: 1
+  m_TextureSettings:
+    serializedVersion: 2
+    m_FilterMode: 1
+    m_Aniso: 1
+    m_MipBias: 0
+    m_WrapU: 1
+    m_WrapV: 1
+    m_WrapW: 1
+  m_Dimension: 2
+  m_VolumeDepth: 1
+  m_ShadowSamplingMode: 2
 --- !u!1 &1078476957
 GameObject:
   m_ObjectHideFlags: 0
@@ -1201,9 +1201,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ThermalErosionDispatcher
   erosionComputeShader: {fileID: 7200000, guid: fd1160cbc396f5665a006dc6a2d9b936, type: 3}
   distributionCoefficient: 0.85
-  talusThreshold: 0.02
-  groupScaleFactor: 1
-  erosionIterationLimit: 1
+  talusThreshold: 0.005
+  groupScaleFactor: 2
+  erosionIterationLimit: 10
 --- !u!4 &1412956748
 Transform:
   m_ObjectHideFlags: 0
@@ -1366,16 +1366,17 @@ MonoBehaviour:
   groupScaleFactor: 3
   numSimultaneousParticles: 12
   inertia: 0.1
-  capacity: 5
+  capacity: 7
   minSlope: 0.02
   deposition: 0.05
-  erosion: 0.2
+  erosion: 0.3
   gravity: 0.2
   evaporation: 0.02
   waterDeathThreshold: 0.1
   erosionNeighborhood: 1
-  numSimulationSteps: 200
-  numSimulationWaves: 2
+  numSimulationSteps: 150
+  numSimulationWaves: 3
+  rainNoiseFrequency: 0.26
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
