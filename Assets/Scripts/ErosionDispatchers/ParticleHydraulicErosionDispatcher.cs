@@ -22,8 +22,8 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
     [Range(0.01f, 100.0f)]
     public float capacity = 10.0f;
 
-    [Range(0.01f, 1.0f)]
-    public float minSlope = 0.03f;
+    [Range(0.0001f, 1.0f)]
+    public float minSlope = 0.01f;
 
     [Range(0.01f, 1.0f)]
     public float deposition = 0.7f;

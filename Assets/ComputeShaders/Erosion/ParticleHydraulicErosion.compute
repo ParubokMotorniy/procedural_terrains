@@ -28,6 +28,12 @@ static const uint2 pipeMap[7][7] =
 static const int pipeMapCenterCoord = 3;
 static const int PLAIN_HEIGHT_THRESHOLD = 1.0e-3;
 
+static const float depositionMapWeights[3][3] =
+    {
+        {0.02, 0.15, 0.02},
+        {0.15, 0.3, 0.15},
+        {0.02, 0.15, 0.02}};
+
 RWTexture2D<float> resultHeightmap;
 RWStructuredBuffer<ErosionParticle> particlesBuffer;
 RWStructuredBuffer<TexelPipes> pipesBuffer;
@@ -97,8 +103,6 @@ float removeSediment(int2 erosionCenter, float targetAmountToRemove)
 
             uint2 targetOutPipe = pipeMap[x + pipeMapCenterCoord][y + pipeMapCenterCoord];
             pipesBuffer[index2dTo1d(heightmapDimensions, affectedNeighborCoordinate)].outPipes[targetOutPipe.x][targetOutPipe.y] += localAmountRemoved;
-
-            // resultHeightmap[affectedNeighborCoefficient] = max(0.0, currentTexeleHeight - localAmountRemoved);
         }
     }
 
@@ -107,17 +111,15 @@ float removeSediment(int2 erosionCenter, float targetAmountToRemove)
 
 void depositSediment(int2 erosionCenter, float amountToDeposit)
 {
-    float uniformWeight = rcp(5.0);
 
     for (int x = -1; x <= 1; ++x)
     {
         for (int y = -1; y <= 1; ++y)
         {
+            float increment = depositionMapWeights[x + 1.0][y + 1.0] * amountToDeposit;
             uint2 affectedNeighborCoordinates = terrainWrap(erosionCenter + int2(x, y), heightmapDimensions);
-            float increment = ((x == y && x != 0) ? 0.0 : 1.0) * uniformWeight * amountToDeposit;
             uint2 targetInPipe = pipeMap[x + pipeMapCenterCoord][y + pipeMapCenterCoord];
             pipesBuffer[index2dTo1d(heightmapDimensions, affectedNeighborCoordinates)].inPipes[targetInPipe.x][targetInPipe.y] += increment;
-            // resultHeightmap[affectedNeighborCoordinates] += increment;
         }
     }
 }
@@ -248,8 +250,9 @@ float2 computeUniformRandomCoordinates(uint2 targetCoordinates, int nonce)
         float sedimentValueUpdate = 0.0;
         if (heightDelta > PLAIN_HEIGHT_THRESHOLD)
         {
-            depositSediment(floorInt, oldSedimentValue);
-            sedimentValueUpdate = -oldSedimentValue;
+            float amountToDeposit = min(oldSedimentValue, max(abs(resultHeightmap[floorOldParticlePosition] - oldHeight), heightDelta));
+            depositSediment(floorOldParticlePosition, amountToDeposit);
+            sedimentValueUpdate = -amountToDeposit;
         }
         else if (heightDelta < -PLAIN_HEIGHT_THRESHOLD)
         {
@@ -258,18 +261,17 @@ float2 computeUniformRandomCoordinates(uint2 targetCoordinates, int nonce)
             if ((oldSedimentValue - newCapacity) > EPS)
             {
                 float amountToDeposit = (oldSedimentValue - newCapacity) * deposition;
-                depositSediment(floorInt, amountToDeposit);
+                depositSediment(floorOldParticlePosition, amountToDeposit);
                 sedimentValueUpdate = -amountToDeposit;
             }
             else if ((oldSedimentValue - newCapacity) < -EPS)
             {
                 float amountToRemove = min((newCapacity - oldSedimentValue) * erosion, -heightDelta);
-                float actualSedimentRemoved = removeSediment(floorInt, amountToRemove);
-                sedimentValueUpdate = actualSedimentRemoved;
+                sedimentValueUpdate = removeSediment(floorOldParticlePosition, amountToRemove);
             }
         }
 
-        float newParticleVelocity = sqrt(abs(oldParticleVelocity * oldParticleVelocity - heightDelta * gravity)); 
+        float newParticleVelocity = sqrt(abs(oldParticleVelocity * oldParticleVelocity - heightDelta * gravity));
         float newW = max(oldWaterValue * (1 - evaporation), 0.0);
 
         particlesBuffer[processedParticleIdx].pos = newParticlePosition;
