@@ -49,6 +49,9 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
     [Range(1, 10)]
     public int numSimulationWaves = 1;
 
+    [Range(0.001f, 10.0f)]
+    public float rainNoiseFrequency = 1.0f;
+
     private const int integrateGroupSize = 64;
     private const int resolveGroupSize = 32;
 
@@ -92,6 +95,7 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
     private static readonly int PID_erosionNeighborhood = Shader.PropertyToID("erosionNeighborhood");
     private static readonly int PID_erosionDistanceSumPrecompute = Shader.PropertyToID("erosionDistanceSumPrecompute");
     private static readonly int PID_randomInts = Shader.PropertyToID("randomInts");
+    private static readonly int PID_rainNoiseFrequency = Shader.PropertyToID("rainNoiseFrequency");
 
     public override InputExpectations GetStepExpectations()
         => InputExpectations.HeightMapNormalized;
@@ -161,6 +165,7 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
         pipelineContext.SetUniformFloat(erosionComputeShader, PID_evaporation, evaporation);
         pipelineContext.SetUniformFloat(erosionComputeShader, PID_erosionNeighborhood, erosionNeighborhood);
         pipelineContext.SetUniformFloat(erosionComputeShader, PID_erosionDistanceSumPrecompute, erosionDistanceSumPrecompute);
+        pipelineContext.SetUniformFloat(erosionComputeShader, PID_rainNoiseFrequency, rainNoiseFrequency);
 
         {
             int garbageCollectorRunPeriod = (int)math.floor(math.log2(2 * waterDeathThreshold) / math.log2(1.0f - evaporation));

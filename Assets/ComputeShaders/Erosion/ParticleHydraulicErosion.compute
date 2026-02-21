@@ -52,6 +52,7 @@ uniform int erosionNeighborhood; // for 3x3 grid that would be 1, for 5x5 - 2
 uniform float erosionDistanceSumPrecompute;
 uniform int2 randomInts;
 uniform float waterDeathThreshold;
+uniform float rainNoiseFrequency;
 
 // TODO: add hardness parameter
 
@@ -165,9 +166,13 @@ float2 computeUniformRandomCoordinates(uint2 targetCoordinates, int nonce)
     {
         uint processedParticleIdx = threadRangeStart + idx;
 
-        // TODO: drop particles basing on pink noise
         float2 uniformCoefficients = computeUniformRandomCoordinates(uint2(globalId.x, processedParticleIdx), randomInts.x + randomInts.y);
-        float dropSize = abs(sampleGaussBoxMuller(uniformCoefficients));
+        // float dropSize = abs(sampleGaussBoxMuller(uniformCoefficients));
+
+        // here the pink noise accounts for the 'area' a particle covers.
+        // While uniform coordinates guarantee uniform coverage of the entire area of the terrain,
+        // pink-distributed size allows to achieve the typical 'rain' texture (implicitly)
+        float dropSize = pinkNoise2D((uniformCoefficients + randomInts) * rainNoiseFrequency);
 
         particlesBuffer[processedParticleIdx].pos = uniformCoefficients * (float2)heightmapDimensions;
         particlesBuffer[processedParticleIdx].dir = float2(0.0, 0.0);
