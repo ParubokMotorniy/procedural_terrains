@@ -81,4 +81,9 @@ public class UNDispatcher : MultiFormatPipelineStep
     public override void StepConclusion(PipelineContext pipelineContext) { }
 
     public override InputExpectations GetStepExpectations() => InputExpectations.None;
+
+    public override void UpdateHeightmapState(ref HeightmapProperties previousState)
+    {
+        previousState &= ~HeightmapProperties.Normalized;
+    }
 }

@@ -14,5 +14,10 @@ namespace GenerationPipeline
         {
             return InputExpectations.HeightMapNormalized;
         }
+
+        public void UpdateHeightmapState(ref HeightmapProperties previousState)
+        {
+
+        }
     }
 }

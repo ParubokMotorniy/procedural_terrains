@@ -3,6 +3,7 @@ using UnityEngine.Assertions;
 using System.Collections.Generic;
 using System;
 using Unity.Mathematics;
+using Unity.VisualScripting;
 
 namespace GenerationPipeline
 {
@@ -41,8 +42,6 @@ namespace GenerationPipeline
         private readonly HeightmapNormalizer normalizer = new HeightmapNormalizer();
         private readonly FormatFinalizer finalizer = new FormatFinalizer();
 
-        //TODO: instead of manually selecting the number of threads to dispatch, I may want to compile my compute shaders in multiple variants with unity-keywords system. 
-        // However, that can be postponed I believe owing to the complexity of writing code with tons of defines
         //TODO: devise a scheme to reconcile different number of threads, groups and texture sizes
 
         //TODO: getting rid of two-step grid iteration in erosion algos improves appearance but introduces non-conservitivity and races
@@ -79,16 +78,20 @@ namespace GenerationPipeline
             List<PipelineStep> augmentedPipeline = new List<PipelineStep>();
 
             //inserts extra built-in steps if requested by a step
+            HeightmapProperties runningProperties = HeightmapProperties.Created;
             foreach (PipelineStep inputStep in pipelineSteps)
             {
-                if ((inputStep.GetStepExpectations() & InputExpectations.HeightMapNormalized) != 0)
+                if ((inputStep.GetStepExpectations() & InputExpectations.HeightMapNormalized) != 0 && (runningProperties & HeightmapProperties.Normalized) == 0)
                 {
                     augmentedPipeline.Add(normalizer);
+                    normalizer.UpdateHeightmapState(ref runningProperties);
                 }
                 augmentedPipeline.Add(inputStep);
+                inputStep.UpdateHeightmapState(ref runningProperties);
             }
             augmentedPipeline.Add(normalizer);
             augmentedPipeline.Add(finalizer);
+            print(augmentedPipeline.Count);
 
 #if UNITY_EDITOR
             if (useTestTexture)
@@ -113,7 +116,6 @@ namespace GenerationPipeline
 #endif
             Debug.Log("Terrain has been regenerated!");
         }
-
         void Start()
         {
             RegenerateTerrain();

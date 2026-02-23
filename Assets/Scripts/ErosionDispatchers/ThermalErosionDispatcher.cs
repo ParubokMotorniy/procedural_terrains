@@ -52,10 +52,6 @@ public class ThermalErosionDispatcher : MultiFormatPipelineStep
         int permuteAStripH = GenerationUtilities.ComputeCoprime(2 * texelsPerThread, 29);
         int permuteAStripV = GenerationUtilities.ComputeCoprime(2 * (texelsPerThread - 2), 35);
 
-        Debug.Log(permuteACore);
-        Debug.Log(permuteAStripH);
-        Debug.Log(permuteAStripV);
-
         int coreKernelIdx = erosionComputeShader.FindKernel("ThermalCoreEroder");
         int borderKernelIdx = erosionComputeShader.FindKernel("ThermalBorderEroder");
 
@@ -83,4 +79,8 @@ public class ThermalErosionDispatcher : MultiFormatPipelineStep
     }
 
     public override void StepConclusion(PipelineContext pipelineContext) { }
+
+    public override void UpdateHeightmapState(ref HeightmapProperties previousState)
+    {
+    }
 }

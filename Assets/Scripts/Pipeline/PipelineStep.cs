@@ -9,9 +9,18 @@ namespace GenerationPipeline
         HeightMapNormalized = 1 << 0,  // 1
     }
 
+    [System.Flags]
+
+    public enum HeightmapProperties
+    {
+        Created = 0,
+        Normalized = 1 << 0,
+    }
+
     public interface PipelineStep
     {
         public void ExecuteStep(PipelineContext pipelineContext);
         public InputExpectations GetStepExpectations();
+        public void UpdateHeightmapState(ref HeightmapProperties previousState);
     }
 }

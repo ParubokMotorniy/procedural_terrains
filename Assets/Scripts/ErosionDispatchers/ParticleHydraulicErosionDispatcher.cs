@@ -204,4 +204,7 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
     }
 
     public override void StepConclusion(PipelineContext pipelineContext) { }
+
+    public override void UpdateHeightmapState(ref HeightmapProperties previousState)
+    { }
 }
