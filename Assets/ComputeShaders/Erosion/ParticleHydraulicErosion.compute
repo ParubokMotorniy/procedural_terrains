@@ -54,8 +54,6 @@ uniform int2 randomInts;
 uniform float waterDeathThreshold;
 uniform float rainNoiseFrequency;
 
-// TODO: add hardness parameter
-
 bool checkParticleIsValid(ErosionParticle particle)
 {
     float2 particlePos = particle.pos;

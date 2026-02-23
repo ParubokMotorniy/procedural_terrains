@@ -3,9 +3,6 @@ using UnityEngine;
 using UnityEngine.Assertions;
 using System;
 using GenerationPipeline;
-using System.Reflection;
-using System.Diagnostics;
-using Debug = UnityEngine.Debug;
 
 public class FFTDispatcher : MultiFormatPipelineStep
 {
@@ -27,6 +24,7 @@ public class FFTDispatcher : MultiFormatPipelineStep
     private const int generationGroupSize = 16;
     private const int inverseGroupSize = 16;
 
+    //implicitly cleared
     private ComputeBuffer coefficientsBuffer;
 
     private static readonly int PID_resultHeightmap = Shader.PropertyToID("resultHeightmap");
@@ -53,8 +51,12 @@ public class FFTDispatcher : MultiFormatPipelineStep
         int coefficientsBufferSizeX = math.min(actualCoefficientsComputed, textureSize / 2);
         int coefficientsBufferSizeY = actualCoefficientsComputed;
 
-        coefficientsBuffer = new ComputeBuffer(coefficientsBufferSizeX * coefficientsBufferSizeY * 2, sizeof(float));
-        Assert.IsTrue(coefficientsBuffer.IsValid());
+        int neededBufferSize = coefficientsBufferSizeX * coefficientsBufferSizeY * 2;
+        if (coefficientsBuffer is null || !coefficientsBuffer.IsValid() || coefficientsBuffer.count != neededBufferSize)
+        {
+            coefficientsBuffer = new ComputeBuffer(neededBufferSize, sizeof(float));
+            Assert.IsTrue(coefficientsBuffer.IsValid());
+        }
 
         int coefficientGeneratorKernelIdx = shaderToDispatch.FindKernel("CoefficientGenerator");
         int inverseFFTKernelIdx = shaderToDispatch.FindKernel("InverseFFT");

@@ -56,8 +56,12 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
         Assert.IsTrue(textureSize % numLinearThreads == 0, "Texels must be distributed among threads evenly!");
         Assert.IsTrue(texelsPerThread >= 4, "A thread must have at least 4 texels to porcess");
 
-        waterLevelBuffer = new ComputeBuffer(textureSize * textureSize, sizeof(float));
-        Assert.IsTrue(waterLevelBuffer.IsValid());
+        int neededBufferSize = textureSize * textureSize;
+        if (waterLevelBuffer is null || !waterLevelBuffer.IsValid() || waterLevelBuffer.count != neededBufferSize)
+        {
+            waterLevelBuffer = new ComputeBuffer(neededBufferSize, sizeof(float));
+            Assert.IsTrue(waterLevelBuffer.IsValid());
+        }
 
         int texelsPerThreadSquared = (int)math.pow(texelsPerThread - 2, 2);
         int permuteACore = GenerationUtilities.ComputeCoprime(texelsPerThreadSquared, 3);

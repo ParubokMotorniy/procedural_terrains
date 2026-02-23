@@ -33,7 +33,7 @@ public class ThermalErosionDispatcher : MultiFormatPipelineStep
     private static readonly int PID_iterationIdx = Shader.PropertyToID("iterationIdx");
 
     public override InputExpectations GetStepExpectations()
-        => InputExpectations.HeightMapNormalized; // TODO: skip normalization by adjusting talus threshold to effective height range
+        => InputExpectations.HeightMapNormalized;
 
     public override void StepInitialization(PipelineContext pipelineContext) { }
 

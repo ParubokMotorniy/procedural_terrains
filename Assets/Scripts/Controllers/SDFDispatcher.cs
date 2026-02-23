@@ -16,11 +16,14 @@ public class SDFDispatcher : MultiFormatPipelineStep
     public float baseSimplexFrequency = 1.0f;
 
     private const int groupSize = 32;
-    private ComputeBuffer buffer1;
-    private ComputeBuffer buffer2;
 
-    private static readonly int PID_buffer1 = Shader.PropertyToID("buffer1");
-    private static readonly int PID_buffer2 = Shader.PropertyToID("buffer2");
+    //both are implicitly cleared
+    private ComputeBuffer floodingBuffer1;
+    private ComputeBuffer floodingBuffer2;
+    private ComputeBuffer inputContinentHeightmap;
+
+    private static readonly int PID_buffer1 = Shader.PropertyToID("floodingBuffer1");
+    private static readonly int PID_buffer2 = Shader.PropertyToID("floodingBuffer2");
     private static readonly int PID_inputTexture = Shader.PropertyToID("inputTexture");
     private static readonly int PID_outputTexture = Shader.PropertyToID("outputTexture");
 
@@ -45,24 +48,28 @@ public class SDFDispatcher : MultiFormatPipelineStep
 
         Assert.IsTrue(textureSize % numLinearThreads == 0, "Texels must be distributed among threads evenly!");
 
-        // TODO: the texture can actually be reworked to be a computebuffer
-        RenderTexture coastlineTexture = new RenderTexture(textureSize, textureSize, 0)
         {
-            graphicsFormat = UnityEngine.Experimental.Rendering.GraphicsFormat.R32_SFloat,
-            useMipMap = false,
-            enableRandomWrite = true,
-            filterMode = FilterMode.Bilinear,
-            wrapMode = TextureWrapMode.Clamp
-        };
-        {
-            coastlineTexture.Create();
-            Assert.IsTrue(coastlineTexture.IsCreated());
+            int neededBufferSize = textureSize * textureSize;
+            if (inputContinentHeightmap is null || !inputContinentHeightmap.IsValid() || inputContinentHeightmap.count != neededBufferSize)
+            {
+                inputContinentHeightmap = new ComputeBuffer(neededBufferSize, sizeof(float));
+                Assert.IsTrue(inputContinentHeightmap.IsValid());
+            }
         }
 
-        buffer1 = new ComputeBuffer(textureSize * textureSize * 2, sizeof(float));
-        Assert.IsTrue(buffer1.IsValid());
-        buffer2 = new ComputeBuffer(textureSize * textureSize * 2, sizeof(float));
-        Assert.IsTrue(buffer2.IsValid());
+        {
+            int neededBufferSize = textureSize * textureSize * 2;
+            if (floodingBuffer1 is null || !floodingBuffer1.IsValid() || floodingBuffer1.count != neededBufferSize)
+            {
+                floodingBuffer1 = new ComputeBuffer(neededBufferSize, sizeof(float));
+                Assert.IsTrue(floodingBuffer1.IsValid());
+            }
+            if (floodingBuffer2 is null || !floodingBuffer2.IsValid() || floodingBuffer2.count != neededBufferSize)
+            {
+                floodingBuffer2 = new ComputeBuffer(neededBufferSize, sizeof(float));
+                Assert.IsTrue(floodingBuffer2.IsValid());
+            }
+        }
 
         int maskToSeedBufferKernelIdx = shaderToDispatch.FindKernel("MaskToSeedBuffer");
         int floodingStepKernelIdx = shaderToDispatch.FindKernel("FloodingStep");
@@ -81,9 +88,9 @@ public class SDFDispatcher : MultiFormatPipelineStep
 
         foreach (int kernelIdx in kernels)
         {
-            pipelineContext.BindComputeBuffer(shaderToDispatch, kernelIdx, PID_buffer1, buffer1);
-            pipelineContext.BindComputeBuffer(shaderToDispatch, kernelIdx, PID_buffer2, buffer2);
-            pipelineContext.BindTexture(shaderToDispatch, kernelIdx, PID_inputTexture, coastlineTexture);
+            pipelineContext.BindComputeBuffer(shaderToDispatch, kernelIdx, PID_buffer1, floodingBuffer1);
+            pipelineContext.BindComputeBuffer(shaderToDispatch, kernelIdx, PID_buffer2, floodingBuffer2);
+            pipelineContext.BindComputeBuffer(shaderToDispatch, kernelIdx, PID_inputTexture, inputContinentHeightmap);
             pipelineContext.BindTexture(shaderToDispatch, kernelIdx, PID_outputTexture, pipelineContext.intermediateHeightmap);
         }
 
@@ -134,11 +141,6 @@ public class SDFDispatcher : MultiFormatPipelineStep
 
         // Heightmap postprocessing
         pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, sDFPostprocessorKernel, dispatchGroups);
-
-        // TODO: these will become obsolete if we decide to play with endless generation
-        // buffer1.Release();
-        // buffer2.Release();
-        // coastlineTexture.Release();
     }
 
     public override void StepConclusion(PipelineContext pipelineContext) { }
