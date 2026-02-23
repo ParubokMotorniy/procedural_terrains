@@ -91,7 +91,6 @@ namespace GenerationPipeline
             }
             augmentedPipeline.Add(normalizer);
             augmentedPipeline.Add(finalizer);
-            print(augmentedPipeline.Count);
 
 #if UNITY_EDITOR
             if (useTestTexture)

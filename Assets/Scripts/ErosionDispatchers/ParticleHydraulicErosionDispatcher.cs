@@ -10,9 +10,6 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
     [SerializeField]
     public ComputeShader erosionComputeShader;
 
-    [Range(1, 3)]
-    public int groupScaleFactor = 0;
-
     [Range(7, 32)]
     public int numSimultaneousParticles = 10;
 
@@ -104,17 +101,19 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
 
     public override void StepBody(PipelineContext pipelineContext)
     {
-        int textureSize = pipelineContext.GetHeightmapSize();
-        int numGroups = (int)math.pow(2, groupScaleFactor);
+
         int numActualParticles = (int)math.pow(2, numSimultaneousParticles);
-        int particlesPerThread = numActualParticles / (integrateGroupSize * numGroups);
-        int numTexelsPerThread = textureSize / (numGroups * resolveGroupSize);
+        var (optimalIntegrateGroupSize, numIntegrationGroups) = GenerationUtilities.GetOptimalNumberOfGroups(numActualParticles, new int[] { integrateGroupSize }, Int32.MaxValue, 1);
+        int particlesPerThread = numActualParticles / (integrateGroupSize * numIntegrationGroups);
+        Assert.IsTrue(numActualParticles % (integrateGroupSize * numIntegrationGroups) == 0, "Particles must be distributed among threads evenly!");
 
-        var integrateDispatchGroups = new Vector3(numGroups, 1, 1);
-        var resolveDispatchGroups = new Vector3(numGroups, numGroups, 1);
+        int textureSize = pipelineContext.GetHeightmapSize();
+        var (optimalResolveGroupSize, numResolveGroups) = GenerationUtilities.GetOptimalNumberOfGroups(textureSize, new int[] { resolveGroupSize }, Int32.MaxValue, 1);
+        int numTexelsPerThread = textureSize / (numResolveGroups * resolveGroupSize);
+        Assert.IsTrue(textureSize % (numResolveGroups * resolveGroupSize) == 0, "Texels must be distributed among threads evenly!");
 
-        Assert.IsTrue(numActualParticles % (integrateGroupSize * numGroups) == 0, "Particles must be distributed among threads evenly!");
-        Assert.IsTrue(textureSize % (numGroups * resolveGroupSize) == 0, "Texels must be distributed among threads evenly!");
+        var integrateDispatchGroups = new Vector3(numIntegrationGroups, 1, 1);
+        var resolveDispatchGroups = new Vector3(numResolveGroups, numResolveGroups, 1);
 
         int particlesInitializerKernelIdx = erosionComputeShader.FindKernel("ParticlesInitializer");
         int changeResolverKernelIdx = erosionComputeShader.FindKernel("ChangeResolver");
@@ -202,9 +201,7 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
             }
         }
     }
-
     public override void StepConclusion(PipelineContext pipelineContext) { }
-
     public override void UpdateHeightmapState(ref HeightmapProperties previousState)
     { }
 }

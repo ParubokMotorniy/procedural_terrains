@@ -90,7 +90,6 @@ float3 computeClosestPointOnEllipse(float a, float b, float2 pointOfInterest)
 float maskCoefficient(float2 texelPosition)
 {
     float halfLength = bufferSideLength / 2.0;
-    // TODO: can be simplified to simple circle computation
     float innerA = halfLength - maskBorderWidth;
     float innerB = halfLength - maskBorderWidth;
 

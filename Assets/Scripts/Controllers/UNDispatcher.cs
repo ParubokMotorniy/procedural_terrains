@@ -2,14 +2,12 @@ using UnityEngine;
 using UnityEngine.Assertions;
 using Unity.Mathematics;
 using GenerationPipeline;
+using System;
 
 public class UNDispatcher : MultiFormatPipelineStep
 {
     [SerializeField]
     private ComputeShader shaderToDispatch;
-
-    [Range(1, 3)]
-    public int groupScaleFactor = 0;
 
     [Range(0.001f, 2.0f)]
     public float noiseFrequency = 0.001f;
@@ -47,8 +45,8 @@ public class UNDispatcher : MultiFormatPipelineStep
     public override void StepBody(PipelineContext pipelineContext)
     {
         int textureSize = pipelineContext.GetHeightmapSize();
-        int numGroups = (int)math.pow(2, groupScaleFactor);
-        int numLinearThreads = groupSize * numGroups;
+        var (optimalGroupSize, numGroups) = GenerationUtilities.GetOptimalNumberOfGroups(textureSize, new int[] { groupSize }, Int32.MaxValue, 1);
+        int numLinearThreads = optimalGroupSize * numGroups;
 
         Assert.IsTrue(textureSize % numLinearThreads == 0, "Texels must be distributed among threads evenly!");
 

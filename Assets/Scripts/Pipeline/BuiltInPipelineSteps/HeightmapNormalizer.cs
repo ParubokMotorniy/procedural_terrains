@@ -28,7 +28,6 @@ namespace GenerationPipeline
             {
                 pipelineContext.AppendDispatchToCommandBuffer(normalizationShader, normalizationKernel, new Vector3(1, 1, 1));
             }
-            Debug.LogWarning("Heightmap has been normalized. Max height now: " + 1.0);
         }
 
         public InputExpectations GetStepExpectations()

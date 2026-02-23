@@ -2,6 +2,7 @@ using GenerationPipeline;
 using UnityEngine.Assertions;
 using Unity.Mathematics;
 using UnityEngine;
+using System;
 
 public class ThermalErosionDispatcher : MultiFormatPipelineStep
 {
@@ -13,9 +14,6 @@ public class ThermalErosionDispatcher : MultiFormatPipelineStep
 
     [Range(0.001f, 1.0f)]
     public float talusThreshold = 0.15f;
-
-    [Range(1, 3)]
-    public int groupScaleFactor = 0;
 
     [Range(1, 100)]
     public int erosionIterationLimit = 25;
@@ -40,8 +38,9 @@ public class ThermalErosionDispatcher : MultiFormatPipelineStep
     public override void StepBody(PipelineContext pipelineContext)
     {
         int textureSize = pipelineContext.GetHeightmapSize();
-        int numGroups = (int)math.pow(2, groupScaleFactor);
-        int numLinearThreads = groupSize * numGroups;
+        var (optimalGroupSize, numGroups) = GenerationUtilities.GetOptimalNumberOfGroups(textureSize, new int[] { groupSize }, Int32.MaxValue, 4);
+
+        int numLinearThreads = optimalGroupSize * numGroups;
         int texelsPerThread = textureSize / numLinearThreads;
 
         Assert.IsTrue(textureSize % numLinearThreads == 0, "Texels must be distributed among threads evenly!");

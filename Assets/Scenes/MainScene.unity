@@ -149,7 +149,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GenerationControllerr
   shaderToDispatch: {fileID: 7200000, guid: 960e83aac4f822fd1b16e9e8930df0bb, type: 3}
-  groupScaleFactor: 3
   noiseFrequency: 0.003
   persistence: 0.15
   sharpness: 0.7
@@ -513,7 +512,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SDFDispatcher
   shaderToDispatch: {fileID: 7200000, guid: 6533fa195b3b17795aa989c0fcf24026, type: 3}
-  groupScaleFactor: 3
   baseSimplexFrequency: 3.2
 --- !u!4 &360891027
 Transform:
@@ -621,15 +619,16 @@ MonoBehaviour:
   terrainSize: 9
   terrainScale: 1
   enableProfiling: 0
-  generatorSeed: 758672
+  generatorSeed: 77645857
   dumpTextures: 0
   useTestTexture: 0
   testTexture: {fileID: 2800000, guid: b41b9ee7e6cd54a8a92533da387d527d, type: 3}
   pipelineSteps:
-  - {fileID: 1592727441}
+  - {fileID: 280840668}
   - {fileID: 1412956747}
   - {fileID: 1778127573}
   - {fileID: 1412956747}
+  - {fileID: 1778127573}
 --- !u!4 &385078007
 Transform:
   m_ObjectHideFlags: 0
@@ -855,7 +854,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _HeightMap:
-        m_Texture: {fileID: 1650225388}
+        m_Texture: {fileID: 832353900}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _Heightmap:
@@ -937,6 +936,43 @@ Material:
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
+--- !u!84 &832353900
+RenderTexture:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: 
+  m_ImageContentsHash:
+    serializedVersion: 2
+    Hash: 00000000000000000000000000000000
+  m_IsAlphaChannelOptional: 0
+  serializedVersion: 6
+  m_Width: 512
+  m_Height: 512
+  m_AntiAliasing: 1
+  m_MipCount: -1
+  m_DepthStencilFormat: 0
+  m_ColorFormat: 21
+  m_MipMap: 0
+  m_GenerateMips: 1
+  m_SRGB: 1
+  m_UseDynamicScale: 0
+  m_UseDynamicScaleExplicit: 0
+  m_BindMS: 0
+  m_EnableCompatibleFormat: 1
+  m_EnableRandomWrite: 1
+  m_TextureSettings:
+    serializedVersion: 2
+    m_FilterMode: 1
+    m_Aniso: 1
+    m_MipBias: 0
+    m_WrapU: 1
+    m_WrapV: 1
+    m_WrapW: 1
+  m_Dimension: 2
+  m_VolumeDepth: 1
+  m_ShadowSamplingMode: 2
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0
@@ -1032,9 +1068,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MidpointDisplacementController
   shaderToDispatch: {fileID: 7200000, guid: 2da1ab904200f97c69eeb6b358aa73d3, type: 3}
   numSubdivisions: 3
-  H: 0.079
+  H: 0.035
   addExtraNoise: 1
-  worleyFrequency: 4
+  worleyFrequency: 1.3
   perlinFrequency: 2.5
 --- !u!1 &1078476957
 GameObject:
@@ -1165,10 +1201,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ThermalErosionDispatcher
   erosionComputeShader: {fileID: 7200000, guid: fd1160cbc396f5665a006dc6a2d9b936, type: 3}
-  distributionCoefficient: 0.1
+  distributionCoefficient: 0.3
   talusThreshold: 0.001
-  groupScaleFactor: 2
-  erosionIterationLimit: 5
+  erosionIterationLimit: 10
 --- !u!4 &1412956748
 Transform:
   m_ObjectHideFlags: 0
@@ -1229,47 +1264,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FFTDispatcher
   shaderToDispatch: {fileID: 7200000, guid: 7eab4ea28e40baeefb1eed8a3ff23269, type: 3}
-  groupScaleFactor: 2
   inverseGroupScaleFactor: 6
   fractalDimension: 1.6
   fracCoefficientsConsidered: 0.3
---- !u!84 &1650225388
-RenderTexture:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: 
-  m_ImageContentsHash:
-    serializedVersion: 2
-    Hash: 00000000000000000000000000000000
-  m_IsAlphaChannelOptional: 0
-  serializedVersion: 6
-  m_Width: 512
-  m_Height: 512
-  m_AntiAliasing: 1
-  m_MipCount: -1
-  m_DepthStencilFormat: 0
-  m_ColorFormat: 21
-  m_MipMap: 0
-  m_GenerateMips: 1
-  m_SRGB: 1
-  m_UseDynamicScale: 0
-  m_UseDynamicScaleExplicit: 0
-  m_BindMS: 0
-  m_EnableCompatibleFormat: 1
-  m_EnableRandomWrite: 1
-  m_TextureSettings:
-    serializedVersion: 2
-    m_FilterMode: 1
-    m_Aniso: 1
-    m_MipBias: 0
-    m_WrapU: 1
-    m_WrapV: 1
-    m_WrapW: 1
-  m_Dimension: 2
-  m_VolumeDepth: 1
-  m_ShadowSamplingMode: 2
 --- !u!1 &1778127572
 GameObject:
   m_ObjectHideFlags: 0
@@ -1300,9 +1297,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CellularHydraulicErosionDispatcher
   erosionComputeShader: {fileID: 7200000, guid: 4ed1628a5a942d083b9081ea5e46e44b, type: 3}
-  groupScaleFactor: 1
-  erosionIterationLimit: 5
-  solubilityConstant: 0.005
+  erosionIterationLimit: 1
+  solubilityConstant: 0.001
   evaporationConstant: 0.05
   rainNoiseFrequency: 0.1
 --- !u!4 &1778127574
@@ -1365,7 +1361,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ParticleHydraulicErosionDispatcher
   erosionComputeShader: {fileID: 7200000, guid: 9225322c08a776a9f920190d22c7f260, type: 3}
-  groupScaleFactor: 3
   numSimultaneousParticles: 12
   inertia: 0.1
   capacity: 7

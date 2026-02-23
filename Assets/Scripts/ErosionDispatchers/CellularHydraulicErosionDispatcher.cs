@@ -1,3 +1,4 @@
+using System;
 using GenerationPipeline;
 using Unity.Mathematics;
 using UnityEngine;
@@ -7,10 +8,6 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
 {
     [SerializeField]
     public ComputeShader erosionComputeShader;
-
-    [Range(1, 3)]
-    public int groupScaleFactor = 0;
-
     [Range(1, 100)]
     public int erosionIterationLimit = 25;
 
@@ -48,8 +45,9 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
     public override void StepBody(PipelineContext pipelineContext)
     {
         int textureSize = pipelineContext.GetHeightmapSize();
-        int numGroups = (int)math.pow(2, groupScaleFactor);
-        int numLinearThreads = groupSize * numGroups;
+        var (optimalGroupSize, numGroups) = GenerationUtilities.GetOptimalNumberOfGroups(textureSize, new int[] { groupSize }, Int32.MaxValue, 4);
+        int numLinearThreads = optimalGroupSize * numGroups;
+
         int texelsPerThread = textureSize / numLinearThreads;
         var dispatchGroups = new Vector3(numGroups, numGroups, 1);
 

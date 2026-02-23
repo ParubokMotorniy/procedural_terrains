@@ -9,9 +9,6 @@ public class FFTDispatcher : MultiFormatPipelineStep
     [SerializeField]
     private ComputeShader shaderToDispatch;
 
-    [Range(0, 3)]
-    public int groupScaleFactor = 0;
-
     [Range(4, 8)]
     public int inverseGroupScaleFactor = 4;
 
@@ -74,8 +71,9 @@ public class FFTDispatcher : MultiFormatPipelineStep
         }
 
         // uniforms
-        int numGenerationGroups = (int)math.pow(2, groupScaleFactor);
-        int numLinearThreads = generationGroupSize * numGenerationGroups;
+        var (optimalGroupSize, numGenerationGroups) = GenerationUtilities.GetOptimalNumberOfGroups(math.min(coefficientsBufferSizeX, coefficientsBufferSizeY), new int[] { generationGroupSize }, Int32.MaxValue, 1);
+        int numLinearThreads = optimalGroupSize * numGenerationGroups;
+
         int texelsPerThreadX = coefficientsBufferSizeX / numLinearThreads;
         int texelsPerThreadY = coefficientsBufferSizeY / numLinearThreads;
 
