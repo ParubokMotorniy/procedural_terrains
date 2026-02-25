@@ -19,9 +19,7 @@ uniform float2 noiseDisplacement;
 uniform float worleyFrequency;
 uniform float perlinFrequency;
 
-// TODO: I may want to move the extra noise addition to the division loops
 // TODO: can I employ gradients of noise here?
-// TODO: consider using computebuffers prior to building a final texture
 // TODO: further try to understand whta causes the spikes and lattice artifacts at times
 
 float sampleGaussianNoise(float2 noiseTextureIdx)

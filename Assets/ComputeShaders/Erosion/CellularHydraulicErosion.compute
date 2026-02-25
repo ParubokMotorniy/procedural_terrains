@@ -1,11 +1,19 @@
 #include "../Common/Utilities.hlsl"
 
-RWStructuredBuffer<float> waterLevel;
+struct TexelParameters
+{
+    float waterLevel;
+    float sedimentLevel;
+};
+
+RWStructuredBuffer<TexelParameters>
+    texelParameters;
 RWTexture2D<float> resultHeightmap;
 
-struct WaterPipes
+struct TexelPipes
 {
-    float inPipes[3][3];
+    float inWaterPipes[3][3];
+    float inSedimentPipes[3][3];
 };
 
 static const uint2 pipeMap[3][3] =
@@ -14,13 +22,14 @@ static const uint2 pipeMap[3][3] =
         {uint2(1, 2), uint2(1, 1), uint2(1, 0)},
         {uint2(0, 2), uint2(0, 1), uint2(0, 0)},
 };
-RWStructuredBuffer<WaterPipes> pipesBuffer;
+RWStructuredBuffer<TexelPipes> pipesBuffer;
 
 uniform int2 heightmapDimensions; // so as not to GetDimensions() every time
 uniform int texelsPerThread;
 uniform int iterationIdx;
 uniform float solubilityConstant;
 uniform float evaporationConstant;
+uniform float capacityConstant;
 uniform float rainNoiseFrequency;
 
 uniform float2 randomSeeds;
@@ -33,6 +42,13 @@ static const float HEIGHT_EPS = 1.0e-3; // texels differing by less are assumed 
 static const float MIN_WATER = 0.3;
 
 // TODO: try to adjust erosion by the slope value
+// 1. Add sediment map. I can't do without it          -> done
+// 2. Adapt current implementation to the sediment map -> done
+// 3. Introduce computation of flow velocity in a cell
+// 4. Introduce computation of effective sediment capacity
+// 5. Adjust sediment by capacity
+// 6. Distribute sediment separately from water, respecting proportionality and
+// 7. Adjust water evaporation
 
 float computeUniformFloat(uint2 targetTextureCoordinates, int nonce)
 {
@@ -52,7 +68,8 @@ float computeUniformFloat(uint2 targetTextureCoordinates, int nonce)
         {
             int2 processedTexel = topLeftCorner + int2(x, y);
             uint processedTexelLin = index2dTo1d(heightmapDimensions, processedTexel);
-            waterLevel[processedTexelLin] = 0.0;
+            texelParameters[processedTexelLin].waterLevel = 0.0;
+            texelParameters[processedTexelLin].sedimentLevel = 0.0;
         }
     }
 }
@@ -70,16 +87,18 @@ float computeUniformFloat(uint2 targetTextureCoordinates, int nonce)
             uint2 processedTexel = (uint2)processedTexel_i;
             uint lin = index2dTo1d(heightmapDimensions, processedTexel);
 
-            float currentWaterLevel = waterLevel[lin];
+            float currentWaterLevel = texelParameters[lin].waterLevel;
             float currentHeight = resultHeightmap[processedTexel_i];
             float maxAllowedExtraWater = currentHeight / solubilityConstant;
 
             float extraRainWater = min(maxAllowedExtraWater, pinkNoise2D(((float2)processedTexel + randomSeeds * (float2)heightmapDimensions) * rainNoiseFrequency));
             extraRainWater = extraRainWater < MIN_WATER ? 0.0 : extraRainWater;
+            float localSoftness = computeSoftnessCoefficient(computeGradientAtPoint(resultHeightmap, heightmapDimensions, processedTexel), currentHeight, 0.1);
+            float heightLoss = extraRainWater * solubilityConstant * localSoftness;
 
-            // this can break assumption that water always contain the same concentration of sediment (if more water falls than there is sediment to be fit into that volume). Thus clamping is needed.
-            waterLevel[lin] = extraRainWater + currentWaterLevel;                                              // step 1
-            resultHeightmap[processedTexel_i] = max(currentHeight - extraRainWater * solubilityConstant, 0.0); // step 2
+            texelParameters[lin].waterLevel = extraRainWater + currentWaterLevel;     // step 1
+            texelParameters[lin].sedimentLevel += min(currentHeight, heightLoss);     // step 2
+            resultHeightmap[processedTexel_i] = max(currentHeight - heightLoss, 0.0); // step 2
         }
     }
 }
@@ -87,6 +106,7 @@ float computeUniformFloat(uint2 targetTextureCoordinates, int nonce)
 struct WaterDistributionFromTexel
 {
     float waterSpreadValue[3][3];
+    float sedimentSpreadValue[3][3];
 };
 
 // computes how water (and implicit sediment) is distributed from texel
@@ -95,7 +115,8 @@ WaterDistributionFromTexel computeWaterDistribution(int2 processedTexel)
     WaterDistributionFromTexel nInfo;
 
     uint centerLin = index2dTo1d(heightmapDimensions, (uint2)processedTexel);
-    float waterLevelAtTexel = waterLevel[centerLin];
+    float waterLevelAtTexel = texelParameters[centerLin].waterLevel;
+    float sedimentLevelAtTexel = texelParameters[centerLin].sedimentLevel;
     float texelHeight = resultHeightmap[processedTexel] + waterLevelAtTexel;
 
     float sumError = 0.0;
@@ -111,7 +132,7 @@ WaterDistributionFromTexel computeWaterDistribution(int2 processedTexel)
                 int2 neighborCoord = terrainWrap(processedTexel + int2(x, y), heightmapDimensions);
 
                 uint nLin = index2dTo1d(heightmapDimensions, (uint2)neighborCoord);
-                float d = texelHeight - (resultHeightmap[neighborCoord] + waterLevel[nLin]);
+                float d = texelHeight - (resultHeightmap[neighborCoord] + texelParameters[nLin].waterLevel);
                 if (d > HEIGHT_EPS)
                 {
                     numCriticalNeighbors++;
@@ -135,6 +156,7 @@ WaterDistributionFromTexel computeWaterDistribution(int2 processedTexel)
             [unroll] for (int xx = 0; xx < 3; ++xx)
             {
                 nInfo.waterSpreadValue[yy][xx] = 0.0;
+                nInfo.sedimentSpreadValue[yy][xx] = 0.0;
             }
         }
         return nInfo;
@@ -156,13 +178,19 @@ WaterDistributionFromTexel computeWaterDistribution(int2 processedTexel)
             for (int y = -1; y < 2; ++y)
             {
                 float d = nInfo.waterSpreadValue[y + 1][x + 1];
-                nInfo.waterSpreadValue[y + 1][x + 1] = totalWaterLost * d * invSum;
+
+                float dWater = totalWaterLost * d * invSum;
+                float dSediment = (sedimentLevelAtTexel * dWater) / waterLevelAtTexel;
+
+                nInfo.waterSpreadValue[y + 1][x + 1] = dWater;
+                nInfo.sedimentSpreadValue[y + 1][x + 1] = dSediment;
             }
         }
     }
 
-    // how much water the central texel loses
+    // how much water and sediment the central texel loses
     nInfo.waterSpreadValue[1][1] = -totalWaterLost;
+    nInfo.sedimentSpreadValue[1][1] = -(totalWaterLost * sedimentLevelAtTexel) / waterLevelAtTexel;
     return nInfo;
 }
 
@@ -178,8 +206,8 @@ void applyKernel(int2 processedTexel)
             uint lin = index2dTo1d(heightmapDimensions, (uint2)target);
 
             uint2 targetInPipe = pipeMap[i + 1][j + 1];
-            pipesBuffer[lin].inPipes[targetInPipe.x][targetInPipe.y] = distributionAtTexel.waterSpreadValue[j + 1][i + 1];
-            // waterLevel[lin] += distributionAtTexel.waterSpreadValue[j + 1][i + 1];
+            pipesBuffer[lin].inWaterPipes[targetInPipe.x][targetInPipe.y] = distributionAtTexel.waterSpreadValue[j + 1][i + 1];
+            pipesBuffer[lin].inSedimentPipes[targetInPipe.x][targetInPipe.y] = distributionAtTexel.sedimentSpreadValue[j + 1][i + 1];
         }
     }
 }
@@ -213,7 +241,8 @@ void applyKernel(int2 processedTexel)
             {
                 for (int j = 0; j < 3; ++j)
                 {
-                    pipesBuffer[lin].inPipes[i][j] = 0;
+                    pipesBuffer[lin].inWaterPipes[i][j] = 0;
+                    pipesBuffer[lin].inSedimentPipes[i][j] = 0;
                 }
             }
         }
@@ -237,22 +266,27 @@ void applyKernel(int2 processedTexel)
             uint lin = index2dTo1d(heightmapDimensions, processedTexel);
 
             float extraPipeWater = 0.0;
+            float extraPipeSediment = 0.0;
             for (int i = 0; i < 3; ++i)
             {
                 for (int j = 0; j < 3; ++j)
                 {
-                    extraPipeWater += pipesBuffer[lin].inPipes[i][j];
+                    extraPipeWater += pipesBuffer[lin].inWaterPipes[i][j];
+                    extraPipeSediment += pipesBuffer[lin].inSedimentPipes[i][j];
                 }
             }
-            float waterLevelAtTexel = max(0.0, waterLevel[lin] + extraPipeWater);
+            float waterLevelAtTexel = max(0.0, texelParameters[lin].waterLevel + extraPipeWater);
+            float sedimentLevelAtTexel = max(0.0, texelParameters[lin].sedimentLevel + extraPipeSediment);
 
             float newWaterLevel = waterLevelAtTexel * (1.0 - evap);
-
             float removedWater = waterLevelAtTexel - newWaterLevel;
-            float sedimentationValue = removedWater * solubilityConstant;
+
+            float maxSediment = waterLevelAtTexel * capacityConstant;
+            float sedimentationValue = max(0.0, sedimentLevelAtTexel - maxSediment);
 
             // step 4
-            waterLevel[lin] = max(newWaterLevel, 0.0);
+            texelParameters[lin].waterLevel = max(newWaterLevel, 0.0);
+            texelParameters[lin].sedimentLevel = max(sedimentLevelAtTexel - sedimentationValue, 0.0);
             resultHeightmap[processedTexel_i] += sedimentationValue;
         }
     }
@@ -274,18 +308,17 @@ void applyKernel(int2 processedTexel)
             uint2 processedTexel = (uint2)processedTexel_i;
 
             uint lin = index2dTo1d(heightmapDimensions, processedTexel);
-            float extraPipeWater = 0.0;
+            float extraPipeSediment = 0.0;
             for (int i = 0; i < 3; ++i)
             {
                 for (int j = 0; j < 3; ++j)
                 {
-                    extraPipeWater += pipesBuffer[lin].inPipes[i][j];
+                    extraPipeSediment += pipesBuffer[lin].inSedimentPipes[i][j];
                 }
             }
 
-            float waterLevelAtTexel = max(0.0, waterLevel[lin] + extraPipeWater);
-            float sedimentationValue = waterLevelAtTexel * solubilityConstant;
-            resultHeightmap[processedTexel_i] += sedimentationValue;
+            float sedimentLevelAtTexel = max(0.0, texelParameters[lin].sedimentLevel + extraPipeSediment);
+            resultHeightmap[processedTexel_i] += sedimentLevelAtTexel;
         }
     }
 }

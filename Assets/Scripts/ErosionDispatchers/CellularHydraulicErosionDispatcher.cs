@@ -17,22 +17,27 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
     [Range(0.0001f, 1.0f)]
     public float evaporationConstant;
 
+    [Range(0.0001f, 1.0f)]
+    public float capacityConstant;
+
     [Range(0.001f, 1.0f)]
     public float rainNoiseFrequency = 0.25f;
 
+
     private const int groupSize = 32;
 
-    private ComputeBuffer waterLevelBuffer;
+    private ComputeBuffer texelParametersBuffer;
     private ComputeBuffer waterPipesBuffer;
 
     private static readonly int PID_resultHeightmap = Shader.PropertyToID("resultHeightmap");
-    private static readonly int PID_waterLevel = Shader.PropertyToID("waterLevel");
+    private static readonly int PID_waterLevel = Shader.PropertyToID("texelParameters");
     private static readonly int PID_pipesBuffer = Shader.PropertyToID("pipesBuffer");
     private static readonly int PID_permuteACore = Shader.PropertyToID("permuteACore");
     private static readonly int PID_permuteAStripH = Shader.PropertyToID("permuteAStripH");
     private static readonly int PID_permuteAStripV = Shader.PropertyToID("permuteAStripV");
     private static readonly int PID_texelsPerThread = Shader.PropertyToID("texelsPerThread");
     private static readonly int PID_solubilityConstant = Shader.PropertyToID("solubilityConstant");
+    private static readonly int PID_capacityConstant = Shader.PropertyToID("capacityConstant");
     private static readonly int PID_evaporationConstant = Shader.PropertyToID("evaporationConstant");
     private static readonly int PID_heightmapDimensions = Shader.PropertyToID("heightmapDimensions");
     private static readonly int PID_randomSeeds = Shader.PropertyToID("randomSeeds");
@@ -58,17 +63,17 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
 
         {
             int neededBufferSize = textureSize * textureSize;
-            if (waterLevelBuffer is null || !waterLevelBuffer.IsValid() || waterLevelBuffer.count != neededBufferSize)
+            if (texelParametersBuffer is null || !texelParametersBuffer.IsValid() || texelParametersBuffer.count != neededBufferSize)
             {
-                waterLevelBuffer = new ComputeBuffer(neededBufferSize, sizeof(float));
-                Assert.IsTrue(waterLevelBuffer.IsValid());
+                texelParametersBuffer = new ComputeBuffer(neededBufferSize, 2 * sizeof(float));
+                Assert.IsTrue(texelParametersBuffer.IsValid());
             }
         }
         {
             int neededBufferSize = textureSize * textureSize;
             if (waterPipesBuffer is null || !waterPipesBuffer.IsValid() || waterPipesBuffer.count != neededBufferSize)
             {
-                waterPipesBuffer = new ComputeBuffer(neededBufferSize, sizeof(float) * 9);
+                waterPipesBuffer = new ComputeBuffer(neededBufferSize, sizeof(float) * 18);
                 Assert.IsTrue(waterPipesBuffer.IsValid());
             }
         }
@@ -88,7 +93,7 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
         foreach (int kernelIdx in new[] { rainDropKernelIdx, waterEvaporatorKernelIdx, resourceInitializerKernelIdx, finalWaterEvaporatorKernelIdx, eroderKernelIdx, pipePlumberKernelIdx })
         {
             pipelineContext.BindTexture(erosionComputeShader, kernelIdx, PID_resultHeightmap, pipelineContext.intermediateHeightmap);
-            pipelineContext.BindComputeBuffer(erosionComputeShader, kernelIdx, PID_waterLevel, waterLevelBuffer);
+            pipelineContext.BindComputeBuffer(erosionComputeShader, kernelIdx, PID_waterLevel, texelParametersBuffer);
             pipelineContext.BindComputeBuffer(erosionComputeShader, kernelIdx, PID_pipesBuffer, waterPipesBuffer);
         }
 
@@ -99,6 +104,7 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
         pipelineContext.SetUniformInts(erosionComputeShader, PID_heightmapDimensions, new int[2] { textureSize, textureSize });
         pipelineContext.SetUniformFloat(erosionComputeShader, PID_evaporationConstant, evaporationConstant);
         pipelineContext.SetUniformFloat(erosionComputeShader, PID_solubilityConstant, solubilityConstant);
+        pipelineContext.SetUniformFloat(erosionComputeShader, PID_capacityConstant, capacityConstant);
         pipelineContext.SetUniformFloat(erosionComputeShader, PID_rainNoiseFrequency, rainNoiseFrequency);
 
         pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, resourceInitializerKernelIdx, dispatchGroups);
@@ -112,8 +118,7 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, eroderKernelIdx, dispatchGroups);
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, waterEvaporatorKernelIdx, dispatchGroups);
         }
-
-        pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, finalWaterEvaporatorKernelIdx, dispatchGroups);
+        // pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, finalWaterEvaporatorKernelIdx, dispatchGroups);
     }
 
     public override void StepConclusion(PipelineContext pipelineContext) { }

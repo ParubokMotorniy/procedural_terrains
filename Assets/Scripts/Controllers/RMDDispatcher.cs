@@ -42,6 +42,7 @@ public class RMDDispatcher : MultiFormatPipelineStep
 
     public override void StepBody(PipelineContext pipelineContext)
     {
+        //TODO: fitting problems can be solved (reduced) by introducing keyword-based group size 
         int textureSize = pipelineContext.GetHeightmapSize();
         int texelsPerThreadDomain = (int)math.pow(2, numSubdivisions);
         int numLinearThreads = textureSize / texelsPerThreadDomain;
