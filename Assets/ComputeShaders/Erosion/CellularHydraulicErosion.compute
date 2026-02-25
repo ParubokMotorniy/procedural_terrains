@@ -27,28 +27,22 @@ RWStructuredBuffer<TexelPipes> pipesBuffer;
 uniform int2 heightmapDimensions; // so as not to GetDimensions() every time
 uniform int texelsPerThread;
 uniform int iterationIdx;
-uniform float solubilityConstant;
+
+uniform float rainSolubilityConstant;
 uniform float evaporationConstant;
 uniform float capacityConstant;
-uniform float rainNoiseFrequency;
+uniform float depositionConstant;
+uniform float solubilityConstant;
+uniform float maxWaterDepth;
 
 uniform float2 randomSeeds;
 
-uniform uint permuteACore;
-uniform uint permuteAStripH;
-uniform uint permuteAStripV;
+uniform float rainNoiseFrequency;
 
 static const float HEIGHT_EPS = 1.0e-3; // texels differing by less are assumed to be at the same level
 static const float MIN_WATER = 0.3;
 
-// TODO: try to adjust erosion by the slope value
-// 1. Add sediment map. I can't do without it          -> done
-// 2. Adapt current implementation to the sediment map -> done
-// 3. Introduce computation of flow velocity in a cell
-// 4. Introduce computation of effective sediment capacity
-// 5. Adjust sediment by capacity
-// 6. Distribute sediment separately from water, respecting proportionality and
-// 7. Adjust water evaporation
+// TODO: either figure out how to compute velocity basing on 9 neighbors, or reduce the simulation globally to Neumann neighborhood
 
 float computeUniformFloat(uint2 targetTextureCoordinates, int nonce)
 {
@@ -74,8 +68,31 @@ float computeUniformFloat(uint2 targetTextureCoordinates, int nonce)
     }
 }
 
+#pragma kernel PipePlumber
+    [numthreads(32, 32, 1)] void PipePlumber(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+{
+    int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
+    for (int x = 0; x < texelsPerThread; ++x)
+    {
+        for (int y = 0; y < texelsPerThread; ++y)
+        {
+            uint2 processedTexel = topLeftCorner + uint2(x, y);
+            uint lin = index2dTo1d(heightmapDimensions, processedTexel);
+
+            for (int i = 0; i < 3; ++i)
+            {
+                for (int j = 0; j < 3; ++j)
+                {
+                    pipesBuffer[lin].inWaterPipes[i][j] = 0;
+                    pipesBuffer[lin].inSedimentPipes[i][j] = 0;
+                }
+            }
+        }
+    }
+}
+
 #pragma kernel RainDropper
-    [numthreads(32, 32, 1)] void RainDropper(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+[numthreads(32, 32, 1)] void RainDropper(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
 
@@ -89,12 +106,12 @@ float computeUniformFloat(uint2 targetTextureCoordinates, int nonce)
 
             float currentWaterLevel = texelParameters[lin].waterLevel;
             float currentHeight = resultHeightmap[processedTexel_i];
-            float maxAllowedExtraWater = currentHeight / solubilityConstant;
+            float maxAllowedExtraWater = currentHeight / rainSolubilityConstant;
 
             float extraRainWater = min(maxAllowedExtraWater, pinkNoise2D(((float2)processedTexel + randomSeeds * (float2)heightmapDimensions) * rainNoiseFrequency));
             extraRainWater = extraRainWater < MIN_WATER ? 0.0 : extraRainWater;
             float localSoftness = computeSoftnessCoefficient(computeGradientAtPoint(resultHeightmap, heightmapDimensions, processedTexel), currentHeight, 0.1);
-            float heightLoss = extraRainWater * solubilityConstant * localSoftness;
+            float heightLoss = extraRainWater * rainSolubilityConstant * localSoftness;
 
             texelParameters[lin].waterLevel = extraRainWater + currentWaterLevel;     // step 1
             texelParameters[lin].sedimentLevel += min(currentHeight, heightLoss);     // step 2
@@ -106,17 +123,15 @@ float computeUniformFloat(uint2 targetTextureCoordinates, int nonce)
 struct WaterDistributionFromTexel
 {
     float waterSpreadValue[3][3];
-    float sedimentSpreadValue[3][3];
 };
 
-// computes how water (and implicit sediment) is distributed from texel
+// computes how water is distributed from texel
 WaterDistributionFromTexel computeWaterDistribution(int2 processedTexel)
 {
     WaterDistributionFromTexel nInfo;
 
     uint centerLin = index2dTo1d(heightmapDimensions, (uint2)processedTexel);
     float waterLevelAtTexel = texelParameters[centerLin].waterLevel;
-    float sedimentLevelAtTexel = texelParameters[centerLin].sedimentLevel;
     float texelHeight = resultHeightmap[processedTexel] + waterLevelAtTexel;
 
     float sumError = 0.0;
@@ -156,7 +171,6 @@ WaterDistributionFromTexel computeWaterDistribution(int2 processedTexel)
             [unroll] for (int xx = 0; xx < 3; ++xx)
             {
                 nInfo.waterSpreadValue[yy][xx] = 0.0;
-                nInfo.sedimentSpreadValue[yy][xx] = 0.0;
             }
         }
         return nInfo;
@@ -180,21 +194,18 @@ WaterDistributionFromTexel computeWaterDistribution(int2 processedTexel)
                 float d = nInfo.waterSpreadValue[y + 1][x + 1];
 
                 float dWater = totalWaterLost * d * invSum;
-                float dSediment = (sedimentLevelAtTexel * dWater) / waterLevelAtTexel;
 
                 nInfo.waterSpreadValue[y + 1][x + 1] = dWater;
-                nInfo.sedimentSpreadValue[y + 1][x + 1] = dSediment;
             }
         }
     }
 
-    // how much water and sediment the central texel loses
+    // how much water the central texel loses
     nInfo.waterSpreadValue[1][1] = -totalWaterLost;
-    nInfo.sedimentSpreadValue[1][1] = -(totalWaterLost * sedimentLevelAtTexel) / waterLevelAtTexel;
     return nInfo;
 }
 
-void applyKernel(int2 processedTexel)
+void applyWaterKernel(int2 processedTexel)
 {
     WaterDistributionFromTexel distributionAtTexel = computeWaterDistribution(processedTexel); // step 3
 
@@ -207,13 +218,12 @@ void applyKernel(int2 processedTexel)
 
             uint2 targetInPipe = pipeMap[i + 1][j + 1];
             pipesBuffer[lin].inWaterPipes[targetInPipe.x][targetInPipe.y] = distributionAtTexel.waterSpreadValue[j + 1][i + 1];
-            pipesBuffer[lin].inSedimentPipes[targetInPipe.x][targetInPipe.y] = distributionAtTexel.sedimentSpreadValue[j + 1][i + 1];
         }
     }
 }
 
-#pragma kernel HydraulicEroder
-[numthreads(32, 32, 1)] void HydraulicEroder(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+#pragma kernel WaterDistributor
+[numthreads(32, 32, 1)] void WaterDistributor(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
     for (int x = 0; x < texelsPerThread; ++x)
@@ -221,36 +231,115 @@ void applyKernel(int2 processedTexel)
         for (int y = 0; y < texelsPerThread; ++y)
         {
             uint2 processedTexel = topLeftCorner + uint2(x, y);
-            applyKernel(processedTexel);
+            applyWaterKernel(processedTexel);
         }
     }
 }
 
-#pragma kernel PipePlumber
-    [numthreads(32, 32, 1)] void PipePlumber(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+float computeLargerVelocity(int2 processedTexel)
+{
+    uint centerLin = index2dTo1d(heightmapDimensions, (uint2)processedTexel);
+
+    int neighborTop = index2dTo1d(heightmapDimensions, terrainWrap(processedTexel - int2(0, 1), heightmapDimensions));
+    int neighborBottom = index2dTo1d(heightmapDimensions, terrainWrap(processedTexel + int2(0, 1), heightmapDimensions));
+
+    int neighborLeft = index2dTo1d(heightmapDimensions, terrainWrap(processedTexel - int2(1, 0), heightmapDimensions));
+    int neighborRight = index2dTo1d(heightmapDimensions, terrainWrap(processedTexel + int2(1, 0), heightmapDimensions));
+
+    float vX = 0.5 * (pipesBuffer[neighborRight].inWaterPipes[1][0] + pipesBuffer[centerLin].inWaterPipes[1][0] - pipesBuffer[neighborLeft].inWaterPipes[1][2] - pipesBuffer[centerLin].inWaterPipes[1][2]);
+
+    float vY = 0.5 * (pipesBuffer[neighborBottom].inWaterPipes[0][1] + pipesBuffer[centerLin].inWaterPipes[0][1] - pipesBuffer[neighborTop].inWaterPipes[2][1] - pipesBuffer[centerLin].inWaterPipes[2][1]);
+
+    float sNormSq = vX * vX + vY * vY;
+
+    int neighborTopLeft = index2dTo1d(heightmapDimensions, terrainWrap(processedTexel - int2(1, 1), heightmapDimensions));
+    int neighborBottomRight = index2dTo1d(heightmapDimensions, terrainWrap(processedTexel + int2(1, 1), heightmapDimensions));
+
+    int neighborTopRight = index2dTo1d(heightmapDimensions, terrainWrap(processedTexel + int2(1, -1), heightmapDimensions));
+    int neighborBottomLeft = index2dTo1d(heightmapDimensions, terrainWrap(processedTexel + int2(-1, 1), heightmapDimensions));
+
+    // from top left to bottom right
+    float vL = 0.5 * (pipesBuffer[neighborBottomRight].inWaterPipes[0][0] + pipesBuffer[centerLin].inWaterPipes[0][0] - pipesBuffer[neighborTopLeft].inWaterPipes[2][2] - pipesBuffer[centerLin].inWaterPipes[2][2]);
+
+    // from bottom left to top right
+    float vR = 0.5 * (pipesBuffer[neighborTopRight].inWaterPipes[2][0] + pipesBuffer[centerLin].inWaterPipes[2][0] - pipesBuffer[neighborBottomLeft].inWaterPipes[0][2] - pipesBuffer[centerLin].inWaterPipes[0][2]);
+
+    float dNormSq = vL * vL + vR * vR;
+
+    return sqrt(max(sNormSq, dNormSq));
+}
+
+#pragma kernel SedimentDistributor
+[numthreads(32, 32, 1)] void SedimentDistributor(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
     for (int x = 0; x < texelsPerThread; ++x)
     {
         for (int y = 0; y < texelsPerThread; ++y)
         {
-            uint2 processedTexel = topLeftCorner + uint2(x, y);
-            uint lin = index2dTo1d(heightmapDimensions, processedTexel);
+            int2 processedTexel = topLeftCorner + int2(x, y);
+            uint centerLin = index2dTo1d(heightmapDimensions, (uint2)processedTexel);
 
-            for (int i = 0; i < 3; ++i)
+            float waterLevelAtTexel = texelParameters[centerLin].waterLevel;
+            float sedimentLevelAtTexel = texelParameters[centerLin].sedimentLevel;
+            float terrainHeightAtTexel = resultHeightmap[processedTexel];
+
+            float sedimentAdjustment = 0.0;
+
             {
-                for (int j = 0; j < 3; ++j)
+                float2 heightGradientAtTexel = computeGradientAtPoint(resultHeightmap, heightmapDimensions, processedTexel);
+
+                float velocityNorm = computeLargerVelocity(processedTexel);
+
+                float gradientNorm = length(heightGradientAtTexel);
+                float sinAlpha = gradientNorm / sqrt(1.0 + gradientNorm * gradientNorm);
+
+                float depthAdjustment = waterLevelAtTexel >= maxWaterDepth ? 1.0 : (1.0 - (maxWaterDepth - waterLevelAtTexel) / maxWaterDepth);
+                float localSedimentCapacity = capacityConstant * max(sinAlpha, 0.2) * velocityNorm * depthAdjustment;
+
+                if (sedimentLevelAtTexel <= localSedimentCapacity)
                 {
-                    pipesBuffer[lin].inWaterPipes[i][j] = 0;
-                    pipesBuffer[lin].inSedimentPipes[i][j] = 0;
+                    // sediment amount is increased
+                    float localSoftness = computeSoftnessCoefficient(heightGradientAtTexel, terrainHeightAtTexel, 0.1);
+                    // we can't dissolve more than height
+                    sedimentAdjustment = min(localSoftness * (localSedimentCapacity - sedimentLevelAtTexel) * solubilityConstant, terrainHeightAtTexel);
+                }
+                else
+                {
+                    // sediment amount is reduced
+                    sedimentAdjustment = -(sedimentLevelAtTexel - localSedimentCapacity) * depositionConstant;
+                }
+                // resultHeightmap[processedTexel] = gradientNorm;
+            }
+
+            float waterLostAtTexel = abs(pipesBuffer[centerLin].inWaterPipes[1][1]);
+            float intermediateSedimentLevel = sedimentLevelAtTexel + sedimentAdjustment;
+
+            for (int i = -1; i < 2; ++i)
+            {
+                for (int j = -1; j < 2; ++j)
+                {
+                    int2 processedNeighbor = terrainWrap(processedTexel + int2(i, j), heightmapDimensions);
+                    int nLin = index2dTo1d(heightmapDimensions, processedNeighbor);
+
+                    uint2 targetInPipe = pipeMap[i + 1][j + 1];
+
+                    float waterReceived = pipesBuffer[nLin].inWaterPipes[targetInPipe.x][targetInPipe.y];
+                    float sedimentReceived = intermediateSedimentLevel * (waterReceived / waterLevelAtTexel);
+
+                    pipesBuffer[nLin].inSedimentPipes[targetInPipe.x][targetInPipe.y] = sedimentReceived;
                 }
             }
+
+            // this change will be taken into account during evaporation stage
+            pipesBuffer[centerLin].inSedimentPipes[1][1] = /*due depth*/ sedimentAdjustment - /*due water flow*/ (intermediateSedimentLevel * (waterLostAtTexel / waterLevelAtTexel));
+            resultHeightmap[processedTexel] = max(0.0, terrainHeightAtTexel - sedimentAdjustment);
         }
     }
 }
 
 #pragma kernel WaterEvaporator
-[numthreads(32, 32, 1)] void WaterEvaporator(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+    [numthreads(32, 32, 1)] void WaterEvaporator(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
 
@@ -279,22 +368,16 @@ void applyKernel(int2 processedTexel)
             float sedimentLevelAtTexel = max(0.0, texelParameters[lin].sedimentLevel + extraPipeSediment);
 
             float newWaterLevel = waterLevelAtTexel * (1.0 - evap);
-            float removedWater = waterLevelAtTexel - newWaterLevel;
 
-            float maxSediment = waterLevelAtTexel * capacityConstant;
-            float sedimentationValue = max(0.0, sedimentLevelAtTexel - maxSediment);
-
-            // step 4
-            texelParameters[lin].waterLevel = max(newWaterLevel, 0.0);
-            texelParameters[lin].sedimentLevel = max(sedimentLevelAtTexel - sedimentationValue, 0.0);
-            resultHeightmap[processedTexel_i] += sedimentationValue;
+            texelParameters[lin].waterLevel = newWaterLevel;
+            texelParameters[lin].sedimentLevel = sedimentLevelAtTexel;
         }
     }
 }
 
 // evaporates whatever water is left after the erosion process
 #pragma kernel FinalWaterEvaporator
-    [numthreads(32, 32, 1)] void FinalWaterEvaporator(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+[numthreads(32, 32, 1)] void FinalWaterEvaporator(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
 
