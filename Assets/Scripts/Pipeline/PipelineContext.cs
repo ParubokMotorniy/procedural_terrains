@@ -106,5 +106,10 @@ namespace GenerationPipeline
         {
             Graphics.ExecuteCommandBuffer(terrainPipelineCMD);
         }
+
+        public void SetKeyword(ComputeShader targetShader, ref LocalKeyword keywordToSet, bool value)
+        {
+            terrainPipelineCMD.SetKeyword(targetShader, keywordToSet, value);
+        }
     }
 }

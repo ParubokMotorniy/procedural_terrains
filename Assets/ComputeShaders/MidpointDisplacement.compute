@@ -3,6 +3,8 @@
 #include "../../3rdparty/hlsl_noise/common/stegu-math.hlsl"
 #include "./Common/Utilities.hlsl"
 
+#pragma multi_compile_local GROUP_8 GROUP_16 GROUP_32
+
 RWTexture2D<float> Result;
 
 uniform int threadDomainTexelWidth;
@@ -66,7 +68,14 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates)
 }
 
 #pragma kernel IntializeTexture
-[numthreads(16, 16, 1)] void IntializeTexture(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+#if GROUP_8
+[numthreads(8, 8, 1)]
+#elif GROUP_16
+[numthreads(16, 16, 1)]
+#elif GROUP_32
+[numthreads(32, 32, 1)]
+#endif
+    void IntializeTexture(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     uint2 topLeftCellIdx = globalId.xy * threadDomainTexelWidth;
 
@@ -90,7 +99,14 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates)
 }
 
 #pragma kernel Transition12
-[numthreads(16, 16, 1)] void Transition12(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+#if GROUP_8
+[numthreads(8, 8, 1)]
+#elif GROUP_16
+[numthreads(16, 16, 1)]
+#elif GROUP_32
+[numthreads(32, 32, 1)]
+#endif
+    void Transition12(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     uint2 topLeftCellIdx = globalId.xy * threadDomainTexelWidth;
 
@@ -114,7 +130,14 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates)
 }
 
 #pragma kernel Transition21
-[numthreads(16, 16, 1)] void Transition21(uint3 localID : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+#if GROUP_8
+    [numthreads(8, 8, 1)]
+#elif GROUP_16
+    [numthreads(16, 16, 1)]
+#elif GROUP_32
+    [numthreads(32, 32, 1)]
+#endif
+    void Transition21(uint3 localID : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     uint2 topLeftCellIdx = globalId.xy * threadDomainTexelWidth;
 

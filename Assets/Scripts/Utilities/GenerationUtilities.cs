@@ -41,7 +41,7 @@ public static class GenerationUtilities
             int testedGroupSizeAlongDimension = availableGroupSizes[i];
             Assert.IsTrue(testedGroupSizeAlongDimension < 1024, "The group size exceeds hardware limitations (on my machine)");
 
-            int preferredLocalGroups = 100 * (int)math.ceil(320 / testedGroupSizeAlongDimension); //roughly 8 * 40 = 320 threads per CU
+            int preferredLocalGroups = 100 * (int)math.ceil(320 / testedGroupSizeAlongDimension); //roughly 8 * 40 = 320 threads (5 waves) per CU
 
             int maxGroups = (int)math.min(preferredLocalGroups, math.ceil((float)linearWorkItems / (testedGroupSizeAlongDimension * minWorkPerThread)));
             int minGroups = (int)math.max(1, math.floor((float)linearWorkItems / (testedGroupSizeAlongDimension * maxWorkPerThread)));

@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.Assertions;
 using System;
 using GenerationPipeline;
+using UnityEngine.Rendering;
 
 public class RMDDispatcher : MultiFormatPipelineStep
 {
@@ -24,7 +25,7 @@ public class RMDDispatcher : MultiFormatPipelineStep
     [Range(0.01f, 10.0f)]
     public float perlinFrequency;
 
-    private const int groupSize = 16;
+    private readonly int[] groupSizes = new int[] { 32, 16, 8 };
 
     private static readonly int PID_threadDomainTexelWidth = Shader.PropertyToID("threadDomainTexelWidth");
     private static readonly int PID_threadSubdomainsX = Shader.PropertyToID("threadSubdomainsX");
@@ -42,14 +43,26 @@ public class RMDDispatcher : MultiFormatPipelineStep
 
     public override void StepBody(PipelineContext pipelineContext)
     {
-        //TODO: fitting problems can be solved (reduced) by introducing keyword-based group size 
         int textureSize = pipelineContext.GetHeightmapSize();
         int texelsPerThreadDomain = (int)math.pow(2, numSubdivisions);
         int numLinearThreads = textureSize / texelsPerThreadDomain;
-        int numGroups = numLinearThreads / groupSize;
-
-        Assert.IsTrue(numLinearThreads % groupSize == 0, "Underoccupied groups requested!");
         Assert.IsTrue(textureSize % texelsPerThreadDomain == 0, "Can't fit integer number of domains into the texture!");
+
+        int numGroups = 0;
+        int groupSize = 0;
+        foreach (int candidateGroupSize in groupSizes)
+        {
+            if (numLinearThreads % candidateGroupSize == 0)
+            {
+                numGroups = numLinearThreads / candidateGroupSize;
+                groupSize = candidateGroupSize;
+            }
+        }
+
+        Assert.IsTrue(numGroups != 0 && groupSize != 0, "Underoccupied groups requested!");
+
+        var appropriateShaderKeyword = new LocalKeyword(shaderToDispatch, "GROUP_" + groupSize);
+        pipelineContext.SetKeyword(shaderToDispatch, ref appropriateShaderKeyword, true);
 
         int initializationKernelIdx = shaderToDispatch.FindKernel("IntializeTexture");
         int transition12KernelIdx = shaderToDispatch.FindKernel("Transition12");
