@@ -8,7 +8,7 @@ uniform float slopeErosion;
 uniform float perturbationStrength;
 uniform float persistence;
 uniform int numOctaves;
-uniform uint2 textureDimensions; //to avoid GetDimensions()
+uniform uint2 textureDimensions; // to avoid GetDimensions()
 uniform float randomFloats;
 
 // TODO: when possible, I should use analytical derivatives of the resulting terrain
@@ -16,11 +16,20 @@ RWTexture2D<float> Result;
 
 #define PI 3.141592654
 
+#pragma multi_compile GLOBAL_GROUP_8 GLOBAL_GROUP_16 GLOBAL_GROUP_32 GLOBAL_GROUP_64 
+
 #pragma kernel UberNoiseTerrainGenerator
-[numthreads(32, 32, 1)] void UberNoiseTerrainGenerator(uint3 id : SV_DispatchThreadID)
+#if GLOBAL_GROUP_8
+[numthreads(8, 8, 1)]
+#elif GLOBAL_GROUP_16
+[numthreads(16, 16, 1)]
+#elif GLOBAL_GROUP_32
+[numthreads(32, 32, 1)]
+#endif
+    void UberNoiseTerrainGenerator(uint3 id : SV_DispatchThreadID)
 {
     uint2 topLeftThreadCorner = id.xy * texelsPerThread;
-    float2 extraDisplacement = (float2)textureDimensions *  randomFloats;
+    float2 extraDisplacement = (float2)textureDimensions * randomFloats;
 
     for (int i = 0; i < texelsPerThread; ++i)
     {

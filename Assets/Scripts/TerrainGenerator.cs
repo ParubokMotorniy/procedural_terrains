@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System;
 using Unity.Mathematics;
 using Unity.VisualScripting;
+using UnityEngine.Rendering;
 
 namespace GenerationPipeline
 {
@@ -14,6 +15,9 @@ namespace GenerationPipeline
     {
         [Range(5, 12)]
         public int terrainSize = 5;
+
+        [Range(3, 6)]
+        public int preferredGroupSizePower = 5;
 
         [Range(0.001f, 32.0f)]
         public float terrainScale = 1.0f;
@@ -70,7 +74,12 @@ namespace GenerationPipeline
                 Assert.IsTrue(intermediateHeightmap.IsCreated());
             }
 
-            PipelineContext currentContext = enableProfiling ? new ProfilingPipelineContext(intermediateHeightmap, generatorSeed) : new PipelineContext(intermediateHeightmap, generatorSeed);
+            int preferredGroupSize = (int)math.pow(2, preferredGroupSizePower);
+            PipelineContext currentContext = enableProfiling ? new ProfilingPipelineContext(intermediateHeightmap,
+            generatorSeed, preferredGroupSize) : new PipelineContext(intermediateHeightmap, generatorSeed, preferredGroupSize);
+
+            var groupSizeKeyword = GlobalKeyword.Create("GLOBAL_GROUP_" + preferredGroupSize);
+            currentContext.SetGlobalKeyword(ref groupSizeKeyword, true);
 
             GetComponent<Renderer>().sharedMaterial.SetTexture("_HeightMap", currentContext.finalHeightmap);
             GetComponent<Renderer>().sharedMaterial.SetFloat("_HeightScale", terrainScale);

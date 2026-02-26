@@ -54,6 +54,8 @@ uniform int2 randomInts;
 uniform float waterDeathThreshold;
 uniform float rainNoiseFrequency;
 
+#pragma multi_compile GLOBAL_GROUP_8 GLOBAL_GROUP_16 GLOBAL_GROUP_32 GLOBAL_GROUP_64 
+
 bool checkParticleIsValid(ErosionParticle particle)
 {
     float2 particlePos = particle.pos;
@@ -134,7 +136,14 @@ float2 computeUniformRandomCoordinates(uint2 targetCoordinates, int nonce)
 }
 
 #pragma kernel GarbageCollector
-[numthreads(64, 1, 1)] void GarbageCollector(uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupThreadID)
+#if GLOBAL_GROUP_8
+[numthreads(8, 1, 1)]
+#elif GLOBAL_GROUP_16
+[numthreads(16, 1, 1)]
+#elif GLOBAL_GROUP_32
+[numthreads(32, 1, 1)]
+#endif
+    void GarbageCollector(uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupThreadID)
 {
     uint threadRangeStart = globalId.x * particlesPerThread;
 
@@ -157,7 +166,14 @@ float2 computeUniformRandomCoordinates(uint2 targetCoordinates, int nonce)
 }
 
 #pragma kernel ParticlesInitializer
-    [numthreads(64, 1, 1)] void ParticlesInitializer(uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupThreadID)
+#if GLOBAL_GROUP_8
+    [numthreads(8, 1, 1)]
+#elif GLOBAL_GROUP_16
+    [numthreads(16, 1, 1)]
+#elif GLOBAL_GROUP_32
+    [numthreads(32, 1, 1)]
+#endif
+    void ParticlesInitializer(uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupThreadID)
 {
     uint threadRangeStart = globalId.x * particlesPerThread;
 
@@ -182,7 +198,14 @@ float2 computeUniformRandomCoordinates(uint2 targetCoordinates, int nonce)
 }
 
 #pragma kernel PipesInitializer
-[numthreads(32, 32, 1)] void PipesInitializer(uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupThreadID)
+#if GLOBAL_GROUP_8
+[numthreads(8, 8, 1)]
+#elif GLOBAL_GROUP_16
+[numthreads(16, 16, 1)]
+#elif GLOBAL_GROUP_32
+[numthreads(32, 32, 1)]
+#endif
+    void PipesInitializer(uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupThreadID)
 {
     uint2 threadTopLfetIndex = globalId.xy * texelsPerThread;
     for (int x = 0; x < texelsPerThread; ++x)
@@ -203,7 +226,14 @@ float2 computeUniformRandomCoordinates(uint2 targetCoordinates, int nonce)
 }
 
 #pragma kernel Integrator
-    [numthreads(64, 1, 1)] void Integrator(uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupThreadID)
+#if GLOBAL_GROUP_8
+    [numthreads(8, 1, 1)]
+#elif GLOBAL_GROUP_16
+    [numthreads(16, 1, 1)]
+#elif GLOBAL_GROUP_32
+    [numthreads(32, 1, 1)]
+#endif
+    void Integrator(uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupThreadID)
 {
     uint threadRangeStart = globalId.x * particlesPerThread;
 
@@ -287,7 +317,14 @@ float2 computeUniformRandomCoordinates(uint2 targetCoordinates, int nonce)
 }
 
 #pragma kernel ChangeResolver
-[numthreads(32, 32, 1)] void ChangeResolver(uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupThreadID)
+#if GLOBAL_GROUP_8
+[numthreads(8, 8, 1)]
+#elif GLOBAL_GROUP_16
+[numthreads(16, 16, 1)]
+#elif GLOBAL_GROUP_32
+[numthreads(32, 32, 1)]
+#endif
+    void ChangeResolver(uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupThreadID)
 {
     uint2 threadTopLeftIndex = globalId.xy * texelsPerThread;
     for (int x = 0; x < texelsPerThread; ++x)

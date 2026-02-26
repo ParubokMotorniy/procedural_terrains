@@ -21,6 +21,8 @@ uniform float randomFloats;
 static const uint MAX_UINT = 0xFFFFFFFFu;
 static const uint2 MAX_COORD = uint2(MAX_UINT, MAX_UINT);
 
+#pragma multi_compile GLOBAL_GROUP_8 GLOBAL_GROUP_16 GLOBAL_GROUP_32 GLOBAL_GROUP_64 
+
 uint tabularToLinearIdx(uint2 tabularIdx)
 {
     return tabularIdx.x + (uint)bufferSideLength * tabularIdx.y;
@@ -143,7 +145,14 @@ float coastlineComputer(float2 texelCoord)
 }
 
 #pragma kernel CoastlineGenerator
-[numthreads(32, 32, 1)] void CoastlineGenerator(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+#if GLOBAL_GROUP_8
+[numthreads(8, 8, 1)]
+#elif GLOBAL_GROUP_16
+[numthreads(16, 16, 1)]
+#elif GLOBAL_GROUP_32
+[numthreads(32, 32, 1)]
+#endif
+    void CoastlineGenerator(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     uint2 topLeftCorner = globalId.xy * texelsPerThread;
 
@@ -159,7 +168,14 @@ float coastlineComputer(float2 texelCoord)
 
 // TODO: using kernel stride of 2 gives 4 times fewer reads but 2 times more writes at border pixels. Can it be optimized?
 #pragma kernel MaskToSeedBuffer
-    [numthreads(32, 32, 1)] void MaskToSeedBuffer(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+#if GLOBAL_GROUP_8
+    [numthreads(8, 8, 1)]
+#elif GLOBAL_GROUP_16
+    [numthreads(16, 16, 1)]
+#elif GLOBAL_GROUP_32
+    [numthreads(32, 32, 1)]
+#endif
+    void MaskToSeedBuffer(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     uint2 topLeftCorner = globalId.xy * texelsPerThread;
 
@@ -203,7 +219,14 @@ float coastlineComputer(float2 texelCoord)
 }
 
 #pragma kernel FloodingStep
-[numthreads(32, 32, 1)] void FloodingStep(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+#if GLOBAL_GROUP_8
+[numthreads(8, 8, 1)]
+#elif GLOBAL_GROUP_16
+[numthreads(16, 16, 1)]
+#elif GLOBAL_GROUP_32
+[numthreads(32, 32, 1)]
+#endif
+    void FloodingStep(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     uint2 topLeftCorner = globalId.xy * texelsPerThread;
 
@@ -257,7 +280,14 @@ float coastlineComputer(float2 texelCoord)
 }
 
 #pragma kernel SeedBufferToHieghtmap
-    [numthreads(32, 32, 1)] void SeedBufferToHieghtmap(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+#if GLOBAL_GROUP_8
+    [numthreads(8, 8, 1)]
+#elif GLOBAL_GROUP_16
+    [numthreads(16, 16, 1)]
+#elif GLOBAL_GROUP_32
+    [numthreads(32, 32, 1)]
+#endif
+    void SeedBufferToHieghtmap(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     uint2 topLeftCorner = globalId.xy * texelsPerThread;
 
@@ -283,7 +313,14 @@ float coastlineComputer(float2 texelCoord)
 }
 
 #pragma kernel SDFPostprocessor
-[numthreads(32, 32, 1)] void SDFPostprocessor(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+#if GLOBAL_GROUP_8
+[numthreads(8, 8, 1)]
+#elif GLOBAL_GROUP_16
+[numthreads(16, 16, 1)]
+#elif GLOBAL_GROUP_32
+[numthreads(32, 32, 1)]
+#endif
+    void SDFPostprocessor(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     uint2 topLeftCorner = globalId.xy * texelsPerThread;
 

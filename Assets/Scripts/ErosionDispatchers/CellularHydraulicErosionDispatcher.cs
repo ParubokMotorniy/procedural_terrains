@@ -32,9 +32,6 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
     [Range(0.001f, 1.0f)]
     public float rainNoiseFrequency = 0.25f;
 
-
-    private const int groupSize = 32;
-
     private ComputeBuffer texelParametersBuffer;
     private ComputeBuffer waterPipesBuffer;
 
@@ -61,7 +58,7 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
     public override void StepBody(PipelineContext pipelineContext)
     {
         int textureSize = pipelineContext.GetHeightmapSize();
-        var (optimalGroupSize, numGroups) = GenerationUtilities.GetOptimalNumberOfGroups(textureSize, new int[] { groupSize }, Int32.MaxValue, 4);
+        var (optimalGroupSize, numGroups) = GenerationUtilities.GetOptimalNumberOfGroups(textureSize, new int[] { pipelineContext.preferredGlobalGroupSize }, Int32.MaxValue, 4);
         int numLinearThreads = optimalGroupSize * numGroups;
 
         int texelsPerThread = textureSize / numLinearThreads;

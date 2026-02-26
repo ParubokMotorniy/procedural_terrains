@@ -42,6 +42,8 @@ uniform float rainNoiseFrequency;
 static const float HEIGHT_EPS = 1.0e-3; // texels differing by less are assumed to be at the same level
 static const float MIN_WATER = 0.3;
 
+#pragma multi_compile GLOBAL_GROUP_8 GLOBAL_GROUP_16 GLOBAL_GROUP_32 GLOBAL_GROUP_64 
+
 // TODO: either figure out how to compute velocity basing on 9 neighbors, or reduce the simulation globally to Neumann neighborhood
 
 float computeUniformFloat(uint2 targetTextureCoordinates, int nonce)
@@ -52,7 +54,14 @@ float computeUniformFloat(uint2 targetTextureCoordinates, int nonce)
 
 // I don't want to perform CPU-side zeroing or change the render target (expensive)
 #pragma kernel ResourceInitializer
-[numthreads(32, 32, 1)] void ResourceInitializer(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+#if GLOBAL_GROUP_8
+[numthreads(8, 8, 1)]
+#elif GLOBAL_GROUP_16
+[numthreads(16, 16, 1)]
+#elif GLOBAL_GROUP_32
+[numthreads(32, 32, 1)]
+#endif
+    void ResourceInitializer(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
 
@@ -69,7 +78,14 @@ float computeUniformFloat(uint2 targetTextureCoordinates, int nonce)
 }
 
 #pragma kernel PipePlumber
-    [numthreads(32, 32, 1)] void PipePlumber(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+#if GLOBAL_GROUP_8
+    [numthreads(8, 8, 1)]
+#elif GLOBAL_GROUP_16
+    [numthreads(16, 16, 1)]
+#elif GLOBAL_GROUP_32
+    [numthreads(32, 32, 1)]
+#endif
+    void PipePlumber(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
     for (int x = 0; x < texelsPerThread; ++x)
@@ -92,7 +108,14 @@ float computeUniformFloat(uint2 targetTextureCoordinates, int nonce)
 }
 
 #pragma kernel RainDropper
-[numthreads(32, 32, 1)] void RainDropper(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+#if GLOBAL_GROUP_8
+[numthreads(8, 8, 1)]
+#elif GLOBAL_GROUP_16
+[numthreads(16, 16, 1)]
+#elif GLOBAL_GROUP_32
+[numthreads(32, 32, 1)]
+#endif
+    void RainDropper(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
 
@@ -223,7 +246,14 @@ void applyWaterKernel(int2 processedTexel)
 }
 
 #pragma kernel WaterDistributor
-[numthreads(32, 32, 1)] void WaterDistributor(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+#if GLOBAL_GROUP_8
+[numthreads(8, 8, 1)]
+#elif GLOBAL_GROUP_16
+[numthreads(16, 16, 1)]
+#elif GLOBAL_GROUP_32
+[numthreads(32, 32, 1)]
+#endif
+    void WaterDistributor(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
     for (int x = 0; x < texelsPerThread; ++x)
@@ -270,7 +300,14 @@ float computeLargerVelocity(int2 processedTexel)
 }
 
 #pragma kernel SedimentDistributor
-[numthreads(32, 32, 1)] void SedimentDistributor(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+#if GLOBAL_GROUP_8
+[numthreads(8, 8, 1)]
+#elif GLOBAL_GROUP_16
+[numthreads(16, 16, 1)]
+#elif GLOBAL_GROUP_32
+[numthreads(32, 32, 1)]
+#endif
+    void SedimentDistributor(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
     for (int x = 0; x < texelsPerThread; ++x)
@@ -339,7 +376,14 @@ float computeLargerVelocity(int2 processedTexel)
 }
 
 #pragma kernel WaterEvaporator
-    [numthreads(32, 32, 1)] void WaterEvaporator(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+#if GLOBAL_GROUP_8
+    [numthreads(8, 8, 1)]
+#elif GLOBAL_GROUP_16
+    [numthreads(16, 16, 1)]
+#elif GLOBAL_GROUP_32
+    [numthreads(32, 32, 1)]
+#endif
+    void WaterEvaporator(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
 
@@ -377,7 +421,14 @@ float computeLargerVelocity(int2 processedTexel)
 
 // evaporates whatever water is left after the erosion process
 #pragma kernel FinalWaterEvaporator
-[numthreads(32, 32, 1)] void FinalWaterEvaporator(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
+#if GLOBAL_GROUP_8
+[numthreads(8, 8, 1)]
+#elif GLOBAL_GROUP_16
+[numthreads(16, 16, 1)]
+#elif GLOBAL_GROUP_32
+[numthreads(32, 32, 1)]
+#endif
+    void FinalWaterEvaporator(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
 

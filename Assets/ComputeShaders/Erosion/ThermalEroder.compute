@@ -14,6 +14,8 @@ uniform uint permuteAStripV;
 
 static const float BIG_FLOAT = 3.402823466e+38f;
 
+#pragma multi_compile GLOBAL_GROUP_8 GLOBAL_GROUP_16 GLOBAL_GROUP_32 GLOBAL_GROUP_64 
+
 float computeUniformFloat(uint2 targetTextureCoordinates, int passId)
 {
     uint seed = seedFromXYPass(targetTextureCoordinates.x, targetTextureCoordinates.y, passId);
@@ -127,7 +129,14 @@ void applyKernel(int2 processedTexel)
 
 // race-free update of quadrants' centers
 #pragma kernel ThermalCoreEroder
-[numthreads(32, 32, 1)] void ThermalCoreEroder(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+#if GLOBAL_GROUP_8
+[numthreads(8, 8, 1)]
+#elif GLOBAL_GROUP_16
+[numthreads(16, 16, 1)]
+#elif GLOBAL_GROUP_32
+[numthreads(32, 32, 1)]
+#endif
+    void ThermalCoreEroder(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     int2 topLeftCorner = int2(2, 2) + (int2)globalId.xy * texelsPerThread;
     float randomUniform = computeUniformFloat(topLeftCorner, iterationIdx * (groupId.x + groupId.y));
@@ -155,7 +164,14 @@ void applyKernel(int2 processedTexel)
 
 // race-free update of quadrants' borders
 #pragma kernel ThermalBorderEroder
-    [numthreads(32, 32, 1)] void ThermalBorderEroder(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+#if GLOBAL_GROUP_8
+    [numthreads(8, 8, 1)]
+#elif GLOBAL_GROUP_16
+    [numthreads(16, 16, 1)]
+#elif GLOBAL_GROUP_32
+    [numthreads(32, 32, 1)]
+#endif
+    void ThermalBorderEroder(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
     float randomUniform = computeUniformFloat(topLeftCorner, iterationIdx * (groupId.x + groupId.y));

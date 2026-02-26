@@ -12,8 +12,6 @@ public class SDFDispatcher : MultiFormatPipelineStep
     [Range(0.025f, 4.0f)]
     public float baseSimplexFrequency = 1.0f;
 
-    private const int groupSize = 32;
-
     //both are implicitly cleared
     private ComputeBuffer floodingBuffer1;
     private ComputeBuffer floodingBuffer2;
@@ -40,7 +38,7 @@ public class SDFDispatcher : MultiFormatPipelineStep
     public override void StepBody(PipelineContext pipelineContext)
     {
         int textureSize = pipelineContext.GetHeightmapSize();
-        var (optimalGroupSize, numLinearGroups) = GenerationUtilities.GetOptimalNumberOfGroups(textureSize, new int[] { groupSize }, Int32.MaxValue, 1);
+        var (optimalGroupSize, numLinearGroups) = GenerationUtilities.GetOptimalNumberOfGroups(textureSize, new int[] { pipelineContext.preferredGlobalGroupSize }, Int32.MaxValue, 1);
         int numLinearThreads = optimalGroupSize * numLinearGroups;
 
         Assert.IsTrue(textureSize % numLinearThreads == 0, "Texels must be distributed among threads evenly!");

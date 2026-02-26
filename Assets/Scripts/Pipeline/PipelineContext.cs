@@ -22,16 +22,23 @@ namespace GenerationPipeline
             protected set;
         }
 
+        public int preferredGlobalGroupSize
+        {
+            get;
+            protected set;
+        }
+
         protected CommandBuffer terrainPipelineCMD;
         protected Random randomGenerator;
         protected static float[] randomFloatsArray = new float[2];
         protected static int[] randomIntsArray = new int[2];
 
-        public PipelineContext(RenderTexture passHeightmap, int seed)
+        public PipelineContext(RenderTexture passHeightmap, int seed, int preferredGlobalGroupSize)
         {
             intermediateHeightmap = passHeightmap;
             terrainPipelineCMD = new CommandBuffer();
             randomGenerator = new System.Random(seed);
+            this.preferredGlobalGroupSize = preferredGlobalGroupSize;
 
             finalHeightmap = new RenderTexture(intermediateHeightmap.width, intermediateHeightmap.height, 0)
             {
@@ -110,6 +117,11 @@ namespace GenerationPipeline
         public void SetKeyword(ComputeShader targetShader, ref LocalKeyword keywordToSet, bool value)
         {
             terrainPipelineCMD.SetKeyword(targetShader, keywordToSet, value);
+        }
+
+        public void SetGlobalKeyword(ref GlobalKeyword keywordToSet, bool value)
+        {
+            terrainPipelineCMD.SetKeyword(keywordToSet, value);
         }
     }
 }

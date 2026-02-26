@@ -18,8 +18,6 @@ public class ThermalErosionDispatcher : MultiFormatPipelineStep
     [Range(1, 100)]
     public int erosionIterationLimit = 25;
 
-    private const int groupSize = 32;
-
     private static readonly int PID_resultHeightmap = Shader.PropertyToID("resultHeightmap");
     private static readonly int PID_permuteACore = Shader.PropertyToID("permuteACore");
     private static readonly int PID_permuteAStripH = Shader.PropertyToID("permuteAStripH");
@@ -38,7 +36,7 @@ public class ThermalErosionDispatcher : MultiFormatPipelineStep
     public override void StepBody(PipelineContext pipelineContext)
     {
         int textureSize = pipelineContext.GetHeightmapSize();
-        var (optimalGroupSize, numGroups) = GenerationUtilities.GetOptimalNumberOfGroups(textureSize, new int[] { groupSize }, Int32.MaxValue, 4);
+        var (optimalGroupSize, numGroups) = GenerationUtilities.GetOptimalNumberOfGroups(textureSize, new int[] { pipelineContext.preferredGlobalGroupSize }, Int32.MaxValue, 4);
 
         int numLinearThreads = optimalGroupSize * numGroups;
         int texelsPerThread = textureSize / numLinearThreads;

@@ -49,9 +49,6 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
     [Range(0.001f, 10.0f)]
     public float rainNoiseFrequency = 1.0f;
 
-    private const int integrateGroupSize = 64;
-    private const int resolveGroupSize = 32;
-
     [StructLayout(LayoutKind.Sequential)]
     private struct ErosionParticle
     {
@@ -101,16 +98,16 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
 
     public override void StepBody(PipelineContext pipelineContext)
     {
-
+        int preferredGroupSize = pipelineContext.preferredGlobalGroupSize;
         int numActualParticles = (int)math.pow(2, numSimultaneousParticles);
-        var (optimalIntegrateGroupSize, numIntegrationGroups) = GenerationUtilities.GetOptimalNumberOfGroups(numActualParticles, new int[] { integrateGroupSize }, Int32.MaxValue, 1);
-        int particlesPerThread = numActualParticles / (integrateGroupSize * numIntegrationGroups);
-        Assert.IsTrue(numActualParticles % (integrateGroupSize * numIntegrationGroups) == 0, "Particles must be distributed among threads evenly!");
+        var (optimalIntegrateGroupSize, numIntegrationGroups) = GenerationUtilities.GetOptimalNumberOfGroups(numActualParticles, new int[] { preferredGroupSize }, Int32.MaxValue, 1);
+        int particlesPerThread = numActualParticles / (preferredGroupSize * numIntegrationGroups);
+        Assert.IsTrue(numActualParticles % (preferredGroupSize * numIntegrationGroups) == 0, "Particles must be distributed among threads evenly!");
 
         int textureSize = pipelineContext.GetHeightmapSize();
-        var (optimalResolveGroupSize, numResolveGroups) = GenerationUtilities.GetOptimalNumberOfGroups(textureSize, new int[] { resolveGroupSize }, Int32.MaxValue, 1);
-        int numTexelsPerThread = textureSize / (numResolveGroups * resolveGroupSize);
-        Assert.IsTrue(textureSize % (numResolveGroups * resolveGroupSize) == 0, "Texels must be distributed among threads evenly!");
+        var (optimalResolveGroupSize, numResolveGroups) = GenerationUtilities.GetOptimalNumberOfGroups(textureSize, new int[] { preferredGroupSize }, Int32.MaxValue, 1);
+        int numTexelsPerThread = textureSize / (numResolveGroups * preferredGroupSize);
+        Assert.IsTrue(textureSize % (numResolveGroups * preferredGroupSize) == 0, "Texels must be distributed among threads evenly!");
 
         var integrateDispatchGroups = new Vector3(numIntegrationGroups, 1, 1);
         var resolveDispatchGroups = new Vector3(numResolveGroups, numResolveGroups, 1);

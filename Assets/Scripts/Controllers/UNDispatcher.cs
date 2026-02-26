@@ -27,8 +27,6 @@ public class UNDispatcher : MultiFormatPipelineStep
     [Range(0.01f, 10.0f)]
     public float perturbationStrength = 0.01f;
 
-    private const int groupSize = 32;
-
     private static readonly int PID_Result = Shader.PropertyToID("Result");
     private static readonly int PID_texelsPerThread = Shader.PropertyToID("texelsPerThread");
     private static readonly int PID_noiseFrequency = Shader.PropertyToID("noiseFrequency");
@@ -45,7 +43,7 @@ public class UNDispatcher : MultiFormatPipelineStep
     public override void StepBody(PipelineContext pipelineContext)
     {
         int textureSize = pipelineContext.GetHeightmapSize();
-        var (optimalGroupSize, numGroups) = GenerationUtilities.GetOptimalNumberOfGroups(textureSize, new int[] { groupSize }, Int32.MaxValue, 1);
+        var (optimalGroupSize, numGroups) = GenerationUtilities.GetOptimalNumberOfGroups(textureSize, new int[] { pipelineContext.preferredGlobalGroupSize }, Int32.MaxValue, 1);
         int numLinearThreads = optimalGroupSize * numGroups;
 
         Assert.IsTrue(textureSize % numLinearThreads == 0, "Texels must be distributed among threads evenly!");
