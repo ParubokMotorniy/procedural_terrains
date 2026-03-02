@@ -4,12 +4,12 @@ using System.IO;
 
 public static class RenderTextureDumper
 {
-    public static void SaveRFloatToExr(RenderTexture rt, string filePath)
+    public static void SaveRFloatToExr(RenderTexture rt, string filePath, bool beAsync = true)
     {
         if (rt == null) { Debug.LogError("RT is null"); return; }
         if (!rt.IsCreated()) { Debug.LogError("RT not created"); return; }
 
-        AsyncGPUReadback.Request(rt, 0, TextureFormat.RFloat, req =>
+        var request = AsyncGPUReadback.Request(rt, 0, TextureFormat.RFloat, req =>
         {
             if (req.hasError)
             {
@@ -28,5 +28,8 @@ public static class RenderTextureDumper
             UnityEngine.Object.DestroyImmediate(tex);
             Debug.Log($"Saved EXR: {filePath}");
         });
+
+        if(!beAsync)
+            request.WaitForCompletion();
     }
 }

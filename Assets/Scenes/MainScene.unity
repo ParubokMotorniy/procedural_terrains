@@ -208,7 +208,7 @@ Camera:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 330585543}
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 2
   m_ClearFlags: 2
   m_BackGroundColor: {r: 0.4117647, g: 0.4117647, b: 0.4117647, a: 1}
@@ -620,13 +620,15 @@ MonoBehaviour:
   preferredGroupSizePower: 5
   terrainScale: 1
   enableProfiling: 0
-  generatorSeed: 74866
+  enableMetricEvaluation: 0
+  generatorSeed: 74865
+  numSamples: 25
   dumpTextures: 0
   useTestTexture: 0
   testTexture: {fileID: 2800000, guid: 3bfbe080445f6af44a691926ed750d48, type: 3}
   pipelineSteps:
   - {fileID: 1592727441}
-  - {fileID: 2081510694}
+  - {fileID: 1412956747}
 --- !u!4 &385078007
 Transform:
   m_ObjectHideFlags: 0
@@ -852,7 +854,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _HeightMap:
-        m_Texture: {fileID: 1637512497}
+        m_Texture: {fileID: 1617635558}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _Heightmap:
@@ -1228,7 +1230,7 @@ MonoBehaviour:
   inverseGroupScaleFactor: 6
   fractalDimension: 1.6
   fracCoefficientsConsidered: 0.3
---- !u!84 &1637512497
+--- !u!84 &1617635558
 RenderTexture:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}

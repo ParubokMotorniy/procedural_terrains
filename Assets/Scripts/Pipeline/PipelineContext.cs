@@ -33,23 +33,13 @@ namespace GenerationPipeline
         protected static float[] randomFloatsArray = new float[2];
         protected static int[] randomIntsArray = new int[2];
 
-        public PipelineContext(RenderTexture passHeightmap, int seed, int preferredGlobalGroupSize)
+        public PipelineContext(RenderTexture passHeightmap, RenderTexture finalHeightmap, int seed, int preferredGlobalGroupSize)
         {
             intermediateHeightmap = passHeightmap;
+            this.finalHeightmap = finalHeightmap;
             terrainPipelineCMD = new CommandBuffer();
             randomGenerator = new System.Random(seed);
             this.preferredGlobalGroupSize = preferredGlobalGroupSize;
-
-            finalHeightmap = new RenderTexture(intermediateHeightmap.width, intermediateHeightmap.height, 0)
-            {
-                graphicsFormat = UnityEngine.Experimental.Rendering.GraphicsFormat.R16_UNorm,
-                useMipMap = false,
-                enableRandomWrite = true,
-                filterMode = FilterMode.Bilinear,
-                wrapMode = TextureWrapMode.Clamp
-            };
-            finalHeightmap.Create();
-            Assert.IsTrue(finalHeightmap.IsCreated());
         }
 
         public int GetHeightmapSize() { return intermediateHeightmap.height; }

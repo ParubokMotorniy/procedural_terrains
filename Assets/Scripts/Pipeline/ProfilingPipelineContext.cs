@@ -18,13 +18,12 @@ namespace GenerationPipeline
 
         private static ProfilerRecorder gpuTimeProfiler = ProfilerRecorder.StartNew(ProfilerCategory.Render, "GPU Frame Time");
 
-
         public long cpuMilliseconds { get; private set; }
         public long gpuMilliseconds { get; private set; }
         public long gpuTicks { get; private set; }
         public long gpuFrameTime { get; private set; }
 
-        public ProfilingPipelineContext(RenderTexture passHeightmap, int seed, int preferredGroupSize) : base(passHeightmap, seed, preferredGroupSize)
+        public ProfilingPipelineContext(RenderTexture passHeightmap, RenderTexture finalHeightmap, int seed, int preferredGroupSize) : base(passHeightmap, finalHeightmap, seed, preferredGroupSize)
         {
             Debug.LogWarning("System supports fences ? :" + SystemInfo.supportsGraphicsFence);
 
@@ -49,7 +48,7 @@ namespace GenerationPipeline
 
             Graphics.ExecuteCommandBuffer(terrainPipelineCMD);
             cpuProfilingStopwatch.Stop();
-            
+
             await Task.WhenAll(cmdStartTask, cmdEndTask);
 
             cpuMilliseconds = cpuProfilingStopwatch.ElapsedMilliseconds;
@@ -58,7 +57,7 @@ namespace GenerationPipeline
 
             Debug.Log("CPU housekeeping time (ms): " + cpuMilliseconds + ". Ticks: " + cpuProfilingStopwatch.ElapsedTicks);
             Debug.Log("GPU processing time (ms): " + gpuMilliseconds + ". Ticks: " + gpuTicks);
-            Debug.Log("Total frame time (ns) :" + gpuFrameTime);
+            Debug.Log("Total frame time (ns) : " + gpuFrameTime);
         }
     }
 }
