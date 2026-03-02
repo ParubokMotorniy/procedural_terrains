@@ -25,12 +25,14 @@ namespace GenerationPipeline
 
         public ProfilingPipelineContext(RenderTexture passHeightmap, RenderTexture finalHeightmap, int seed, int preferredGroupSize) : base(passHeightmap, finalHeightmap, seed, preferredGroupSize)
         {
-            Debug.LogWarning("System supports fences ? :" + SystemInfo.supportsGraphicsFence);
 
             pipelineStartFence = terrainPipelineCMD.CreateGraphicsFence(UnityEngine.Rendering.GraphicsFenceType.CPUSynchronisation, UnityEngine.Rendering.SynchronisationStageFlags.AllGPUOperations);
 
             cpuProfilingStopwatch = new Stopwatch();
             gpuProfilingStopwatch = new Stopwatch();
+
+            Debug.LogWarning("System supports fences ? : " + SystemInfo.supportsGraphicsFence);
+            Debug.LogWarning("Stopwatches are high-res ? : " + Stopwatch.IsHighResolution);
 
             cpuProfilingStopwatch.Start();
         }

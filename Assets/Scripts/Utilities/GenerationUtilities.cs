@@ -30,7 +30,6 @@ public static class GenerationUtilities
                 return permuteA;
             }
         }
-        return permuteA;
     }
 
     //returns: group_size, n_groups

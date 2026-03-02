@@ -8,6 +8,7 @@ using UnityEngine.Rendering;
 using UnityEditor;
 using System.IO;
 using System.Text;
+using UnityEngine.Experimental.GlobalIllumination;
 
 namespace GenerationPipeline
 {
@@ -177,13 +178,16 @@ namespace GenerationPipeline
             //minimize draw calls
             int oldVSync = QualitySettings.vSyncCount;
             int oldFrameRate = Application.targetFrameRate;
+            var currentCameras = Camera.allCameras;
             {
                 QualitySettings.vSyncCount = 0;
                 Application.targetFrameRate = -1;
-                foreach (var cam in Camera.allCameras)
+                foreach (var cam in currentCameras)
                 {
                     cam.enabled = false;
                 }
+                foreach (var light in FindObjectsByType<Light>(FindObjectsSortMode.None))
+                { light.enabled = false; }
             }
 
             (long cpuSide, long gpuSide)[] result = new (long cpuSide, long gpuSide)[numSamples];
@@ -198,6 +202,7 @@ namespace GenerationPipeline
                 RenderTextureDumper.SaveRFloatToExr(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples/terrain_" + s + ".exr"), false);
             }
 
+            //TODO: I might want to make first barrier optional and instead measure time from the moment of dispatch
             {
                 string path = Path.Combine(Application.persistentDataPath, "performance_evaluation.txt");
                 var sb = new StringBuilder();
@@ -214,20 +219,30 @@ namespace GenerationPipeline
             {
                 QualitySettings.vSyncCount = oldVSync;
                 Application.targetFrameRate = oldFrameRate;
-                foreach (var cam in Camera.allCameras)
+                foreach (var cam in currentCameras)
                 {
                     cam.enabled = true;
                 }
+                foreach (var light in FindObjectsByType<Light>(FindObjectsSortMode.None))
+                { light.enabled = true; }
             }
-        }
-        void Start()
-        {
-            RegenerateTerrain();
         }
 
         void OnValidate()
         {
             GetComponent<Renderer>().sharedMaterial.SetFloat("_HeightScale", terrainScale);
+        }
+
+        void OnGUI()
+        {
+            if (GUI.Button(new Rect(25, 25, 200, 25), "Generate terrain"))
+            {
+                RegenerateTerrain();
+            }
+            if (GUI.Button(new Rect(25, 75, 200, 25), "Collect statistics"))
+            {
+                CollectStatistics();
+            }
         }
 
         void OnDrawGizmos()
