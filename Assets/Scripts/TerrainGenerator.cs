@@ -26,6 +26,9 @@ namespace GenerationPipeline
         bool enableProfiling = false;
 
         [SerializeField]
+        bool enableMetricEvaluation = false;
+
+        [SerializeField]
         int generatorSeed = 1;
 
 #if UNITY_EDITOR
@@ -46,10 +49,16 @@ namespace GenerationPipeline
         private readonly HeightmapNormalizer normalizer = new HeightmapNormalizer();
         private readonly FormatFinalizer finalizer = new FormatFinalizer();
 
-        //TODO: devise a scheme to reconcile different number of threads, groups and texture sizes
 
         //TODO: getting rid of two-step grid iteration in erosion algos improves appearance but introduces non-conservitivity and races
         //TODO: when adding basic combination UI, I may want to devise some resource clearing technique.
+
+        //benchmarking design: 
+        //I can keep the same context. Just teach it to read profiler recordings. And stall CPU to read back a new value each frame. That's it. 
+        //The question of dumping the resulting texture is still unclear, but it can be put off for now.
+        //Buffers will have to be regenrated each frame so as to insert new seeds.
+        //CPU blocking can be kept async. The important part is that measurements are split by synchronization
+        //generator can read stuff async as well.
 
         [ContextMenu("Regenerate terrain")]
         async void RegenerateTerrain()
@@ -115,6 +124,11 @@ namespace GenerationPipeline
 
             await currentContext.ExecuteBuffer();
 
+            if (enableMetricEvaluation)
+            {
+                MetricEvaluator.ComputeMetrics(currentContext.finalHeightmap);
+            }
+
 #if UNITY_EDITOR
             if (dumpTextures)
             {
@@ -122,6 +136,7 @@ namespace GenerationPipeline
                 RenderTextureDumper.SaveRFloatToExr(currentContext.finalHeightmap, "heightmap_final.exr");
             }
 #endif
+
             Debug.Log("Terrain has been regenerated!");
         }
         void Start()

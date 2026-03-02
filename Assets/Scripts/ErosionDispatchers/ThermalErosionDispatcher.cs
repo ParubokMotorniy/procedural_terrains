@@ -44,6 +44,7 @@ public class ThermalErosionDispatcher : MultiFormatPipelineStep
         Assert.IsTrue(textureSize % numLinearThreads == 0, "Texels must be distributed among threads evenly!");
         Assert.IsTrue(texelsPerThread >= 4, "A thread must have at least 4 texels to porcess");
 
+        // modular affine permutation
         int texelsPerThreadSquared = (int)math.pow(texelsPerThread - 2, 2);
         int permuteACore = GenerationUtilities.ComputeCoprime(texelsPerThreadSquared, 17);
         int permuteAStripH = GenerationUtilities.ComputeCoprime(2 * texelsPerThread, 29);
