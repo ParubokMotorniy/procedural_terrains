@@ -60,12 +60,9 @@ namespace GenerationPipeline
         //TODO: getting rid of two-step grid iteration in erosion algos improves appearance but introduces non-conservitivity and races
         //TODO: when adding basic combination UI, I may want to devise some resource clearing technique.
 
-        //benchmarking design: 
-        //I can keep the same context. Just teach it to read profiler recordings. And stall CPU to read back a new value each frame. That's it. 
-        //The question of dumping the resulting texture is still unclear, but it can be put off for now.
-        //Buffers will have to be regenrated each frame so as to insert new seeds.
-        //CPU blocking can be kept async. The important part is that measurements are split by synchronization
-        //generator can read stuff async as well.
+        int synchronizedIterationsLeft = 0;
+        (long cpuSideMs, long cpuSideTicks, long gpuSideNs)[] synchronizedResults;
+        Action postCollectionAction;
 
         private PipelineContext buildPipeline(bool enablePipelineProfiling, int pipelineSeed)
         {
@@ -226,6 +223,84 @@ namespace GenerationPipeline
                 foreach (var light in FindObjectsByType<Light>(FindObjectsSortMode.None))
                 { light.enabled = true; }
             }
+
+            Debug.Log("Collection done");
+        }
+
+
+        [ContextMenu("Collect synchronized statistics")]
+        async void CollectSynchronizedStatistics()
+        {
+            if (synchronizedIterationsLeft > 0)
+                return;
+
+            //minimize draw calls
+            int oldVSync = QualitySettings.vSyncCount;
+            int oldFrameRate = Application.targetFrameRate;
+            var currentCameras = Camera.allCameras;
+            {
+                QualitySettings.vSyncCount = 0;
+                Application.targetFrameRate = -1;
+                foreach (var cam in currentCameras)
+                {
+                    cam.enabled = false;
+                }
+                foreach (var light in FindObjectsByType<Light>(FindObjectsSortMode.None))
+                { light.enabled = false; }
+            }
+
+            synchronizedResults = new (long cpuSideMs, long cpuSideTicks, long gpuSideNs)[numSamples];
+            Directory.CreateDirectory(Path.Combine(Application.persistentDataPath, "./samples"));
+
+            postCollectionAction = () =>
+            {
+                QualitySettings.vSyncCount = oldVSync;
+                Application.targetFrameRate = oldFrameRate;
+                foreach (var cam in currentCameras)
+                {
+                    cam.enabled = true;
+                }
+                foreach (var light in FindObjectsByType<Light>(FindObjectsSortMode.None))
+                { light.enabled = true; }
+            };
+
+            synchronizedIterationsLeft = numSamples;
+        }
+
+        [ExecuteAlways]
+        async void Update()
+        {
+            if (synchronizedIterationsLeft > 0)
+            {
+                synchronizedIterationsLeft -= 1;
+
+                int myIteration = synchronizedIterationsLeft;
+
+                var newContext = (ProfilingPipelineContext)buildPipeline(true, numSamples + generatorSeed + myIteration);
+                await newContext.ExecuteBuffer();
+                synchronizedResults[myIteration] = (newContext.gpuMilliseconds, newContext.gpuTicks, newContext.gpuFrameTime);
+                RenderTextureDumper.SaveRFloatToExr(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples/terrain_" + myIteration + ".exr"), false);
+                if (myIteration == 0)
+                {
+                    string path = Path.Combine(Application.persistentDataPath, "performance_evaluation.txt");
+                    var sb = new StringBuilder();
+                    sb.AppendLine("CpuTime (ms)\tCpuTime (ticks)\tGpuTime (ns)");
+                    foreach (var (cpuSide, cpuTicks, gpuSide) in synchronizedResults)
+                    {
+                        sb.Append(cpuSide);
+                        sb.Append('\t');
+                        sb.Append(cpuTicks);
+                        sb.Append('\t');
+                        sb.AppendLine(gpuSide.ToString());
+                    }
+                    File.WriteAllText(path, sb.ToString());
+
+                    postCollectionAction();
+
+                    Debug.Log("Collection done!");
+                }
+
+            }
         }
 
         void OnValidate()
@@ -242,6 +317,10 @@ namespace GenerationPipeline
             if (GUI.Button(new Rect(25, 75, 200, 25), "Collect statistics"))
             {
                 CollectStatistics();
+            }
+            if (GUI.Button(new Rect(25, 125, 200, 25), "Collect sync statistics"))
+            {
+                CollectSynchronizedStatistics();
             }
         }
 

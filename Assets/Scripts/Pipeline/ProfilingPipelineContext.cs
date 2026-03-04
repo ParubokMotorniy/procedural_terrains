@@ -19,8 +19,11 @@ namespace GenerationPipeline
         private static ProfilerRecorder gpuTimeProfiler = ProfilerRecorder.StartNew(ProfilerCategory.Render, "GPU Frame Time");
 
         public long cpuMilliseconds { get; private set; }
+        public long cpuTicks { get; private set; }
+
         public long gpuMilliseconds { get; private set; }
         public long gpuTicks { get; private set; }
+
         public long gpuFrameTime { get; private set; }
 
         public ProfilingPipelineContext(RenderTexture passHeightmap, RenderTexture finalHeightmap, int seed, int preferredGroupSize) : base(passHeightmap, finalHeightmap, seed, preferredGroupSize)
@@ -54,10 +57,12 @@ namespace GenerationPipeline
             await Task.WhenAll(cmdStartTask, cmdEndTask);
 
             cpuMilliseconds = cpuProfilingStopwatch.ElapsedMilliseconds;
+            cpuTicks = cpuProfilingStopwatch.ElapsedTicks;
+
             gpuMilliseconds = (long)(millisecondsAtEnd.TotalMilliseconds - millisecondsAtStart.TotalMilliseconds);
             gpuTicks = millisecondsAtEnd.Ticks - millisecondsAtStart.Ticks;
 
-            Debug.Log("CPU housekeeping time (ms): " + cpuMilliseconds + ". Ticks: " + cpuProfilingStopwatch.ElapsedTicks);
+            Debug.Log("CPU housekeeping time (ms): " + cpuMilliseconds + ". Ticks: " + cpuTicks);
             Debug.Log("GPU processing time (ms): " + gpuMilliseconds + ". Ticks: " + gpuTicks);
             Debug.Log("Total frame time (ns) : " + gpuFrameTime);
         }
