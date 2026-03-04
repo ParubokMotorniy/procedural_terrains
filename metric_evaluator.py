@@ -5,6 +5,9 @@ import OpenEXR
 import Imath
 import math
 import scipy as spy
+from PIL import Image
+import tifffile
+import tqdm
 
 
 # global-local metric that contributes to the final metric basing on how "eroded" the terrain is
@@ -51,6 +54,7 @@ def evaluate_erosion_score(heightmap: np.ndarray):
 
     return erosion_score
 
+
 # TODO: normalize the metric
 # TODO: think how the magnitude can be included
 def evaluate_gradient_score(heightmap: np.ndarray, subdomainSize: int):
@@ -60,7 +64,7 @@ def evaluate_gradient_score(heightmap: np.ndarray, subdomainSize: int):
     average_gradients = []
     spans = []
 
-    for y in range(int(height / subdomainSize)):
+    for y in tqdm.tqdm(range(int(height / subdomainSize))):
         for x in range(int(width / subdomainSize)):
 
             start_x = x * subdomainSize
@@ -71,22 +75,14 @@ def evaluate_gradient_score(heightmap: np.ndarray, subdomainSize: int):
 
             local_gradients = np.array(
                 [
-                    gx[
-                        start_y:end_y,
-                        start_x:end_x,
-                    ],
-                    gy[
-                        start_y:end_y,
-                        start_x:end_x,
-                    ],
+                    gx[start_y:end_y, start_x:end_x],
+                    gy[start_y:end_y, start_x:end_x],
                 ]
             )
 
             norm = np.linalg.norm(local_gradients, axis=0) + 1e-12
-
             normalized_gradients = local_gradients / norm
 
-            max_dot_angle = 0
             g = normalized_gradients.reshape(2, -1).T
             dot_matrix = g @ g.T
             min_dot = np.clip(np.min(dot_matrix), -1.0, 1.0)
@@ -101,12 +97,28 @@ def evaluate_gradient_score(heightmap: np.ndarray, subdomainSize: int):
             avg_gradient /= np.linalg.norm(avg_gradient) + 1e-12
             average_gradients.append(avg_gradient)
 
-    max_global_angle = 0
     average_gradients = np.array(average_gradients)
-    g = average_gradients.reshape(2, -1).T 
-    dot_matrix = g @ g.T
-    min_dot = np.clip(np.min(dot_matrix), -1.0, 1.0)
-    max_global_angle = math.acos(min_dot)
+
+    try:
+        g = average_gradients.reshape(2, -1).T
+        dot_matrix = g @ g.T
+        min_dot = np.clip(np.min(dot_matrix), -1.0, 1.0)
+        max_global_angle = math.acos(min_dot)
+    except Exception as e:
+        print(f"Exception occurred during gradient score evaluation: {e}")
+        print("Doing things in plain-old style.")
+        max_global_angle = 0
+        for i in tqdm.tqdm(range(len(average_gradients))):
+            grad_1 = (average_gradients[i, 0], average_gradients[i, 1])
+            for j in range(i, len(average_gradients)):
+                grad_2 = (average_gradients[j, 0], average_gradients[j, 1])
+                dot = max(
+                    -1.0,
+                    min(1.0, (grad_1[0] * grad_2[0] + grad_1[1] * grad_2[1])),
+                )
+                angle = math.acos(dot)
+                if angle > max_global_angle:
+                    max_global_angle = angle
 
     average_angle = np.mean(spans)
     gradient_score = max_global_angle / max(1e-12, average_angle)
@@ -136,7 +148,26 @@ def read_exr_grayscale(path: str) -> np.ndarray:
     return heightmap
 
 
-def process_heightmap(heightmap: np.ndarray, filename: str):
+def read_jpg_grayscale(path: str) -> np.ndarray:
+    img = Image.open(path).convert("L")
+    arr = np.asarray(img, dtype=np.float32)
+    return arr
+
+
+def read_tiff_grayscale(path: str, normalize: bool = False) -> np.ndarray:
+    arr = tifffile.imread(path)
+
+    if arr.ndim == 3:
+        arr = arr.mean(axis=2)
+
+    tiff_as_np = arr.astype(np.float32)
+    if normalize:
+        max_value = np.max(tiff_as_np)
+        tiff_as_np /= max_value
+    return tiff_as_np
+
+
+def process_heightmap(heightmap: np.ndarray, filename: str, chunk_size: int):
     print(f"Processing heightmap {filename}")
     print("Shape:", heightmap.shape)
     print("Min:", heightmap.min(), "Max:", heightmap.max())
@@ -144,30 +175,71 @@ def process_heightmap(heightmap: np.ndarray, filename: str):
     erosion_score = evaluate_erosion_score(heightmap)
     print(f"Erosion score: {erosion_score}")
 
-    gradient_score = evaluate_gradient_score(heightmap, 8)
+    gradient_score = evaluate_gradient_score(heightmap, chunk_size)
     print(f"Gradient score: {gradient_score}")
 
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate metrics for the heightmaps.")
+
     parser.add_argument(
-        "directory", type=str, help="Directory containing EXR heightmaps"
+        "directory",
+        type=str,
+        help="Directory containing heightmaps",
     )
+
+    parser.add_argument(
+        "--format",
+        type=str,
+        default="exr",
+        help="Heightmap format (exr, jpg, jpeg, tif, tiff)",
+    )
+
+    parser.add_argument(
+        "--chunk-size",
+        type=int,
+        required=True,
+        help="Should such a need arise, the heightmap will be split into chunks of size NxN",
+    )
+
     args = parser.parse_args()
 
     directory = args.directory
+    fmt = args.format.lower()
 
     if not os.path.isdir(directory):
         raise ValueError(f"{directory} is not a valid directory")
 
-    exr_files = sorted(f for f in os.listdir(directory) if f.lower().endswith(".exr"))
+    extensions = {
+        "exr": [".exr"],
+        "jpg": [".jpg", ".jpeg"],
+        "jpeg": [".jpg", ".jpeg"],
+        "tif": [".tif", ".tiff"],
+        "tiff": [".tif", ".tiff"],
+    }
 
-    for filename in exr_files:
+    if fmt not in extensions:
+        raise ValueError("Unsupported format")
+
+    files = sorted(
+        f
+        for f in os.listdir(directory)
+        if any(f.lower().endswith(ext) for ext in extensions[fmt])
+    )
+
+    for filename in files:
         path = os.path.join(directory, filename)
 
-        heightmap = read_exr_grayscale(path)
+        if fmt == "exr":
+            heightmap = read_exr_grayscale(path)
+        elif fmt in ("jpg", "jpeg"):
+            heightmap = read_jpg_grayscale(path)
+        elif fmt in ("tif", "tiff"):
+            heightmap = read_tiff_grayscale(path)
+        else:
+            raise RuntimeError("Unexpected format")
 
-        process_heightmap(heightmap, filename)
+        process_heightmap(heightmap, filename, args.chunk_size)
 
         del heightmap
 

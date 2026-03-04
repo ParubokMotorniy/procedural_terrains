@@ -64,6 +64,9 @@ namespace GenerationPipeline
         (long cpuSideMs, long cpuSideTicks, long gpuSideNs)[] synchronizedResults;
         Action postCollectionAction;
 
+        //this flag synchronizes submissions of command buffers, in order to avoid starting overwriting the heightmap while it's being read back.
+        bool previousReadPending = false;
+
         private PipelineContext buildPipeline(bool enablePipelineProfiling, int pipelineSeed)
         {
             int textureSize = (int)math.pow(2, terrainSize);
@@ -196,7 +199,7 @@ namespace GenerationPipeline
                 var newContext = (ProfilingPipelineContext)buildPipeline(true, numSamples + generatorSeed + s);
                 await newContext.ExecuteBuffer();
                 result[s] = (newContext.gpuMilliseconds, newContext.gpuFrameTime);
-                RenderTextureDumper.SaveRFloatToExr(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples/terrain_" + s + ".exr"), false);
+                RenderTextureDumper.SaveRFloatToExr(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples/terrain_" + s + ".exr"));
             }
 
             //TODO: I might want to make first barrier optional and instead measure time from the moment of dispatch
@@ -265,21 +268,27 @@ namespace GenerationPipeline
             };
 
             synchronizedIterationsLeft = numSamples;
+            previousReadPending = false;
         }
 
         [ExecuteAlways]
         async void Update()
         {
-            if (synchronizedIterationsLeft > 0)
+            if (synchronizedIterationsLeft > 0 && !previousReadPending)
             {
                 synchronizedIterationsLeft -= 1;
 
                 int myIteration = synchronizedIterationsLeft;
 
                 var newContext = (ProfilingPipelineContext)buildPipeline(true, numSamples + generatorSeed + myIteration);
+                previousReadPending = true;
                 await newContext.ExecuteBuffer();
+
                 synchronizedResults[myIteration] = (newContext.gpuMilliseconds, newContext.gpuTicks, newContext.gpuFrameTime);
+
                 RenderTextureDumper.SaveRFloatToExr(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples/terrain_" + myIteration + ".exr"), false);
+                previousReadPending = false;
+
                 if (myIteration == 0)
                 {
                     string path = Path.Combine(Application.persistentDataPath, "performance_evaluation.txt");

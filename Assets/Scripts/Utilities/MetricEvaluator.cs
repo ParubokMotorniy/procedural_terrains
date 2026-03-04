@@ -63,7 +63,6 @@ double erosionScore = stdDev / mean;
 
 Debug.Log("Erosion score: " + erosionScore);
             }};
-    // metricsList.Add();
 
     public static void ComputeMetrics(RenderTexture rt)
     {
