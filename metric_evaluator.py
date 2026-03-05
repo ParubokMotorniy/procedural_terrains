@@ -6,8 +6,11 @@ import Imath
 import math
 import scipy as spy
 from PIL import Image
+from scipy.stats import entropy
 import tifffile
 import tqdm
+from PIL import Image
+import io
 
 
 # global-local metric that contributes to the final metric basing on how "eroded" the terrain is
@@ -130,6 +133,54 @@ def evaluate_fractal_score(heightmap: np.ndarray):
     pass
 
 
+def compressed_size_png(arr):
+    img = Image.fromarray(arr)
+
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+
+    return len(buffer.getvalue())
+
+
+def compressed_size_jpg(arr, quality=95):
+    img = Image.fromarray(arr)
+
+    buffer = io.BytesIO()
+    img.save(buffer, format="JPEG", quality=quality)
+
+    return len(buffer.getvalue())
+
+
+def shannon_entropy(arr):
+    values, counts = np.unique(arr, return_counts=True)
+    probabilities = counts / counts.sum()
+    return entropy(probabilities, base=2)
+
+
+def evaluate_global_aesthetic_measure(heightmap: np.ndarray):
+    height, width = heightmap.shape
+
+    copy_heightmap = heightmap.copy()
+    copy_heightmap = np.round(255.0 * (copy_heightmap / np.max(copy_heightmap))).astype(
+        np.uint8
+    )
+
+    texel_entropy = shannon_entropy(copy_heightmap)
+    initial_information_content = (height * width) * texel_entropy
+
+    heightmap_png_size = compressed_size_png(copy_heightmap)
+    heightmap_jpg_size = compressed_size_jpg(copy_heightmap)
+
+    zurek_png = (
+        initial_information_content - heightmap_png_size
+    ) / initial_information_content
+    zurek_jpg = (
+        initial_information_content - heightmap_jpg_size
+    ) / initial_information_content
+
+    return (zurek_png, zurek_jpg)
+
+
 def read_exr_grayscale(path: str) -> np.ndarray:
     exr = OpenEXR.InputFile(path)
 
@@ -168,6 +219,7 @@ def read_tiff_grayscale(path: str, normalize: bool = False) -> np.ndarray:
 
 
 def process_heightmap(heightmap: np.ndarray, filename: str, chunk_size: int):
+    print("-" * 32)
     print(f"Processing heightmap {filename}")
     print("Shape:", heightmap.shape)
     print("Min:", heightmap.min(), "Max:", heightmap.max())
@@ -177,6 +229,9 @@ def process_heightmap(heightmap: np.ndarray, filename: str, chunk_size: int):
 
     gradient_score = evaluate_gradient_score(heightmap, chunk_size)
     print(f"Gradient score: {gradient_score}")
+
+    zurek_png, zurek_jpg = evaluate_global_aesthetic_measure(heightmap)
+    print(f"GAM: png : ({zurek_png}) jpg : ({zurek_jpg})")
 
 
 def main():
