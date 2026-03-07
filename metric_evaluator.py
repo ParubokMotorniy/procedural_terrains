@@ -4,7 +4,6 @@ import numpy as np
 import OpenEXR
 import Imath
 import math
-import scipy as spy
 from PIL import Image
 from scipy.stats import entropy
 import tifffile
@@ -68,11 +67,15 @@ def evaluate_gradient_score(heightmap: np.ndarray, subdomainSize: int):
     gy, gx = np.gradient(heightmap)
     height, width = heightmap.shape
 
-    average_gradients = []
-    spans = []
+    domains_y = height // subdomainSize
+    domains_x = width // subdomainSize
+    num_domains = domains_y * domains_x
 
-    for y in range(int(height / subdomainSize)):
-        for x in range(int(width / subdomainSize)):
+    average_gradients = np.empty((num_domains, 2))
+    spans = np.empty(num_domains)
+
+    for y in range(domains_y):
+        for x in range(domains_x):
 
             start_x = x * subdomainSize
             start_y = y * subdomainSize
@@ -80,31 +83,26 @@ def evaluate_gradient_score(heightmap: np.ndarray, subdomainSize: int):
             end_x = start_x + subdomainSize
             end_y = start_y + subdomainSize
 
-            local_gradients = np.array(
-                [
-                    gx[start_y:end_y, start_x:end_x],
-                    gy[start_y:end_y, start_x:end_x],
-                ]
-            )
+            gx_local = gx[start_y:end_y, start_x:end_x]
+            gy_local = gy[start_y:end_y, start_x:end_x]
 
-            norm = np.linalg.norm(local_gradients, axis=0) + 1e-12
-            normalized_gradients = local_gradients / norm
+            norm = np.sqrt(gx_local**2 + gy_local**2) + 1e-12
 
-            g = normalized_gradients.reshape(2, -1).T
+            g = np.vstack((gx_local / norm, gy_local / norm))
             dot_matrix = g @ g.T
             min_dot = np.clip(np.min(dot_matrix), -1.0, 1.0)
             max_dot_angle = math.acos(min_dot)
 
-            spans.append(max_dot_angle)
+            linear_idx = y * domains_x + x
+
+            spans[linear_idx] = max_dot_angle
 
             avg_gradient = [
-                np.mean(local_gradients[0]),
-                np.mean(local_gradients[1]),
+                np.mean(g[0]),
+                np.mean(g[1]),
             ]
             avg_gradient /= np.linalg.norm(avg_gradient) + 1e-12
-            average_gradients.append(avg_gradient)
-
-    average_gradients = np.array(average_gradients)
+            average_gradients[linear_idx] = avg_gradient
 
     try:
         g = average_gradients.reshape(2, -1).T
@@ -128,7 +126,7 @@ def evaluate_gradient_score(heightmap: np.ndarray, subdomainSize: int):
                     max_global_angle = angle
 
     average_angle = np.mean(spans)
-    
+
     gradient_score = max_global_angle / max(1e-12, average_angle)
 
     return gradient_score
@@ -166,11 +164,8 @@ def compressed_size_lzma(arr):
 
 # assumes the values are strictly positive
 def quantize_heightmap(heightmap: np.ndarray, max_value: float = 255.0, type=np.uint8):
-    copy_heightmap = heightmap.copy()
-    copy_heightmap = np.round(
-        max_value * (copy_heightmap / np.max(copy_heightmap))
-    ).astype(type)
-    return copy_heightmap
+    max_h = np.max(heightmap)
+    return np.round(max_value * (heightmap / max_h)).astype(type)
 
 
 def concatenate_domains_rect(sub1: np.ndarray, sub2: np.ndarray):
@@ -379,20 +374,23 @@ def evaluate_composite_aesthetics_measure(
 
     heightmap_division = partition_heightmap(copy_heightmap, division_depth, 0.2)
 
-    def compute_ncd(sub1: np.ndarray, sub2: np.ndarray, compressor: callable):
-        c_1 = compressor(sub1.reshape(1, -1))
-        c_2 = compressor(sub2.reshape(1, -1))
-        sub12 = np.concatenate([sub1.reshape(1, -1), sub2.reshape(1, -1)], axis=1)
-        c_joint = compressor(sub12)
+    def compute_ncd(sub1, sub2, compressor):
+        flat1 = sub1.ravel()
+        flat2 = sub2.ravel()
 
-        return (c_joint - min(c_1, c_2)) / max(c_1, c_2)
+        c1 = compressor(flat1)
+        c2 = compressor(flat2)
 
-    split_visualization_heightmap = quantize_heightmap(heightmap, normalized_max)
+        cj = compressor(np.hstack((flat1, flat2)))
+
+        return (cj - min(c1, c2)) / max(c1, c2)
+
+    split_visualization_heightmap = copy_heightmap.copy()
 
     ncds = {c: [] for c in compressors}
     for i in range(len(heightmap_division)):
         y0, y1, x0, x1 = heightmap_division[i]
-
+        
         split_visualization_heightmap[y0:y1, x0] = normalized_max
         split_visualization_heightmap[y0:y1, min(x1, width - 1)] = normalized_max
         split_visualization_heightmap[y0, x0:x1] = normalized_max
