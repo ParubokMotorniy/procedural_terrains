@@ -9,6 +9,7 @@ from PIL import Image
 from scipy.stats import entropy
 import tifffile
 import zlib
+import lzma
 import tqdm
 import io
 
@@ -159,6 +160,10 @@ def compressed_size_zlib(arr):
     return len(zlib.compress(arr.tobytes()))
 
 
+def compressed_size_lzma(arr):
+    return len(lzma.compress(arr.tobytes()))
+
+
 # assumes the values are strictly positive
 def quantize_heightmap(heightmap: np.ndarray):
     copy_heightmap = heightmap.copy()
@@ -220,21 +225,21 @@ def evaluate_global_aesthetic_measure(heightmap: np.ndarray):
     texel_entropy = shannon_entropy(copy_heightmap)
     initial_information_content = (height * width) * texel_entropy
 
-    heightmap_png_size = compressed_size_png(copy_heightmap)
-    heightmap_jpg_size = compressed_size_jpg(copy_heightmap)
-    heightmap_zlib_size = compressed_size_zlib(copy_heightmap)
+    heightmap_png_size = compressed_size_png(copy_heightmap.reshape(1, -1))
+    heightmap_zlib_size = compressed_size_zlib(copy_heightmap.reshape(1, -1))
+    heightmap_lzma_size = compressed_size_zlib(copy_heightmap.reshape(1, -1))
 
     zurek_png = (
         initial_information_content - heightmap_png_size
     ) / initial_information_content
-    zurek_jpg = (
-        initial_information_content - heightmap_jpg_size
+    zurek_lzma = (
+        initial_information_content - heightmap_lzma_size
     ) / initial_information_content
     zurek_zlib = (
         initial_information_content - heightmap_zlib_size
     ) / initial_information_content
 
-    return (zurek_png, zurek_jpg, zurek_zlib)
+    return (zurek_png, zurek_lzma, zurek_zlib)
 
 
 def mutual_information_from_histograms(h1, h2):
@@ -376,15 +381,9 @@ def evaluate_composite_aesthetics_measure(
     heightmap_division = partition_heightmap(copy_heightmap, division_depth, 0.2)
 
     def compute_ncd(sub1: np.ndarray, sub2: np.ndarray, compressor: callable):
-        c_1 = compressor(sub1)
-        c_2 = compressor(sub2)
-        if reshape:
-            sub12 = concatenate_domains_rect(sub1, sub2)
-            if sub12 is None:
-                return None
-        else:
-            sub12 = np.concatenate([sub1.reshape(1, -1), sub2.reshape(1, -1)])
-        # print(sub1.shape, sub2.shape, sub12.shape)
+        c_1 = compressor(sub1.reshape(1, -1))
+        c_2 = compressor(sub2.reshape(1, -1))
+        sub12 = np.concatenate([sub1.reshape(1, -1), sub2.reshape(1, -1)], axis=1)
         c_joint = compressor(sub12)
 
         return (c_joint - min(c_1, c_2)) / max(c_1, c_2)
@@ -398,11 +397,7 @@ def evaluate_composite_aesthetics_measure(
             y0, y1, x0, x1 = heightmap_division[j]
             sub_2 = copy_heightmap[y0:y1, x0:x1]
             ncd = compute_ncd(sub_1, sub_2, compressor)
-            print(ncd)
-            if ncd is not None:
-                ncds.append(ncd)
-            else:
-                print("Uncomputable NCD detected!")
+            ncds.append(ncd)
 
     return 1.0 - np.mean(ncds)
 
@@ -458,17 +453,17 @@ def process_heightmap(
     gradient_score = evaluate_gradient_score(heightmap, chunk_size)
     print(f"Gradient score: {gradient_score}")
 
-    zurek_png, zurek_jpg, zurek_zlib = evaluate_global_aesthetic_measure(heightmap)
+    zurek_png, zurek_lzma, zurek_zlib = evaluate_global_aesthetic_measure(heightmap)
     print(
-        f"GAM:\n  png : ({zurek_png}) \n  jpg : ({zurek_jpg}) \n  zlib : ({zurek_zlib})"
+        f"GAM:\n  png : ({zurek_png}) \n  zlib : ({zurek_zlib}) \n  lzma : ({zurek_lzma})"
     )
 
     order_png = evaluate_composite_aesthetics_measure(
         heightmap, compressed_size_png, division_depth
     )
 
-    order_jpg = evaluate_composite_aesthetics_measure(
-        heightmap, compressed_size_jpg, division_depth
+    order_lzma = evaluate_composite_aesthetics_measure(
+        heightmap, compressed_size_lzma, division_depth
     )
 
     order_zlib = evaluate_composite_aesthetics_measure(
@@ -476,7 +471,7 @@ def process_heightmap(
     )
 
     print(
-        f"CAM:\n  png : ({order_png}) \n  jpg : ({order_jpg}) \n  zlib : ({order_zlib})"
+        f"CAM:\n  png : ({order_png}) \n  zlib : ({order_zlib}) \n  lzma : ({order_lzma})"
     )
 
 
