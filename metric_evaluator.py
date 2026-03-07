@@ -12,6 +12,7 @@ import zlib
 import lzma
 import tqdm
 import io
+from pathlib import Path
 
 JPEG_MAX_DIM = 65500
 
@@ -19,7 +20,6 @@ JPEG_MAX_DIM = 65500
 
 
 # global-local metric that contributes to the final metric basing on how "eroded" the terrain is
-# TODO: normalize the metric by computing upper-bound for the given dimensionality
 def evaluate_erosion_score(heightmap: np.ndarray):
     height, width = heightmap.shape
 
@@ -63,7 +63,6 @@ def evaluate_erosion_score(heightmap: np.ndarray):
     return erosion_score
 
 
-# TODO: normalize the metric
 # TODO: think how the magnitude can be included
 def evaluate_gradient_score(heightmap: np.ndarray, subdomainSize: int):
     gy, gx = np.gradient(heightmap)
@@ -129,6 +128,7 @@ def evaluate_gradient_score(heightmap: np.ndarray, subdomainSize: int):
                     max_global_angle = angle
 
     average_angle = np.mean(spans)
+    
     gradient_score = max_global_angle / max(1e-12, average_angle)
 
     return gradient_score
@@ -165,11 +165,11 @@ def compressed_size_lzma(arr):
 
 
 # assumes the values are strictly positive
-def quantize_heightmap(heightmap: np.ndarray):
+def quantize_heightmap(heightmap: np.ndarray, max_value: float = 255.0, type=np.uint8):
     copy_heightmap = heightmap.copy()
-    copy_heightmap = np.round(255.0 * (copy_heightmap / np.max(copy_heightmap))).astype(
-        np.uint8
-    )
+    copy_heightmap = np.round(
+        max_value * (copy_heightmap / np.max(copy_heightmap))
+    ).astype(type)
     return copy_heightmap
 
 
@@ -371,12 +371,11 @@ def partition_heightmap(
 
 
 def evaluate_composite_aesthetics_measure(
-    heightmap: np.ndarray,
-    compressor: callable,
-    division_depth: int,
-    reshape: bool = True,
+    heightmap: np.ndarray, division_depth: int, compressors
 ):
-    copy_heightmap = quantize_heightmap(heightmap)
+    height, width = heightmap.shape
+    normalized_max = 255.0
+    copy_heightmap = quantize_heightmap(heightmap, normalized_max)
 
     heightmap_division = partition_heightmap(copy_heightmap, division_depth, 0.2)
 
@@ -388,18 +387,29 @@ def evaluate_composite_aesthetics_measure(
 
         return (c_joint - min(c_1, c_2)) / max(c_1, c_2)
 
-    # TODO: plot the division onto the image
-    ncds = []
+    split_visualization_heightmap = quantize_heightmap(heightmap, normalized_max)
+
+    ncds = {c: [] for c in compressors}
     for i in range(len(heightmap_division)):
         y0, y1, x0, x1 = heightmap_division[i]
+
+        split_visualization_heightmap[y0:y1, x0] = normalized_max
+        split_visualization_heightmap[y0:y1, min(x1, width - 1)] = normalized_max
+        split_visualization_heightmap[y0, x0:x1] = normalized_max
+        split_visualization_heightmap[min(y1, height - 1), x0:x1] = normalized_max
+
         sub_1 = copy_heightmap[y0:y1, x0:x1]
         for j in range(i, len(heightmap_division)):
             y0, y1, x0, x1 = heightmap_division[j]
             sub_2 = copy_heightmap[y0:y1, x0:x1]
-            ncd = compute_ncd(sub_1, sub_2, compressor)
-            ncds.append(ncd)
+            for compressor in compressors:
+                ncd = compute_ncd(sub_1, sub_2, compressor)
+                ncds[compressor].append(ncd)
+    cams = []
+    for compressor in compressors:
+        cams.append(1.0 - np.mean(ncds[compressor]))
 
-    return 1.0 - np.mean(ncds)
+    return (cams, split_visualization_heightmap)
 
 
 def read_exr_grayscale(path: str) -> np.ndarray:
@@ -458,16 +468,15 @@ def process_heightmap(
         f"GAM:\n  png : ({zurek_png}) \n  zlib : ({zurek_zlib}) \n  lzma : ({zurek_lzma})"
     )
 
-    order_png = evaluate_composite_aesthetics_measure(
-        heightmap, compressed_size_png, division_depth
+    (order_png, order_lzma, order_zlib), split_visualization = (
+        evaluate_composite_aesthetics_measure(
+            heightmap,
+            division_depth,
+            [compressed_size_png, compressed_size_lzma, compressed_size_zlib],
+        )
     )
-
-    order_lzma = evaluate_composite_aesthetics_measure(
-        heightmap, compressed_size_lzma, division_depth
-    )
-
-    order_zlib = evaluate_composite_aesthetics_measure(
-        heightmap, compressed_size_zlib, division_depth
+    Image.fromarray(split_visualization).save(
+        f"./{'.'.join(filename.split('.')[:-1])}_split.png", format="PNG"
     )
 
     print(
