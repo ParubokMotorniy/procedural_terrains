@@ -12,10 +12,11 @@ import lzma
 import tqdm
 import io
 from pathlib import Path
+import scipy as spy
+import porespy as pspy
+import matplotlib.pyplot as plt
 
 JPEG_MAX_DIM = 65500
-
-# TODO: check if I need to discard compression headers from the compressed heightmaps
 
 
 # global-local metric that contributes to the final metric basing on how "eroded" the terrain is
@@ -132,8 +133,41 @@ def evaluate_gradient_score(heightmap: np.ndarray, subdomainSize: int):
     return gradient_score
 
 
-def evaluate_fractal_score(heightmap: np.ndarray):
-    pass
+def evaluate_fractal_score(heightmap: np.ndarray, threshold: float = 0.25):
+    # fractal dimension
+    quantized_heightmap = quantize_heightmap(heightmap, 1.0, np.float32)
+    binary_heightmap = quantized_heightmap >= threshold
+
+    data = pspy.metrics.boxcount(binary_heightmap)
+    coeffs = np.polyfit(np.log(data.size), np.log(data.count), 1)
+    fractal_dimension = -coeffs[0]
+
+    # 1/f^beta <- beta
+    F = np.fft.fft2(quantized_heightmap - np.mean(quantized_heightmap))
+    psd2D = np.abs(np.fft.fftshift(F)) ** 2
+
+    ny, nx = psd2D.shape
+    y, x = np.indices((ny, nx))
+    center = np.array([(ny - 1) / 2, (nx - 1) / 2])
+
+    r = np.sqrt((x - center[1]) ** 2 + (y - center[0]) ** 2).astype(int)
+
+    tbin = np.bincount(r.ravel(), psd2D.ravel())
+    nr = np.bincount(r.ravel())
+
+    radial_psd = tbin / nr
+    freqs = np.arange(len(radial_psd))
+
+    freqs, psd = freqs[1:], radial_psd[1:]
+
+    plt.plot(np.log(freqs), np.log(psd))
+    plt.show()
+
+    slope = np.polyfit(np.log(freqs), np.log(psd), 1)[0]
+    beta = -slope
+
+    # return
+    return fractal_dimension, beta
 
 
 def compressed_size_png(arr):
@@ -168,61 +202,21 @@ def quantize_heightmap(heightmap: np.ndarray, max_value: float = 255.0, type=np.
     return np.round(max_value * (heightmap / max_h)).astype(type)
 
 
-def concatenate_domains_rect(sub1: np.ndarray, sub2: np.ndarray):
-    h1, w1 = sub1.shape
-    h2, w2 = sub2.shape
-
-    if h1 == h2 and w1 + w2 < JPEG_MAX_DIM:
-        return np.concatenate([sub1, sub2], axis=1)
-
-    if w1 == w2 and h1 + h2 < JPEG_MAX_DIM:
-        return np.concatenate([sub1, sub2], axis=0)
-
-    flat = np.concatenate([sub1.ravel(), sub2.ravel()])
-
-    N = flat.size
-
-    if N >= JPEG_MAX_DIM**JPEG_MAX_DIM:
-        raise ValueError("The heightmap pieces to stitch are way too huge")
-
-    width = int(np.sqrt(N))
-
-    while width > 1 and N % width != 0:
-        width -= 1
-
-    height = N // width
-
-    if height >= JPEG_MAX_DIM:
-        width = JPEG_MAX_DIM
-
-        while width > 1 and N % width != 0:
-            width -= 1
-
-        height = N // width
-
-    if height >= JPEG_MAX_DIM or width >= JPEG_MAX_DIM:
-        return None
-
-    return flat.reshape(height, width)
-
-
 def shannon_entropy(arr):
     values, counts = np.unique(arr, return_counts=True)
     probabilities = counts / counts.sum()
     return entropy(probabilities, base=2)
 
 
-def evaluate_global_aesthetic_measure(heightmap: np.ndarray):
-    height, width = heightmap.shape
+def evaluate_global_aesthetic_measure(quantized_heightmap: np.ndarray):
+    height, width = quantized_heightmap.shape
 
-    copy_heightmap = quantize_heightmap(heightmap)
-
-    texel_entropy = shannon_entropy(copy_heightmap)
+    texel_entropy = shannon_entropy(quantized_heightmap)
     initial_information_content = (height * width) * texel_entropy
 
-    heightmap_png_size = compressed_size_png(copy_heightmap.reshape(1, -1))
-    heightmap_zlib_size = compressed_size_zlib(copy_heightmap.reshape(1, -1))
-    heightmap_lzma_size = compressed_size_zlib(copy_heightmap.reshape(1, -1))
+    heightmap_png_size = compressed_size_png(quantized_heightmap.reshape(1, -1))
+    heightmap_zlib_size = compressed_size_zlib(quantized_heightmap.reshape(1, -1))
+    heightmap_lzma_size = compressed_size_zlib(quantized_heightmap.reshape(1, -1))
 
     zurek_png = (
         initial_information_content - heightmap_png_size
@@ -330,9 +324,6 @@ def partition_heightmap(
 ):
     """
     Recursively partitions a heightmap using mutual information splits.
-
-    Returns list of leaf rectangles:
-    (y0, y1, x0, x1)
     """
 
     leaves = []
@@ -390,7 +381,7 @@ def evaluate_composite_aesthetics_measure(
     ncds = {c: [] for c in compressors}
     for i in range(len(heightmap_division)):
         y0, y1, x0, x1 = heightmap_division[i]
-        
+
         split_visualization_heightmap[y0:y1, x0] = normalized_max
         split_visualization_heightmap[y0:y1, min(x1, width - 1)] = normalized_max
         split_visualization_heightmap[y0, x0:x1] = normalized_max
@@ -450,6 +441,8 @@ def read_tiff_grayscale(path: str, normalize: bool = False) -> np.ndarray:
 def process_heightmap(
     heightmap: np.ndarray, filename: str, chunk_size: int, division_depth: int
 ):
+    quantized_heightmap = quantize_heightmap(heightmap, 255.0)
+
     print("-" * 32)
     print(f"Processing heightmap {filename}")
     print("Shape:", heightmap.shape)
@@ -461,7 +454,13 @@ def process_heightmap(
     gradient_score = evaluate_gradient_score(heightmap, chunk_size)
     print(f"Gradient score: {gradient_score}")
 
-    zurek_png, zurek_lzma, zurek_zlib = evaluate_global_aesthetic_measure(heightmap)
+    fractal_dimension, beta = evaluate_fractal_score(heightmap)
+    print(f"Fractal dimenison: {fractal_dimension}")
+    print(f"Noise beta exponent: {beta}")
+
+    zurek_png, zurek_lzma, zurek_zlib = evaluate_global_aesthetic_measure(
+        quantized_heightmap
+    )
     print(
         f"GAM:\n  png : ({zurek_png}) \n  zlib : ({zurek_zlib}) \n  lzma : ({zurek_lzma})"
     )
