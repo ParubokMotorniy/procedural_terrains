@@ -92,7 +92,7 @@ def evaluate_gradient_score(heightmap: np.ndarray, subdomainSize: int):
             g = np.vstack((gx_local / norm, gy_local / norm))
             dot_matrix = g @ g.T
             min_dot = np.clip(np.min(dot_matrix), -1.0, 1.0)
-            max_dot_angle = math.acos(min_dot)
+            max_dot_angle = np.abs((min_dot - 1.0) / 2.0) 
 
             linear_idx = y * domains_x + x
 
@@ -105,30 +105,32 @@ def evaluate_gradient_score(heightmap: np.ndarray, subdomainSize: int):
             avg_gradient /= np.linalg.norm(avg_gradient) + 1e-12
             average_gradients[linear_idx] = avg_gradient
 
-    try:
-        g = average_gradients.reshape(2, -1).T
-        dot_matrix = g @ g.T
-        min_dot = np.clip(np.min(dot_matrix), -1.0, 1.0)
-        max_global_angle = math.acos(min_dot)
-    except Exception as e:
-        print(f"Exception occurred during gradient score evaluation: {e}")
-        print("Doing things in plain-old style.")
-        max_global_angle = 0
-        for i in tqdm.tqdm(range(len(average_gradients))):
-            grad_1 = (average_gradients[i, 0], average_gradients[i, 1])
-            for j in range(i, len(average_gradients)):
-                grad_2 = (average_gradients[j, 0], average_gradients[j, 1])
-                dot = max(
-                    -1.0,
-                    min(1.0, (grad_1[0] * grad_2[0] + grad_1[1] * grad_2[1])),
-                )
-                angle = math.acos(dot)
-                if angle > max_global_angle:
-                    max_global_angle = angle
+    # try:
+    #     g = average_gradients.reshape(2, -1).T
+    #     dot_matrix = g @ g.T
+    #     min_dot = np.clip(np.min(dot_matrix), -1.0, 1.0)
+    #     max_global_angle = math.acos(min_dot)
+    # except Exception as e:
+    #     print(f"Exception occurred during gradient score evaluation: {e}")
+    #     print("Doing things in plain-old style.")
+    #     max_global_angle = 0
+    #     for i in tqdm.tqdm(range(len(average_gradients))):
+    #         grad_1 = (average_gradients[i, 0], average_gradients[i, 1])
+    #         for j in range(i, len(average_gradients)):
+    #             grad_2 = (average_gradients[j, 0], average_gradients[j, 1])
+    #             dot = max(
+    #                 -1.0,
+    #                 min(1.0, (grad_1[0] * grad_2[0] + grad_1[1] * grad_2[1])),
+    #             )
+    #             angle = math.acos(dot)
+    #             if angle > max_global_angle:
+    #                 max_global_angle = angle
 
     average_angle = np.mean(spans)
+    angle_std = np.linalg.norm(np.std(average_gradients, axis=0))
+    print(average_angle ,np.std(average_gradients, axis=0), angle_std)
 
-    gradient_score = max_global_angle / max(1e-12, average_angle)
+    gradient_score = angle_std / max(1e-12, average_angle)
 
     return gradient_score
 
@@ -160,8 +162,8 @@ def evaluate_fractal_score(heightmap: np.ndarray, threshold: float = 0.25):
 
     freqs, psd = freqs[1:], radial_psd[1:]
 
-    plt.plot(np.log(freqs), np.log(psd))
-    plt.show()
+    # plt.plot(np.log(freqs), np.log(psd))
+    # plt.show()
 
     slope = np.polyfit(np.log(freqs), np.log(psd), 1)[0]
     beta = -slope
