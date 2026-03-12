@@ -5,7 +5,7 @@ using System;
 using GenerationPipeline;
 using UnityEngine.Rendering;
 
-public class RMDDispatcher : MultiFormatPipelineStep
+public class RMDDispatcher: MonoPipelineStep
 {
     [SerializeField]
     private ComputeShader shaderToDispatch;
@@ -39,9 +39,8 @@ public class RMDDispatcher : MultiFormatPipelineStep
     private static readonly int PID_Result = Shader.PropertyToID("Result");
     private static readonly int PID_targetDimensions = Shader.PropertyToID("targetDimensions");
 
-    public override void StepInitialization(PipelineContext pipelineContext) { }
 
-    public override void StepBody(PipelineContext pipelineContext)
+    public override void ExecuteStep(PipelineContext pipelineContext)
     {
         int textureSize = pipelineContext.GetHeightmapSize();
         int texelsPerThreadDomain = (int)math.pow(2, numSubdivisions);
@@ -118,8 +117,6 @@ public class RMDDispatcher : MultiFormatPipelineStep
             }
         }
     }
-
-    public override void StepConclusion(PipelineContext pipelineContext) { }
 
     public override InputExpectations GetStepExpectations() => InputExpectations.None;
 

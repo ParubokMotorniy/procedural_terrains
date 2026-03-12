@@ -4,7 +4,7 @@ using Unity.Mathematics;
 using GenerationPipeline;
 using System;
 
-public class UNDispatcher : MultiFormatPipelineStep
+public class UNDispatcher: MonoPipelineStep
 {
     [SerializeField]
     private ComputeShader shaderToDispatch;
@@ -38,9 +38,7 @@ public class UNDispatcher : MultiFormatPipelineStep
     private static readonly int PID_randomFloats = Shader.PropertyToID("randomFloats");
     private static readonly int PID_textureDimensions = Shader.PropertyToID("textureDimensions");
 
-    public override void StepInitialization(PipelineContext pipelineContext) { }
-
-    public override void StepBody(PipelineContext pipelineContext)
+    public override void ExecuteStep(PipelineContext pipelineContext)
     {
         int textureSize = pipelineContext.GetHeightmapSize();
         var (optimalGroupSize, numGroups) = GenerationUtilities.GetOptimalNumberOfGroups(textureSize, new int[] { pipelineContext.preferredGlobalGroupSize }, Int32.MaxValue, 1);
@@ -73,8 +71,6 @@ public class UNDispatcher : MultiFormatPipelineStep
             new Vector3(numGroups, numGroups, 1)
         );
     }
-
-    public override void StepConclusion(PipelineContext pipelineContext) { }
 
     public override InputExpectations GetStepExpectations() => InputExpectations.None;
 

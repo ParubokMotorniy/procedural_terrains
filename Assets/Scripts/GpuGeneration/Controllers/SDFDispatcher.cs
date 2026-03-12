@@ -4,7 +4,7 @@ using UnityEngine.Assertions;
 using System;
 using GenerationPipeline;
 
-public class SDFDispatcher : MultiFormatPipelineStep
+public class SDFDispatcher: MonoPipelineStep
 {
     [SerializeField]
     private ComputeShader shaderToDispatch;
@@ -33,9 +33,7 @@ public class SDFDispatcher : MultiFormatPipelineStep
     private static readonly int PID_floodStepSize = Shader.PropertyToID("floodStepSize");
     private static readonly int PID_randomFloats = Shader.PropertyToID("randomFloats");
 
-    public override void StepInitialization(PipelineContext pipelineContext) { }
-
-    public override void StepBody(PipelineContext pipelineContext)
+    public override void ExecuteStep(PipelineContext pipelineContext)
     {
         int textureSize = pipelineContext.GetHeightmapSize();
         var (optimalGroupSize, numLinearGroups) = GenerationUtilities.GetOptimalNumberOfGroups(textureSize, new int[] { pipelineContext.preferredGlobalGroupSize }, Int32.MaxValue, 1);
@@ -137,8 +135,6 @@ public class SDFDispatcher : MultiFormatPipelineStep
         // Heightmap postprocessing
         pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, sDFPostprocessorKernel, dispatchGroups);
     }
-
-    public override void StepConclusion(PipelineContext pipelineContext) { }
 
     public override InputExpectations GetStepExpectations() => InputExpectations.None;
 

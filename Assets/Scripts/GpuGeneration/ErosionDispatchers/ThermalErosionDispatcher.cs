@@ -4,7 +4,7 @@ using Unity.Mathematics;
 using UnityEngine;
 using System;
 
-public class ThermalErosionDispatcher : MultiFormatPipelineStep
+public class ThermalErosionDispatcher: MonoPipelineStep
 {
     [SerializeField]
     public ComputeShader erosionComputeShader;
@@ -31,9 +31,7 @@ public class ThermalErosionDispatcher : MultiFormatPipelineStep
     public override InputExpectations GetStepExpectations()
         => InputExpectations.HeightMapNormalized;
 
-    public override void StepInitialization(PipelineContext pipelineContext) { }
-
-    public override void StepBody(PipelineContext pipelineContext)
+    public override void ExecuteStep(PipelineContext pipelineContext)
     {
         int textureSize = pipelineContext.GetHeightmapSize();
         var (optimalGroupSize, numGroups) = GenerationUtilities.GetOptimalNumberOfGroups(textureSize, new int[] { pipelineContext.preferredGlobalGroupSize }, Int32.MaxValue, 4);
@@ -75,8 +73,6 @@ public class ThermalErosionDispatcher : MultiFormatPipelineStep
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, borderKernelIdx, dispatchGroups);
         }
     }
-
-    public override void StepConclusion(PipelineContext pipelineContext) { }
 
     public override void UpdateHeightmapState(ref HeightmapProperties previousState)
     {

@@ -4,7 +4,7 @@ using UnityEngine.Assertions;
 using System;
 using GenerationPipeline;
 
-public class FFTDispatcher : MultiFormatPipelineStep
+public class FFTDispatcher: MonoPipelineStep
 {
     [SerializeField]
     private ComputeShader shaderToDispatch;
@@ -38,9 +38,7 @@ public class FFTDispatcher : MultiFormatPipelineStep
     private static readonly int PID_randomSeeds = Shader.PropertyToID("randomSeeds");
 
 
-    public override void StepInitialization(PipelineContext pipelineContext) { }
-
-    public override void StepBody(PipelineContext pipelineContext)
+    public override void ExecuteStep(PipelineContext pipelineContext)
     {
         int textureSize = pipelineContext.GetHeightmapSize();
         int actualCoefficientsComputed = (int)math.pow(2, (int)math.floor(math.log2(fracCoefficientsConsidered * textureSize)));
@@ -107,8 +105,6 @@ public class FFTDispatcher : MultiFormatPipelineStep
             }
         }
     }
-
-    public override void StepConclusion(PipelineContext pipelineContext) { }
 
     public override InputExpectations GetStepExpectations() => InputExpectations.None;
 

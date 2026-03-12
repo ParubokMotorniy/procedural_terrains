@@ -4,7 +4,7 @@ using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Assertions;
 
-public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
+public class CellularHydraulicErosionDispatcher: MonoPipelineStep
 {
     [SerializeField]
     public ComputeShader erosionComputeShader;
@@ -53,9 +53,7 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
     public override InputExpectations GetStepExpectations()
         => InputExpectations.HeightMapNormalized;
 
-    public override void StepInitialization(PipelineContext pipelineContext) { }
-
-    public override void StepBody(PipelineContext pipelineContext)
+    public override void ExecuteStep(PipelineContext pipelineContext)
     {
         int textureSize = pipelineContext.GetHeightmapSize();
         var (optimalGroupSize, numGroups) = GenerationUtilities.GetOptimalNumberOfGroups(textureSize, new int[] { pipelineContext.preferredGlobalGroupSize }, Int32.MaxValue, 4);
@@ -124,8 +122,6 @@ public class CellularHydraulicErosionDispatcher : MultiFormatPipelineStep
         }
         // pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, finalWaterEvaporatorKernelIdx, dispatchGroups);
     }
-
-    public override void StepConclusion(PipelineContext pipelineContext) { }
 
     public override void UpdateHeightmapState(ref HeightmapProperties previousState)
     {

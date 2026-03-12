@@ -5,7 +5,7 @@ using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Assertions;
 
-public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
+public class ParticleHydraulicErosionDispatcher: MonoPipelineStep
 {
     [SerializeField]
     public ComputeShader erosionComputeShader;
@@ -94,9 +94,7 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
     public override InputExpectations GetStepExpectations()
         => InputExpectations.HeightMapNormalized;
 
-    public override void StepInitialization(PipelineContext pipelineContext) { }
-
-    public override void StepBody(PipelineContext pipelineContext)
+    public override void ExecuteStep(PipelineContext pipelineContext)
     {
         int preferredGroupSize = pipelineContext.preferredGlobalGroupSize;
         int numActualParticles = (int)math.pow(2, numSimultaneousParticles);
@@ -198,7 +196,6 @@ public class ParticleHydraulicErosionDispatcher : MultiFormatPipelineStep
             }
         }
     }
-    public override void StepConclusion(PipelineContext pipelineContext) { }
     public override void UpdateHeightmapState(ref HeightmapProperties previousState)
     { }
 }
