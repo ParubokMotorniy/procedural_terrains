@@ -167,7 +167,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CpuGenerationPipeline.CpuTerrainGenerator
   terrainSize: 5
   terrainScale: 1
-  enableProfiling: 0
   generatorSeed: 1
   numSamples: 5
   dumpTextures: 0
@@ -277,8 +276,8 @@ Transform:
   m_GameObject: {fileID: 280840667}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -1, z: -0, w: 0}
-  m_LocalPosition: {x: 8.15272, y: 0, z: 34.52094}
-  m_LocalScale: {x: 200, y: 200, z: 200}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 1147574083}
@@ -670,8 +669,8 @@ Transform:
   m_GameObject: {fileID: 360891023}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -1, z: -0, w: 0}
-  m_LocalPosition: {x: 8.15272, y: 0, z: 34.52094}
-  m_LocalScale: {x: 200, y: 200, z: 200}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 1147574083}
@@ -774,9 +773,7 @@ MonoBehaviour:
   dumpTextures: 1
   useTestTexture: 0
   testTexture: {fileID: 2800000, guid: 14fa032c7256704c8a0ead7b71566301, type: 3}
-  pipelineSteps:
-  - {fileID: 360891026}
-  - {fileID: 2081510694}
+  pipelineSteps: []
 --- !u!4 &385078007
 Transform:
   m_ObjectHideFlags: 0
@@ -961,7 +958,7 @@ GameObject:
   m_Component:
   - component: {fileID: 471226916}
   m_Layer: 0
-  m_Name: GpuEroders
+  m_Name: Eroders
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -976,14 +973,14 @@ Transform:
   m_GameObject: {fileID: 471226915}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -8.15272, y: 0, z: -34.52094}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1412956748}
   - {fileID: 1778127574}
   - {fileID: 2081510693}
-  m_Father: {fileID: 1400669491}
+  m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!84 &691927586
 RenderTexture:
@@ -1228,8 +1225,8 @@ Transform:
   m_GameObject: {fileID: 852555915}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -1, z: -0, w: 0}
-  m_LocalPosition: {x: 8.15272, y: 0, z: 34.52094}
-  m_LocalScale: {x: 200, y: 200, z: 200}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 1147574083}
@@ -1326,7 +1323,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1147574083}
   m_Layer: 0
-  m_Name: GpuGenerators
+  m_Name: Generators
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1341,7 +1338,7 @@ Transform:
   m_GameObject: {fileID: 1147574082}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -8.15272, y: 0, z: -34.52094}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -1349,7 +1346,7 @@ Transform:
   - {fileID: 852555919}
   - {fileID: 360891027}
   - {fileID: 1592727440}
-  m_Father: {fileID: 1400669491}
+  m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1400669490
 GameObject:
@@ -1381,8 +1378,6 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 385078007}
-  - {fileID: 1147574083}
-  - {fileID: 471226916}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1412956746
@@ -1427,7 +1422,7 @@ Transform:
   m_GameObject: {fileID: 1412956746}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -22.98119, y: 0, z: -21.04102}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1528,7 +1523,7 @@ Transform:
   m_GameObject: {fileID: 1778127572}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -6.5445595, y: 0, z: -49.087772}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1600,5 +1595,7 @@ SceneRoots:
   - {fileID: 410087041}
   - {fileID: 832575519}
   - {fileID: 1078476959}
+  - {fileID: 1147574083}
+  - {fileID: 471226916}
   - {fileID: 1400669491}
   - {fileID: 406185818}
