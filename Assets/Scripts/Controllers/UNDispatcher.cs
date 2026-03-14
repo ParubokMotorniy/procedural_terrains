@@ -17,7 +17,7 @@ public class UNDispatcher : UltimatePipelineStep
     [Range(0.01f, 1.0f)]
     public float persistence = 0.2f;
 
-    [Range(-10.0f, 10.0f)]
+    [Range(-1.0f, 1.0f)]
     public float sharpness = 0.0f;
 
     [Range(0.001f, 10.0f)]
@@ -83,53 +83,54 @@ public class UNDispatcher : UltimatePipelineStep
 
     public override Task ExecuteStepCpu(CpuPipelineContext pipelineContext)
     {
-        return Task.Run(() =>
+        // return Task.Run(() =>
+        // {
+
+        // });
+        int2 textureDimensions = new int2(pipelineContext.intermediateHeightmap.width, pipelineContext.intermediateHeightmap.height);
+        float2 extraDisplacement = (float2)textureDimensions * pipelineContext.GetRandomFloats();
+        var nativeHeightmapArray = pipelineContext.intermediateHeightmap.GetRawTextureData<float>();
+
+        for (int x = 0; x < textureDimensions.x; ++x)
         {
-            int2 textureDimensions = new int2(pipelineContext.intermediateHeightmap.width, pipelineContext.intermediateHeightmap.height);
-            float2 extraDisplacement = (float2)textureDimensions * pipelineContext.GetRandomFloats();
-            var nativeHeightmapArray = pipelineContext.intermediateHeightmap.GetRawTextureData<float>();
-
-            for (int x = 0; x < textureDimensions.x; ++x)
+            for (int y = 0; y < textureDimensions.y; ++y)
             {
-                for (int y = 0; y < textureDimensions.y; ++y)
+                float2 floatIdx = extraDisplacement + new float2(x,y);
+
+                float2 slopeErosionDerivativeSum = (float2)math.clamp(new float2(noise.snoise(floatIdx)), -0.15, 0.15).xx;
+                float2 perturbDerivativeSum = float2.zero;
+                float noiseResult = 0.0f;
+
+                float octaveAmplitude = 1.0f;
+                float octaveFrequency = noiseFrequency;
+                float2 samplePosition = float2.zero;
+
+                for (int o = 0; o < numOctaves; ++o)
                 {
-                    int2 actualTextureIdx = new int2(x, y);
-                    float2 floatIdx = extraDisplacement + (float2)actualTextureIdx;
+                    samplePosition = (floatIdx * octaveFrequency) + perturbDerivativeSum;
 
-                    float2 slopeErosionDerivativeSum = (float2)math.clamp(new float2(noise.snoise(floatIdx)), -0.15, 0.15).xx;
-                    float2 perturbDerivativeSum = new(0.0);
-                    float noiseResult = 0.0f;
+                    float3 startNoiseValue = noise.psrdnoise(samplePosition, new float2(1e15f), 0.0f);
+                    float featureNoise = startNoiseValue.x;
+                    float2 featureDerivative = startNoiseValue.yz;
 
-                    float octaveAmplitude = 1.0f;
-                    float octaveFrequency = noiseFrequency;
-                    float2 samplePosition = new(0.0f);
+                    float ridgedNoise = 1.0f - math.abs(featureNoise);
+                    float billowNoise = ridgedNoise * ridgedNoise;
+                    featureNoise = (float)math.lerp(featureNoise, billowNoise, math.max(0.0, sharpness));
+                    featureNoise = (float)math.lerp(featureNoise, ridgedNoise, math.abs(math.min(0.0, sharpness)));
 
-                    for (int o = 0; o < numOctaves; ++o)
-                    {
-                        samplePosition = (floatIdx * octaveFrequency) + perturbDerivativeSum;
+                    slopeErosionDerivativeSum += featureDerivative * slopeErosion;
+                    perturbDerivativeSum += octaveAmplitude * perturbationStrength * featureDerivative;
+                    float derivativeNorm = math.dot(slopeErosionDerivativeSum, slopeErosionDerivativeSum);
+                    noiseResult += octaveAmplitude * featureNoise * (1.0f / (1.0f + derivativeNorm));
 
-                        float3 startNoiseValue = noise.psrdnoise(samplePosition, 1.0f, 0.0f);
-                        float featureNoise = startNoiseValue.x;
-                        float2 featureDerivative = startNoiseValue.yz;
-
-                        float ridgedNoise = 1.0f - math.abs(featureNoise);
-                        float billowNoise = ridgedNoise * ridgedNoise;
-                        featureNoise = (float)math.lerp(featureNoise, billowNoise, math.max(0.0, sharpness));
-                        featureNoise = (float)math.lerp(featureNoise, ridgedNoise, math.abs(math.min(0.0, sharpness)));
-
-                        slopeErosionDerivativeSum += featureDerivative * slopeErosion;
-                        perturbDerivativeSum += featureDerivative * perturbationStrength * octaveAmplitude;
-                        float derivativeNorm = math.dot(slopeErosionDerivativeSum, slopeErosionDerivativeSum);
-                        noiseResult += octaveAmplitude * featureNoise * (1.0f / (1.0f + derivativeNorm));
-
-                        octaveAmplitude *= persistence;
-                        octaveFrequency *= 2.0f;
-                    }
-
-                    nativeHeightmapArray[actualTextureIdx.x * textureDimensions.y + actualTextureIdx.y] = noiseResult;
+                    octaveAmplitude *= persistence;
+                    octaveFrequency *= 2.0f;
                 }
+
+                nativeHeightmapArray[x * textureDimensions.y + y] = noiseResult;
             }
-        });
+        }
+        return Task.CompletedTask;
     }
 
     public override CpuInputExpectations GetStepExpectationsCpu() => CpuInputExpectations.None;

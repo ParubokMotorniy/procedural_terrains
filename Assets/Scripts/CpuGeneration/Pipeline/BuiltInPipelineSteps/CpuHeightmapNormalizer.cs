@@ -4,6 +4,7 @@ using Unity.Mathematics;
 using Unity.VisualScripting;
 using System.Threading.Tasks;
 using System;
+using UnityEditor.Experimental.GraphView;
 
 namespace CpuGenerationPipeline
 {
@@ -12,33 +13,36 @@ namespace CpuGenerationPipeline
     {
         public Task ExecuteStepCpu(CpuPipelineContext pipelineContext)
         {
-            return Task.Run(() =>
+            // return Task.Run(() =>
+            // {
+            // });
+
+            int2 textureDimensions = new int2(pipelineContext.intermediateHeightmap.width, pipelineContext.intermediateHeightmap.height);
+            var nativeHeightmapArray = pipelineContext.intermediateHeightmap.GetRawTextureData<float>();
+
+            float minHeight = Single.MaxValue;
+            float maxHeight = Single.MinValue;
+            for (int x = 0; x < textureDimensions.x; ++x)
             {
-                int2 textureDimensions = new int2(pipelineContext.intermediateHeightmap.width, pipelineContext.intermediateHeightmap.height);
-                var nativeHeightmapArray = pipelineContext.intermediateHeightmap.GetRawTextureData<float>();
-
-                float minHeight = Single.MaxValue;
-                float maxHeight = Single.MinValue;
-                for (int x = 0; x < textureDimensions.x; ++x)
+                for (int y = 0; y < textureDimensions.y; ++y)
                 {
-                    for (int y = 0; y < textureDimensions.y; ++y)
-                    {
-                        minHeight = math.min(nativeHeightmapArray[x * textureDimensions.y + y], minHeight);
-                        maxHeight = math.max(nativeHeightmapArray[x * textureDimensions.y + y], maxHeight);
-                    }
+                    float oldHeight = nativeHeightmapArray[x * textureDimensions.y + y];
+                    minHeight = math.min(oldHeight, minHeight);
+                    maxHeight = math.max(oldHeight, maxHeight);
                 }
+            }
 
-                float span = math.abs(minHeight) + math.abs(maxHeight);
+            float span = maxHeight - minHeight;
 
-                for (int x = 0; x < textureDimensions.x; ++x)
+            for (int x = 0; x < textureDimensions.x; ++x)
+            {
+                for (int y = 0; y < textureDimensions.y; ++y)
                 {
-                    for (int y = 0; y < textureDimensions.y; ++y)
-                    {
-                        float oldHeight = nativeHeightmapArray[x * textureDimensions.y + y];
-                        nativeHeightmapArray[x * textureDimensions.y + y] = (oldHeight + minHeight) / span;
-                    }
+                    float oldHeight = nativeHeightmapArray[x * textureDimensions.y + y];
+                    nativeHeightmapArray[x * textureDimensions.y + y] = (oldHeight - minHeight) / span;
                 }
-            });
+            }
+            return Task.CompletedTask;
         }
 
         public CpuInputExpectations GetStepExpectationsCpu()

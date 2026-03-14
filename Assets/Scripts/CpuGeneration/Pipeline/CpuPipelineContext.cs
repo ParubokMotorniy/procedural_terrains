@@ -4,7 +4,7 @@ using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Assertions;
 using UnityEngine.Rendering;
-using static Unity.Mathematics.math;
+using Unity.Mathematics;
 using Random = System.Random;
 
 namespace CpuGenerationPipeline
@@ -43,13 +43,13 @@ namespace CpuGenerationPipeline
             return randomGenerator.Next();
         }
 
-        public Unity.Mathematics.float2 GetRandomFloats()
+        public float2 GetRandomFloats()
         {
-            return new Unity.Mathematics.float2((float)randomGenerator.NextDouble(), (float)randomGenerator.NextDouble());
+            return new float2((float)randomGenerator.NextDouble(), (float)randomGenerator.NextDouble());
         }
-        public Unity.Mathematics.int2 GetRandomInts()
+        public int2 GetRandomInts()
         {
-            return new Unity.Mathematics.int2(randomGenerator.Next(), randomGenerator.Next());
+            return new int2(randomGenerator.Next(), randomGenerator.Next());
         }
     }
 }
