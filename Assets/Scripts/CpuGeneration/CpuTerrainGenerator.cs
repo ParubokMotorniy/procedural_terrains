@@ -50,6 +50,8 @@ namespace CpuGenerationPipeline
         // Action postCollectionAction;
         // bool previousReadPending = false;
 
+        //TODO: consider using intermediate float array to allow async execution of the pipeline
+
         private struct ExecutablePipeline
         {
             public List<CpuPipelineStep> pipelineToRun;

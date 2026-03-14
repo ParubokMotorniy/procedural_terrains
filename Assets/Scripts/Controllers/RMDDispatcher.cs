@@ -43,6 +43,7 @@ public class RMDDispatcher : UltimatePipelineStep
     private static readonly int PID_noiseDisplacement = Shader.PropertyToID("noiseDisplacement");
     private static readonly int PID_octaveAmplitude = Shader.PropertyToID("octaveAmplitude");
     private static readonly int PID_texelWidthDivisionFactor = Shader.PropertyToID("texelWidthDivisionFactor");
+    private static readonly int PID_texelWidthDivisionIteration = Shader.PropertyToID("texelWidthDivisionIteration");
     private static readonly int PID_texelWidthDivided = Shader.PropertyToID("texelWidthDivided");
     private static readonly int PID_Result = Shader.PropertyToID("Result");
     private static readonly int PID_targetDimensions = Shader.PropertyToID("targetDimensions");
@@ -100,6 +101,7 @@ public class RMDDispatcher : UltimatePipelineStep
             int divided = texelsPerThreadDomain / (int)math.pow(2, sub + 1);
 
             pipelineContext.SetUniformInt(shaderToDispatch, PID_texelWidthDivisionFactor, divisionFactor);
+            pipelineContext.SetUniformInt(shaderToDispatch, PID_texelWidthDivisionIteration, sub + 1);
             pipelineContext.SetUniformInt(shaderToDispatch, PID_texelWidthDivided, divided);
 
             octaveAmplitude *= H;
@@ -140,6 +142,8 @@ public class RMDDispatcher : UltimatePipelineStep
         uint2 textureDimensions = new uint2((uint)textureSize, (uint)textureSize);
         var nativeHeightmapArray = pipelineContext.intermediateHeightmap.GetRawTextureData<float>();
 
+        Assert.IsTrue(textureSize % texelsPerThreadDomain == 0, "Can't fit integer number of domains into the texture!");
+
         var sampleGaussianNoise = new Func<float2, float>(noiseTextureIdx =>
         {
             return CpuComputeUtilities.sampleGaussBoxMuller(noiseTextureIdx);
@@ -147,6 +151,7 @@ public class RMDDispatcher : UltimatePipelineStep
 
         var sampleNoise = new Func<float2, float>(noiseTextureIdx =>
         {
+            //TODO: play with non-diagonal
             return noise.snoise(new float2(sampleGaussianNoise(noiseTextureIdx) * perlinFrequency)); // domain warping
         });
 
@@ -231,7 +236,7 @@ public class RMDDispatcher : UltimatePipelineStep
             }
         });
 
-        var transition21 = new Action<int, int, float, int>((texelWidthDivided, texelWidthDivisionFactor, octaveAmplitude, passId) =>
+        var transition21 = new Action<int, int, int, float, int>((texelWidthDivided, texelWidthDivisionFactor, texelWidthDivisionIteration, octaveAmplitude, passId) =>
         {
             int numThreadDomains = textureSize / texelsPerThreadDomain;
             for (int xW = 0; xW < numThreadDomains; ++xW)
@@ -240,7 +245,7 @@ public class RMDDispatcher : UltimatePipelineStep
                 {
                     uint2 topLeftCellIdx = (uint2)(new int2(xW, yW) * texelsPerThreadDomain);
 
-                    int numYPasses = (int)math.pow(2, texelWidthDivisionFactor);
+                    int numYPasses = (int)math.pow(2, texelWidthDivisionIteration);
                     int numXPasses = texelWidthDivisionFactor;
 
                     for (uint y = 0; y < numYPasses; ++y)
@@ -310,7 +315,7 @@ public class RMDDispatcher : UltimatePipelineStep
             }
 
             octaveAmplitude *= H;
-            transition21(texelWidthDivided, texelWidthDivisionFactor, octaveAmplitude, seed);
+            transition21(texelWidthDivided, texelWidthDivisionFactor, sub + 1, octaveAmplitude, seed);
 
             if (addExtraNoise)
             {

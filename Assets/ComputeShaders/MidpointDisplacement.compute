@@ -10,6 +10,7 @@ RWTexture2D<float> Result;
 uniform int threadDomainTexelWidth;
 uniform int texelWidthDivided;
 uniform uint texelWidthDivisionFactor; // 1,2,4,8...
+uniform uint texelWidthDivisionIteration; //1,2,3...
 uniform uint2 targetDimensions;        // so as not to GetDimensions() every time
 
 uniform uint threadSubdomainsX;
@@ -141,7 +142,7 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates)
 {
     uint2 topLeftCellIdx = globalId.xy * threadDomainTexelWidth;
 
-    int numYPasses = pow(2, texelWidthDivisionFactor);
+    int numYPasses = pow(2, texelWidthDivisionIteration);
     int numXPasses = texelWidthDivisionFactor;
 
     for (uint y = 0; y < numYPasses; ++y)
