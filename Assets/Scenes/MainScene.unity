@@ -167,7 +167,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CpuGenerationPipeline.CpuTerrainGenerator
   terrainSize: 8
   terrainScale: 1
-  generatorSeed: 4768345
+  generatorSeed: 346357
   numSamples: 5
   dumpTextures: 0
   useTestTexture: 0
