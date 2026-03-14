@@ -48,7 +48,7 @@ public class CpuParticleHydraulicErosionDispatcher : CpuMonoPipelineStep
     [Range(0.001f, 10.0f)]
     public float rainNoiseFrequency = 1.0f;
 
-    public override Task ExecuteStep(CpuPipelineContext pipelineContext)
+    public override Task ExecuteStepCpu(CpuPipelineContext pipelineContext)
     {
         throw new NotImplementedException();
     }
@@ -78,8 +78,8 @@ public class CpuParticleHydraulicErosionDispatcher : CpuMonoPipelineStep
     // private ComputeBuffer pipesBuffer;
 
 
-    public override InputExpectations GetStepExpectations()
+    public override InputExpectations GetStepExpectationsCpu()
         => InputExpectations.HeightMapNormalized;
-    public override void UpdateHeightmapState(ref HeightmapProperties previousState)
+    public override void UpdateHeightmapStateCpu(ref HeightmapProperties previousState)
     { }
 }

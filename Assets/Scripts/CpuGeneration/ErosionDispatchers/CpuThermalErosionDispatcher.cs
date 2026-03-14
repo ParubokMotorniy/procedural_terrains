@@ -16,14 +16,14 @@ public class CpuThermalErosionDispatcher : CpuMonoPipelineStep
     [Range(1, 100)]
     public int erosionIterationLimit = 25;
 
-    public override Task ExecuteStep(CpuPipelineContext pipelineContext)
+    public override Task ExecuteStepCpu(CpuPipelineContext pipelineContext)
     {
         throw new NotImplementedException();
     }
 
-    public override InputExpectations GetStepExpectations()
+    public override InputExpectations GetStepExpectationsCpu()
         => InputExpectations.HeightMapNormalized;
-    public override void UpdateHeightmapState(ref HeightmapProperties previousState)
+    public override void UpdateHeightmapStateCpu(ref HeightmapProperties previousState)
     {
     }
 }

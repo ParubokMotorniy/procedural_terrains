@@ -2,10 +2,12 @@ using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Assertions;
 using System;
-using GenerationPipeline;
+using CpuGenerationPipeline;
+using GpuGenerationPipeline;
 using UnityEngine.Rendering;
+using System.Threading.Tasks;
 
-public class RMDDispatcher: MonoPipelineStep
+public class RMDDispatcher : UltimatePipelineStep
 {
     [SerializeField]
     private ComputeShader shaderToDispatch;
@@ -40,7 +42,7 @@ public class RMDDispatcher: MonoPipelineStep
     private static readonly int PID_targetDimensions = Shader.PropertyToID("targetDimensions");
 
 
-    public override void ExecuteStep(PipelineContext pipelineContext)
+    public override void ExecuteStepGpu(PipelineContext pipelineContext)
     {
         int textureSize = pipelineContext.GetHeightmapSize();
         int texelsPerThreadDomain = (int)math.pow(2, numSubdivisions);
@@ -118,10 +120,25 @@ public class RMDDispatcher: MonoPipelineStep
         }
     }
 
-    public override InputExpectations GetStepExpectations() => InputExpectations.None;
+    public override InputExpectations GetStepExpectationsGpu() => InputExpectations.None;
 
-    public override void UpdateHeightmapState(ref HeightmapProperties previousState)
+    public override void UpdateHeightmapStateGpu(ref HeightmapProperties previousState)
     {
         previousState &= ~HeightmapProperties.Normalized;
+    }
+
+    public override Task ExecuteStepCpu(CpuPipelineContext pipelineContext)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override CpuInputExpectations GetStepExpectationsCpu()
+    {
+        throw new NotImplementedException();
+    }
+
+    public override void UpdateHeightmapStateCpu(ref CpuHeightmapProperties previousState)
+    {
+        throw new NotImplementedException();
     }
 }

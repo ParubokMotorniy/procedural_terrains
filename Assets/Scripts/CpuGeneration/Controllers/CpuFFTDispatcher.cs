@@ -23,14 +23,14 @@ public class CpuFFTDispatcher : CpuMonoPipelineStep
     //implicitly cleared
     // private ComputeBuffer coefficientsBuffer;
 
-    public override InputExpectations GetStepExpectations() => InputExpectations.None;
+    public override InputExpectations GetStepExpectationsCpu() => InputExpectations.None;
 
-    public override void UpdateHeightmapState(ref HeightmapProperties previousState)
+    public override void UpdateHeightmapStateCpu(ref HeightmapProperties previousState)
     {
         previousState &= ~HeightmapProperties.Normalized;
     }
 
-    public override Task ExecuteStep(CpuPipelineContext pipelineContext)
+    public override Task ExecuteStepCpu(CpuPipelineContext pipelineContext)
     {
         throw new NotImplementedException();
     }

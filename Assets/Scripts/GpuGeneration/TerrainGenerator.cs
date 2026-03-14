@@ -10,7 +10,7 @@ using System.IO;
 using System.Text;
 using UnityEngine.Experimental.GlobalIllumination;
 
-namespace GenerationPipeline
+namespace GpuGenerationPipeline
 {
     [RequireComponent(typeof(Renderer))]
     [RequireComponent(typeof(MeshFilter))]
@@ -48,7 +48,8 @@ namespace GenerationPipeline
         public Texture2D testTexture;
 #endif
 
-        public List<MonoPipelineStep> pipelineSteps;
+        [SerializeField]
+        public List<UltimatePipelineStep> pipelineSteps;
 
         private RenderTexture intermediateHeightmap;
 
@@ -124,13 +125,13 @@ namespace GenerationPipeline
             HeightmapProperties runningProperties = HeightmapProperties.Created;
             foreach (PipelineStep inputStep in pipelineSteps)
             {
-                if ((inputStep.GetStepExpectations() & InputExpectations.HeightMapNormalized) != 0 && (runningProperties & HeightmapProperties.Normalized) == 0)
+                if ((inputStep.GetStepExpectationsGpu() & InputExpectations.HeightMapNormalized) != 0 && (runningProperties & HeightmapProperties.Normalized) == 0)
                 {
                     augmentedPipeline.Add(normalizer);
-                    normalizer.UpdateHeightmapState(ref runningProperties);
+                    normalizer.UpdateHeightmapStateGpu(ref runningProperties);
                 }
                 augmentedPipeline.Add(inputStep);
-                inputStep.UpdateHeightmapState(ref runningProperties);
+                inputStep.UpdateHeightmapStateGpu(ref runningProperties);
             }
             augmentedPipeline.Add(normalizer);
             augmentedPipeline.Add(finalizer);
@@ -144,7 +145,7 @@ namespace GenerationPipeline
             //executes the complete pipeline
             foreach (PipelineStep step in augmentedPipeline)
             {
-                step.ExecuteStep(currentContext);
+                step.ExecuteStepGpu(currentContext);
             }
 
             return currentContext;

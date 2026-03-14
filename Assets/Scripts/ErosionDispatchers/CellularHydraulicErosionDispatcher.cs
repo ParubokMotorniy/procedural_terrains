@@ -1,10 +1,12 @@
 using System;
-using GenerationPipeline;
+using System.Threading.Tasks;
+using CpuGenerationPipeline;
+using GpuGenerationPipeline;
 using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Assertions;
 
-public class CellularHydraulicErosionDispatcher: MonoPipelineStep
+public class CellularHydraulicErosionDispatcher: UltimatePipelineStep
 {
     [SerializeField]
     public ComputeShader erosionComputeShader;
@@ -50,10 +52,10 @@ public class CellularHydraulicErosionDispatcher: MonoPipelineStep
     private static readonly int PID_iterationIdx = Shader.PropertyToID("iterationIdx");
     private static readonly int PID_rainNoiseFrequency = Shader.PropertyToID("rainNoiseFrequency");
 
-    public override InputExpectations GetStepExpectations()
+    public override InputExpectations GetStepExpectationsGpu()
         => InputExpectations.HeightMapNormalized;
 
-    public override void ExecuteStep(PipelineContext pipelineContext)
+    public override void ExecuteStepGpu(PipelineContext pipelineContext)
     {
         int textureSize = pipelineContext.GetHeightmapSize();
         var (optimalGroupSize, numGroups) = GenerationUtilities.GetOptimalNumberOfGroups(textureSize, new int[] { pipelineContext.preferredGlobalGroupSize }, Int32.MaxValue, 4);
@@ -123,7 +125,22 @@ public class CellularHydraulicErosionDispatcher: MonoPipelineStep
         // pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, finalWaterEvaporatorKernelIdx, dispatchGroups);
     }
 
-    public override void UpdateHeightmapState(ref HeightmapProperties previousState)
+    public override void UpdateHeightmapStateGpu(ref HeightmapProperties previousState)
     {
+    }
+
+    public override Task ExecuteStepCpu(CpuPipelineContext pipelineContext)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override CpuInputExpectations GetStepExpectationsCpu()
+    {
+        throw new NotImplementedException();
+    }
+
+    public override void UpdateHeightmapStateCpu(ref CpuHeightmapProperties previousState)
+    {
+        throw new NotImplementedException();
     }
 }

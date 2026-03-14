@@ -6,19 +6,19 @@ namespace CpuGenerationPipeline
 {
     public class CpuFormatFinalizer : CpuPipelineStep
     {
-        public Task ExecuteStep(CpuPipelineContext pipelineContext)
+        public Task ExecuteStepCpu(CpuPipelineContext pipelineContext)
         {
             pipelineContext.intermediateHeightmap.Apply();
             Graphics.Blit(pipelineContext.intermediateHeightmap, pipelineContext.finalHeightmap);
             return Task.CompletedTask;
         }
 
-        public InputExpectations GetStepExpectations()
+        public CpuInputExpectations GetStepExpectationsCpu()
         {
-            return InputExpectations.HeightMapNormalized;
+            return CpuInputExpectations.HeightMapNormalized;
         }
 
-        public void UpdateHeightmapState(ref HeightmapProperties previousState)
+        public void UpdateHeightmapStateCpu(ref CpuHeightmapProperties previousState)
         {
 
         }

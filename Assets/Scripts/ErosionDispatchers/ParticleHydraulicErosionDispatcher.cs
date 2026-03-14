@@ -1,11 +1,13 @@
 using System;
 using System.Runtime.InteropServices;
-using GenerationPipeline;
+using System.Threading.Tasks;
+using CpuGenerationPipeline;
+using GpuGenerationPipeline;
 using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Assertions;
 
-public class ParticleHydraulicErosionDispatcher: MonoPipelineStep
+public class ParticleHydraulicErosionDispatcher: UltimatePipelineStep
 {
     [SerializeField]
     public ComputeShader erosionComputeShader;
@@ -91,10 +93,10 @@ public class ParticleHydraulicErosionDispatcher: MonoPipelineStep
     private static readonly int PID_randomInts = Shader.PropertyToID("randomInts");
     private static readonly int PID_rainNoiseFrequency = Shader.PropertyToID("rainNoiseFrequency");
 
-    public override InputExpectations GetStepExpectations()
+    public override InputExpectations GetStepExpectationsGpu()
         => InputExpectations.HeightMapNormalized;
 
-    public override void ExecuteStep(PipelineContext pipelineContext)
+    public override void ExecuteStepGpu(PipelineContext pipelineContext)
     {
         int preferredGroupSize = pipelineContext.preferredGlobalGroupSize;
         int numActualParticles = (int)math.pow(2, numSimultaneousParticles);
@@ -196,6 +198,21 @@ public class ParticleHydraulicErosionDispatcher: MonoPipelineStep
             }
         }
     }
-    public override void UpdateHeightmapState(ref HeightmapProperties previousState)
+    public override void UpdateHeightmapStateGpu(ref HeightmapProperties previousState)
     { }
+
+    public override Task ExecuteStepCpu(CpuPipelineContext pipelineContext)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override CpuInputExpectations GetStepExpectationsCpu()
+    {
+        throw new NotImplementedException();
+    }
+
+    public override void UpdateHeightmapStateCpu(ref CpuHeightmapProperties previousState)
+    {
+        throw new NotImplementedException();
+    }
 }

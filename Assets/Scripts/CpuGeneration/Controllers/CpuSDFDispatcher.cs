@@ -10,7 +10,7 @@ public class CpuSDFDispatcher : CpuMonoPipelineStep
     [Range(0.025f, 4.0f)]
     public float baseSimplexFrequency = 1.0f;
 
-    public override Task ExecuteStep(CpuPipelineContext pipelineContext)
+    public override Task ExecuteStepCpu(CpuPipelineContext pipelineContext)
     {
         throw new NotImplementedException();
     }
@@ -20,9 +20,9 @@ public class CpuSDFDispatcher : CpuMonoPipelineStep
     // private ComputeBuffer floodingBuffer2;
     // private ComputeBuffer inputContinentHeightmap;
 
-    public override InputExpectations GetStepExpectations() => InputExpectations.None;
+    public override InputExpectations GetStepExpectationsCpu() => InputExpectations.None;
 
-    public override void UpdateHeightmapState(ref HeightmapProperties previousState)
+    public override void UpdateHeightmapStateCpu(ref HeightmapProperties previousState)
     {
         previousState &= ~HeightmapProperties.Normalized;
     }

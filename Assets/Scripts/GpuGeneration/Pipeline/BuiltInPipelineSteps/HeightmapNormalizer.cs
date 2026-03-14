@@ -3,14 +3,14 @@ using UnityEngine.Assertions;
 using Unity.Mathematics;
 using Unity.VisualScripting;
 
-namespace GenerationPipeline
+namespace GpuGenerationPipeline
 {
     [ExecuteAlways]
     public class HeightmapNormalizer : PipelineStep
     {
         private ComputeShader normalizationShader;
 
-        public void ExecuteStep(PipelineContext pipelineContext)
+        public void ExecuteStepGpu(PipelineContext pipelineContext)
         {
             if (normalizationShader is null)
             {
@@ -30,12 +30,12 @@ namespace GenerationPipeline
             }
         }
 
-        public InputExpectations GetStepExpectations()
+        public InputExpectations GetStepExpectationsGpu()
         {
             return InputExpectations.None;
         }
 
-        public void UpdateHeightmapState(ref HeightmapProperties previousState)
+        public void UpdateHeightmapStateGpu(ref HeightmapProperties previousState)
         {
             previousState |= HeightmapProperties.Normalized;
         }

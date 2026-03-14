@@ -1,21 +1,21 @@
 using UnityEngine;
 
-namespace GenerationPipeline
+namespace GpuGenerationPipeline
 {
     public class FormatFinalizer : PipelineStep
     {
-        public void ExecuteStep(PipelineContext pipelineContext)
+        public void ExecuteStepGpu(PipelineContext pipelineContext)
         {
             //TODO: can probably be done more effectively
             pipelineContext.AppendTextureCopyToCommandBuffer(pipelineContext.intermediateHeightmap, pipelineContext.finalHeightmap);
         }
 
-        public InputExpectations GetStepExpectations()
+        public InputExpectations GetStepExpectationsGpu()
         {
             return InputExpectations.HeightMapNormalized;
         }
 
-        public void UpdateHeightmapState(ref HeightmapProperties previousState)
+        public void UpdateHeightmapStateGpu(ref HeightmapProperties previousState)
         {
 
         }

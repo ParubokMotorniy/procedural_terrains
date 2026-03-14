@@ -7,7 +7,7 @@ using System;
 using System.Collections.Generic;
 using Unity.Profiling;
 
-namespace GenerationPipeline
+namespace GpuGenerationPipeline
 {
     public class ProfilingPipelineContext : PipelineContext
     {

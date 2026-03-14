@@ -5,7 +5,7 @@ using UnityEngine.Assertions;
 using UnityEngine.Rendering;
 using Random = System.Random;
 
-namespace GenerationPipeline
+namespace GpuGenerationPipeline
 {
     // TODO: maybe, implement chained static constructor
     //TODO: add callbacks for the stages to use
@@ -32,6 +32,7 @@ namespace GenerationPipeline
         protected Random randomGenerator;
         protected static float[] randomFloatsArray = new float[2];
         protected static int[] randomIntsArray = new int[2];
+        protected static HeightmapNormalizer normalizationShader = new HeightmapNormalizer();
 
         public PipelineContext(RenderTexture passHeightmap, RenderTexture finalHeightmap, int seed, int preferredGlobalGroupSize)
         {
@@ -112,6 +113,11 @@ namespace GenerationPipeline
         public void SetGlobalKeyword(ref GlobalKeyword keywordToSet, bool value)
         {
             terrainPipelineCMD.SetKeyword(keywordToSet, value);
+        }
+
+        public void RunInternalNormalization()
+        {
+            normalizationShader.ExecuteStepGpu(this);
         }
     }
 }

@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace GenerationPipeline
+namespace GpuGenerationPipeline
 {
     [System.Flags]
     public enum InputExpectations //defines what the step assumes about the input it receives from the previosu step
@@ -19,8 +19,8 @@ namespace GenerationPipeline
 
     public interface PipelineStep
     {
-        public void ExecuteStep(PipelineContext pipelineContext);
-        public InputExpectations GetStepExpectations();
-        public void UpdateHeightmapState(ref HeightmapProperties previousState);
+        public void ExecuteStepGpu(PipelineContext pipelineContext);
+        public InputExpectations GetStepExpectationsGpu();
+        public void UpdateHeightmapStateGpu(ref HeightmapProperties previousState);
     }
 }

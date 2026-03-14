@@ -2,9 +2,11 @@ using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Assertions;
 using System;
-using GenerationPipeline;
+using CpuGenerationPipeline;
+using GpuGenerationPipeline;
+using System.Threading.Tasks;
 
-public class SDFDispatcher: MonoPipelineStep
+public class SDFDispatcher: UltimatePipelineStep
 {
     [SerializeField]
     private ComputeShader shaderToDispatch;
@@ -33,7 +35,7 @@ public class SDFDispatcher: MonoPipelineStep
     private static readonly int PID_floodStepSize = Shader.PropertyToID("floodStepSize");
     private static readonly int PID_randomFloats = Shader.PropertyToID("randomFloats");
 
-    public override void ExecuteStep(PipelineContext pipelineContext)
+    public override void ExecuteStepGpu(PipelineContext pipelineContext)
     {
         int textureSize = pipelineContext.GetHeightmapSize();
         var (optimalGroupSize, numLinearGroups) = GenerationUtilities.GetOptimalNumberOfGroups(textureSize, new int[] { pipelineContext.preferredGlobalGroupSize }, Int32.MaxValue, 1);
@@ -130,16 +132,31 @@ public class SDFDispatcher: MonoPipelineStep
         pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, seedBufferToHieghtmapKernelIdx, dispatchGroups);
 
         // Normalization of the output SDF texture
-        RunInternalNormalization(pipelineContext);
+        pipelineContext.RunInternalNormalization();
 
         // Heightmap postprocessing
         pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, sDFPostprocessorKernel, dispatchGroups);
     }
 
-    public override InputExpectations GetStepExpectations() => InputExpectations.None;
+    public override InputExpectations GetStepExpectationsGpu() => InputExpectations.None;
 
-    public override void UpdateHeightmapState(ref HeightmapProperties previousState)
+    public override void UpdateHeightmapStateGpu(ref HeightmapProperties previousState)
     {
         previousState &= ~HeightmapProperties.Normalized;
+    }
+
+    public override Task ExecuteStepCpu(CpuPipelineContext pipelineContext)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override CpuInputExpectations GetStepExpectationsCpu()
+    {
+        throw new NotImplementedException();
+    }
+
+    public override void UpdateHeightmapStateCpu(ref CpuHeightmapProperties previousState)
+    {
+        throw new NotImplementedException();
     }
 }

@@ -1,10 +1,12 @@
-using GenerationPipeline;
+using CpuGenerationPipeline;
+using GpuGenerationPipeline;
 using UnityEngine.Assertions;
 using Unity.Mathematics;
 using UnityEngine;
 using System;
+using System.Threading.Tasks;
 
-public class ThermalErosionDispatcher: MonoPipelineStep
+public class ThermalErosionDispatcher: UltimatePipelineStep
 {
     [SerializeField]
     public ComputeShader erosionComputeShader;
@@ -28,10 +30,10 @@ public class ThermalErosionDispatcher: MonoPipelineStep
     private static readonly int PID_heightmapDimensions = Shader.PropertyToID("heightmapDimensions");
     private static readonly int PID_iterationIdx = Shader.PropertyToID("iterationIdx");
 
-    public override InputExpectations GetStepExpectations()
+    public override InputExpectations GetStepExpectationsGpu()
         => InputExpectations.HeightMapNormalized;
 
-    public override void ExecuteStep(PipelineContext pipelineContext)
+    public override void ExecuteStepGpu(PipelineContext pipelineContext)
     {
         int textureSize = pipelineContext.GetHeightmapSize();
         var (optimalGroupSize, numGroups) = GenerationUtilities.GetOptimalNumberOfGroups(textureSize, new int[] { pipelineContext.preferredGlobalGroupSize }, Int32.MaxValue, 4);
@@ -74,7 +76,22 @@ public class ThermalErosionDispatcher: MonoPipelineStep
         }
     }
 
-    public override void UpdateHeightmapState(ref HeightmapProperties previousState)
+    public override void UpdateHeightmapStateGpu(ref HeightmapProperties previousState)
     {
+    }
+
+    public override Task ExecuteStepCpu(CpuPipelineContext pipelineContext)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override CpuInputExpectations GetStepExpectationsCpu()
+    {
+        throw new NotImplementedException();
+    }
+
+    public override void UpdateHeightmapStateCpu(ref CpuHeightmapProperties previousState)
+    {
+        throw new NotImplementedException();
     }
 }

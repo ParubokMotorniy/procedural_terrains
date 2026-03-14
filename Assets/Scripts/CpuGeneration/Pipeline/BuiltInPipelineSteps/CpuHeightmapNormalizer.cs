@@ -10,7 +10,7 @@ namespace CpuGenerationPipeline
     [ExecuteAlways]
     public class CpuHeightmapNormalizer : CpuPipelineStep
     {
-        public Task ExecuteStep(CpuPipelineContext pipelineContext)
+        public Task ExecuteStepCpu(CpuPipelineContext pipelineContext)
         {
             return Task.Run(() =>
             {
@@ -41,14 +41,14 @@ namespace CpuGenerationPipeline
             });
         }
 
-        public InputExpectations GetStepExpectations()
+        public CpuInputExpectations GetStepExpectationsCpu()
         {
-            return InputExpectations.None;
+            return CpuInputExpectations.None;
         }
 
-        public void UpdateHeightmapState(ref HeightmapProperties previousState)
+        public void UpdateHeightmapStateCpu(ref CpuHeightmapProperties previousState)
         {
-            previousState |= HeightmapProperties.Normalized;
+            previousState |= CpuHeightmapProperties.Normalized;
         }
     }
 }

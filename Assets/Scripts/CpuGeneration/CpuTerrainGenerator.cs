@@ -36,7 +36,7 @@ namespace CpuGenerationPipeline
         public Texture2D testTexture;
 #endif
 
-        public List<CpuMonoPipelineStep> pipelineSteps;
+        public List<UltimatePipelineStep> pipelineSteps;
 
         private Texture2D intermediateHeightmap;
         private RenderTexture finalHeightmap;
@@ -65,7 +65,7 @@ namespace CpuGenerationPipeline
             {
                 foreach (CpuPipelineStep step in pipelineToRun)
                 {
-                    await step.ExecuteStep(pipelineContext);
+                    await step.ExecuteStepCpu(pipelineContext);
                 }
             }
         }
@@ -114,19 +114,19 @@ namespace CpuGenerationPipeline
 
             List<CpuPipelineStep> augmentedPipeline = new List<CpuPipelineStep>();
 
-            HeightmapProperties runningProperties = HeightmapProperties.Created;
+            CpuHeightmapProperties runningProperties = CpuHeightmapProperties.Created;
 
             foreach (CpuPipelineStep inputStep in pipelineSteps)
             {
-                if ((inputStep.GetStepExpectations() & InputExpectations.HeightMapNormalized) != 0 &&
-                    (runningProperties & HeightmapProperties.Normalized) == 0)
+                if ((inputStep.GetStepExpectationsCpu() & CpuInputExpectations.HeightMapNormalized) != 0 &&
+                    (runningProperties & CpuHeightmapProperties.Normalized) == 0)
                 {
                     augmentedPipeline.Add(normalizer);
-                    normalizer.UpdateHeightmapState(ref runningProperties);
+                    normalizer.UpdateHeightmapStateCpu(ref runningProperties);
                 }
 
                 augmentedPipeline.Add(inputStep);
-                inputStep.UpdateHeightmapState(ref runningProperties);
+                inputStep.UpdateHeightmapStateCpu(ref runningProperties);
             }
 
             augmentedPipeline.Add(normalizer);
@@ -230,7 +230,7 @@ namespace CpuGenerationPipeline
         //         //executes the complete pipeline
         //         foreach (CpuPipelineStep step in augmentedPipeline)
         //         {
-        //             step.ExecuteStep(currentContext);
+        //             step.ExecuteStepCpu(currentContext);
         //         }
         //         result[s] = (newContext.gpuMilliseconds, newContext.gpuFrameTime);
         //         RenderTextureDumper.SaveRFloatToExr(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples/cpu_terrain_" + s + ".exr"));

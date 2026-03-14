@@ -26,7 +26,7 @@ public class CpuUNDispatcher : CpuMonoPipelineStep
     [Range(0.01f, 10.0f)]
     public float perturbationStrength = 0.01f;
 
-    public override Task ExecuteStep(CpuPipelineContext pipelineContext)
+    public override Task ExecuteStepCpu(CpuPipelineContext pipelineContext)
     {
         return Task.Run(() =>
         {
@@ -77,9 +77,9 @@ public class CpuUNDispatcher : CpuMonoPipelineStep
         });
     }
 
-    public override InputExpectations GetStepExpectations() => InputExpectations.None;
+    public override InputExpectations GetStepExpectationsCpu() => InputExpectations.None;
 
-    public override void UpdateHeightmapState(ref HeightmapProperties previousState)
+    public override void UpdateHeightmapStateCpu(ref HeightmapProperties previousState)
     {
         previousState &= ~HeightmapProperties.Normalized;
     }
