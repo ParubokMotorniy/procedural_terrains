@@ -87,15 +87,16 @@ public class UNDispatcher : UltimatePipelineStep
         // {
 
         // });
-        int2 textureDimensions = new int2(pipelineContext.intermediateHeightmap.width, pipelineContext.intermediateHeightmap.height);
-        float2 extraDisplacement = (float2)textureDimensions * pipelineContext.GetRandomFloats();
+        int2 textureDimensions = new int2(pipelineContext.GetHeightmapSize(), pipelineContext.GetHeightmapSize());
         var nativeHeightmapArray = pipelineContext.intermediateHeightmap.GetRawTextureData<float>();
+
+        float2 extraDisplacement = (float2)textureDimensions * pipelineContext.GetRandomFloats();
 
         for (int x = 0; x < textureDimensions.x; ++x)
         {
             for (int y = 0; y < textureDimensions.y; ++y)
             {
-                float2 floatIdx = extraDisplacement + new float2(x,y);
+                float2 floatIdx = extraDisplacement + new float2(x, y);
 
                 float2 slopeErosionDerivativeSum = (float2)math.clamp(new float2(noise.snoise(floatIdx)), -0.15, 0.15).xx;
                 float2 perturbDerivativeSum = float2.zero;

@@ -29,6 +29,12 @@ public class RMDDispatcher : UltimatePipelineStep
 
     private readonly int[] groupSizes = new int[] { 32, 16, 8 };
 
+    private static readonly float RANGE_THRSH_CEIL = 0.6f;
+    private static readonly float RANGE_THRSH_FLOOR = 0.35f;
+    private static readonly float EFFECTIVE_RANGE = 0.25f;
+    private static readonly float EPSILON = 3.0e-2f;
+    private static readonly float RIDGE_FALLOF_SPEED = 0.5f;
+
     private static readonly int PID_threadDomainTexelWidth = Shader.PropertyToID("threadDomainTexelWidth");
     private static readonly int PID_threadSubdomainsX = Shader.PropertyToID("threadSubdomainsX");
     private static readonly int PID_threadSubdomainsY = Shader.PropertyToID("threadSubdomainsY");
@@ -129,16 +135,199 @@ public class RMDDispatcher : UltimatePipelineStep
 
     public override Task ExecuteStepCpu(CpuPipelineContext pipelineContext)
     {
-        throw new NotImplementedException();
+        int textureSize = pipelineContext.GetHeightmapSize();
+        int texelsPerThreadDomain = (int)math.pow(2, numSubdivisions);
+        uint2 textureDimensions = new uint2((uint)textureSize, (uint)textureSize);
+        var nativeHeightmapArray = pipelineContext.intermediateHeightmap.GetRawTextureData<float>();
+
+        var sampleGaussianNoise = new Func<float2, float>(noiseTextureIdx =>
+        {
+            return CpuComputeUtilities.sampleGaussBoxMuller(noiseTextureIdx);
+        });
+
+        var sampleNoise = new Func<float2, float>(noiseTextureIdx =>
+        {
+            return noise.snoise(new float2(sampleGaussianNoise(noiseTextureIdx) * perlinFrequency)); // domain warping
+        });
+
+        var sampleWorleyNoise = new Func<float2, float>(noiseTextureIdx =>
+        {
+            float2 f1_f2 = noise.cellular(noiseTextureIdx);
+
+            if (math.abs(f1_f2.x - f1_f2.y) >= EPSILON)
+            {
+                return f1_f2.x;
+            }
+
+            if (f1_f2.x >= RANGE_THRSH_CEIL)
+            {
+                return f1_f2.x;
+            }
+
+            return (float)((math.max(f1_f2.x - RANGE_THRSH_FLOOR, 0.0) * RIDGE_FALLOF_SPEED) / EFFECTIVE_RANGE);
+        });
+
+        // these end up normalized and uniformly distributed
+        var computeNoiseCoordinates = new Func<uint2, int, float2>((targetTextureCoordinates, passId) =>
+        {
+            uint seed = CpuComputeUtilities.seedFromXYPass(targetTextureCoordinates.x, targetTextureCoordinates.y, passId);
+            float u1 = CpuComputeUtilities.u01FromUint(CpuComputeUtilities.pcgHash(seed));
+            float u2 = CpuComputeUtilities.u01FromUint(CpuComputeUtilities.pcgHash(seed ^ 0x68BC21EBu));
+            return new float2(u1, u2);
+        });
+
+        var initializeHeightmap = new Action<float, float2>((octaveAmplitude, noiseDisplacement) =>
+        {
+            int numThreadDomains = textureSize / texelsPerThreadDomain;
+            for (int x = 0; x < numThreadDomains; ++x)
+            {
+                for (int y = 0; y < numThreadDomains; ++y)
+                {
+                    uint2 topLeftCellIdx = (uint2)(new int2(x, y) * texelsPerThreadDomain);
+                    float2 worleyCoordinates = (topLeftCellIdx / (float2)textureDimensions) * worleyFrequency + noiseDisplacement * worleyFrequency;
+                    nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(textureDimensions, topLeftCellIdx)] = sampleWorleyNoise(worleyCoordinates) * octaveAmplitude;
+                }
+            }
+        });
+
+        var addExtraNoiseRoutine = new Action<float, int>((octaveAmplitude, passId) =>
+        {
+            for (int x = 0; x < textureSize; ++x)
+            {
+                for (int y = 0; y < textureSize; ++y)
+                {
+                    nativeHeightmapArray[x * textureSize + y] += sampleGaussianNoise(computeNoiseCoordinates((uint2)new int2(x, y), passId)) * octaveAmplitude;
+                }
+            }
+        });
+
+        var transition12 = new Action<int, int, float, int>((texelWidthDivided, texelWidthDivisionFactor, octaveAmplitude, passId) =>
+        {
+            int numThreadDomains = textureSize / texelsPerThreadDomain;
+            for (int xW = 0; xW < numThreadDomains; ++xW)
+            {
+                for (int yW = 0; yW < numThreadDomains; ++yW)
+                {
+                    uint2 topLeftCellIdx = (uint2)(new int2(xW, yW) * texelsPerThreadDomain);
+
+                    for (int x = 0; x < texelWidthDivisionFactor; ++x)
+                    {
+                        for (int y = 0; y < texelWidthDivisionFactor; ++y)
+                        {
+                            int2 subdivisionIdx = (int2)(topLeftCellIdx.xy + new uint2((uint)(texelWidthDivided + 2 * texelWidthDivided * x), (uint)(texelWidthDivided + 2 * texelWidthDivided * y)));
+
+                            // let the terrain wrap around currently
+                            double averageNeighbors =
+                                (nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(textureDimensions, (uint2)CpuComputeUtilities.terrainWrap(subdivisionIdx + new int2(texelWidthDivided, texelWidthDivided), (int2)textureDimensions))] +
+                                 nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(textureDimensions, (uint2)CpuComputeUtilities.terrainWrap(subdivisionIdx + new int2(texelWidthDivided, -texelWidthDivided), (int2)textureDimensions))] +
+                                 nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(textureDimensions, (uint2)CpuComputeUtilities.terrainWrap(subdivisionIdx + new int2(-texelWidthDivided, texelWidthDivided), (int2)textureDimensions))] +
+                                 nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(textureDimensions, (uint2)CpuComputeUtilities.terrainWrap(subdivisionIdx + new int2(-texelWidthDivided, -texelWidthDivided), (int2)textureDimensions))]) /
+                                4.0;
+
+                            nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(textureDimensions, (uint2)subdivisionIdx)] = (float)(averageNeighbors + sampleNoise(computeNoiseCoordinates((uint2)subdivisionIdx, passId)) * octaveAmplitude);
+                        }
+                    }
+                }
+            }
+        });
+
+        var transition21 = new Action<int, int, float, int>((texelWidthDivided, texelWidthDivisionFactor, octaveAmplitude, passId) =>
+        {
+            int numThreadDomains = textureSize / texelsPerThreadDomain;
+            for (int xW = 0; xW < numThreadDomains; ++xW)
+            {
+                for (int yW = 0; yW < numThreadDomains; ++yW)
+                {
+                    uint2 topLeftCellIdx = (uint2)(new int2(xW, yW) * texelsPerThreadDomain);
+
+                    int numYPasses = (int)math.pow(2, texelWidthDivisionFactor);
+                    int numXPasses = texelWidthDivisionFactor;
+
+                    for (uint y = 0; y < numYPasses; ++y)
+                    {
+                        int xShiftAmount = (1 - (int)(y % 2)) * texelWidthDivided;
+                        for (uint x = 0; x < numXPasses; ++x)
+                        {
+                            int2 diamondIdx = (int2)(topLeftCellIdx.xy + new uint2((uint)(x * 2 * texelWidthDivided + xShiftAmount), (uint)(y * texelWidthDivided)));
+
+                            float neighborLeft = 0.0f;
+                            float neighborRight = 0.0f;
+                            float neighborTop = 0.0f;
+                            float neighborBottom = 0.0f;
+
+                            int numberValid = 0;
+
+                            if (diamondIdx.x != 0)
+                            {
+                                neighborLeft = nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(textureDimensions, (uint2)CpuComputeUtilities.terrainWrap(diamondIdx + new int2(-texelWidthDivided, 0), (int2)textureDimensions))];
+                                numberValid++;
+                            }
+
+                            if (diamondIdx.x != textureDimensions.x - 1)
+                            {
+                                neighborRight = nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(textureDimensions, (uint2)CpuComputeUtilities.terrainWrap(diamondIdx + new int2(+texelWidthDivided, 0), (int2)textureDimensions))];
+                                numberValid++;
+                            }
+
+                            if (diamondIdx.y != 0)
+                            {
+                                neighborTop = nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(textureDimensions, (uint2)CpuComputeUtilities.terrainWrap(diamondIdx + new int2(0, -texelWidthDivided), (int2)textureDimensions))];
+                                numberValid++;
+                            }
+
+                            if (diamondIdx.y != textureDimensions.y - 1)
+                            {
+                                neighborBottom = nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(textureDimensions, (uint2)CpuComputeUtilities.terrainWrap(diamondIdx + new int2(0, +texelWidthDivided), (int2)textureDimensions))];
+                                numberValid++;
+                            }
+
+                            nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(textureDimensions, (uint2)diamondIdx)] = ((neighborLeft +
+                                                   neighborRight +
+                                                   neighborTop +
+                                                   neighborBottom) /
+                                                  numberValid) +
+                                                 sampleNoise(computeNoiseCoordinates((uint2)diamondIdx, passId)) * octaveAmplitude;
+                        }
+                    }
+                }
+            }
+        });
+
+        float octaveAmplitude = 1.0f;
+        initializeHeightmap(1.0f, pipelineContext.GetRandomFloats());
+        for (int sub = 0; sub < numSubdivisions; ++sub)
+        {
+            int texelWidthDivisionFactor = (int)math.pow(2, sub);
+            int texelWidthDivided = texelsPerThreadDomain / (int)math.pow(2, sub + 1);
+            int seed = texelWidthDivided + sub;
+
+            octaveAmplitude *= H;
+            transition12(texelWidthDivided, texelWidthDivisionFactor, octaveAmplitude, seed);
+
+            if (addExtraNoise)
+            {
+                addExtraNoiseRoutine(octaveAmplitude, seed);
+            }
+
+            octaveAmplitude *= H;
+            transition21(texelWidthDivided, texelWidthDivisionFactor, octaveAmplitude, seed);
+
+            if (addExtraNoise)
+            {
+                addExtraNoiseRoutine(octaveAmplitude, seed);
+            }
+        }
+
+        return Task.CompletedTask;
     }
 
     public override CpuInputExpectations GetStepExpectationsCpu()
     {
-        throw new NotImplementedException();
+        return CpuInputExpectations.None;
     }
 
     public override void UpdateHeightmapStateCpu(ref CpuHeightmapProperties previousState)
     {
-        throw new NotImplementedException();
+        previousState &= ~CpuHeightmapProperties.Normalized;
     }
 }
