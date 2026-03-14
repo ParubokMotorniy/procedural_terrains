@@ -38,8 +38,7 @@ namespace CpuGenerationPipeline
 
         public List<CpuMonoPipelineStep> pipelineSteps;
 
-        private float[,] intermediateHeightmap;
-
+        private Texture2D intermediateHeightmap;
         private RenderTexture finalHeightmap;
 
         //built-ins
@@ -78,10 +77,10 @@ namespace CpuGenerationPipeline
 
             // intermediate heightmap creation
             if (intermediateHeightmap == null ||
-                intermediateHeightmap.GetLength(0) != textureSize ||
-                intermediateHeightmap.GetLength(1) != textureSize)
+                intermediateHeightmap.width != textureSize ||
+                intermediateHeightmap.height != textureSize)
             {
-                intermediateHeightmap = new float[textureSize, textureSize];
+                intermediateHeightmap = new Texture2D(textureSize, textureSize, TextureFormat.RFloat, false, true);
             }
 
             // final heightmap creation

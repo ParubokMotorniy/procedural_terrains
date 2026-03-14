@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Assertions;
 using UnityEngine.Rendering;
@@ -10,7 +11,7 @@ namespace CpuGenerationPipeline
 {
     public class CpuPipelineContext
     {
-        public float[,] intermediateHeightmap
+        public Texture2D intermediateHeightmap
         {
             get;
             protected set;
@@ -23,14 +24,14 @@ namespace CpuGenerationPipeline
 
         protected Random randomGenerator;
 
-        public CpuPipelineContext(float[,] passHeightmap, RenderTexture finalHeightmap, int seed)
+        public CpuPipelineContext(Texture2D passHeightmap, RenderTexture finalHeightmap, int seed)
         {
             intermediateHeightmap = passHeightmap;
             this.finalHeightmap = finalHeightmap;
             randomGenerator = new System.Random(seed);
         }
 
-        public int GetHeightmapSize() { return intermediateHeightmap.GetLength(0); }
+        public int GetHeightmapSize() { return intermediateHeightmap.width; }
 
         public float GetRandomFloat()
         {

@@ -4,6 +4,7 @@ using UnityEngine.Assertions;
 using System;
 using CpuGenerationPipeline;
 using UnityEngine.Rendering;
+using System.Threading.Tasks;
 
 public class CpuRMDDispatcher : CpuMonoPipelineStep
 {
@@ -22,15 +23,15 @@ public class CpuRMDDispatcher : CpuMonoPipelineStep
     [Range(0.01f, 10.0f)]
     public float perlinFrequency;
 
+    public override Task ExecuteStep(CpuPipelineContext pipelineContext)
+    {
+        throw new NotImplementedException();
+    }
+
     public override InputExpectations GetStepExpectations() => InputExpectations.None;
 
     public override void UpdateHeightmapState(ref HeightmapProperties previousState)
     {
         previousState &= ~HeightmapProperties.Normalized;
-    }
-
-    public override void ExecuteStep(CpuPipelineContext pipelineContext)
-    {
-        throw new NotImplementedException();
     }
 }

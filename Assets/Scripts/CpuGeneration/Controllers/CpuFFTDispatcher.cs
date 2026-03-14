@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.Assertions;
 using System;
 using CpuGenerationPipeline;
+using System.Threading.Tasks;
 
 public class CpuFFTDispatcher : CpuMonoPipelineStep
 {
@@ -29,7 +30,7 @@ public class CpuFFTDispatcher : CpuMonoPipelineStep
         previousState &= ~HeightmapProperties.Normalized;
     }
 
-    public override void ExecuteStep(CpuPipelineContext pipelineContext)
+    public override Task ExecuteStep(CpuPipelineContext pipelineContext)
     {
         throw new NotImplementedException();
     }

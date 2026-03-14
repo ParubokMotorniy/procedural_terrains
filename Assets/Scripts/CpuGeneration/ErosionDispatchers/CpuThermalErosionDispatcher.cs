@@ -3,6 +3,7 @@ using UnityEngine.Assertions;
 using Unity.Mathematics;
 using UnityEngine;
 using System;
+using System.Threading.Tasks;
 
 public class CpuThermalErosionDispatcher : CpuMonoPipelineStep
 {
@@ -15,7 +16,7 @@ public class CpuThermalErosionDispatcher : CpuMonoPipelineStep
     [Range(1, 100)]
     public int erosionIterationLimit = 25;
 
-    public override void ExecuteStep(CpuPipelineContext pipelineContext)
+    public override Task ExecuteStep(CpuPipelineContext pipelineContext)
     {
         throw new NotImplementedException();
     }

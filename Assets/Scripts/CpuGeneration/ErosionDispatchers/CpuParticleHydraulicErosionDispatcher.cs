@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using CpuGenerationPipeline;
 using Unity.Mathematics;
 using UnityEngine;
@@ -47,6 +48,11 @@ public class CpuParticleHydraulicErosionDispatcher : CpuMonoPipelineStep
     [Range(0.001f, 10.0f)]
     public float rainNoiseFrequency = 1.0f;
 
+    public override Task ExecuteStep(CpuPipelineContext pipelineContext)
+    {
+        throw new NotImplementedException();
+    }
+
     // [StructLayout(LayoutKind.Sequential)]
     // private struct ErosionParticle
     // {
@@ -76,9 +82,4 @@ public class CpuParticleHydraulicErosionDispatcher : CpuMonoPipelineStep
         => InputExpectations.HeightMapNormalized;
     public override void UpdateHeightmapState(ref HeightmapProperties previousState)
     { }
-
-    public override void ExecuteStep(CpuPipelineContext pipelineContext)
-    {
-        throw new NotImplementedException();
-    }
 }

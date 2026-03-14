@@ -20,7 +20,7 @@ namespace CpuGenerationPipeline
 
     public interface CpuPipelineStep
     {
-        public async System.Threading.Tasks.Task ExecuteStep(CpuPipelineContext pipelineContext) { throw new NotImplementedException(); }
+        public System.Threading.Tasks.Task ExecuteStep(CpuPipelineContext pipelineContext);
         public InputExpectations GetStepExpectations();
         public void UpdateHeightmapState(ref HeightmapProperties previousState);
     }

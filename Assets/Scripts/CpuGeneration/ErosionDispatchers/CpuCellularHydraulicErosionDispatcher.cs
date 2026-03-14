@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using CpuGenerationPipeline;
 using Unity.Mathematics;
 using UnityEngine;
@@ -32,7 +33,7 @@ public class CpuCellularHydraulicErosionDispatcher : CpuMonoPipelineStep
     [Range(0.001f, 1.0f)]
     public float rainNoiseFrequency = 0.25f;
 
-    public override void ExecuteStep(CpuPipelineContext pipelineContext)
+    public override Task ExecuteStep(CpuPipelineContext pipelineContext)
     {
         throw new NotImplementedException();
     }
