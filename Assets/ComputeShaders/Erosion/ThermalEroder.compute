@@ -127,7 +127,7 @@ void applyKernel(int2 processedTexel)
     }
 }
 
-// race-free update of quadrants' centers
+// update of quadrants' centers
 #pragma kernel ThermalCoreEroder
 #if GLOBAL_GROUP_8
 [numthreads(8, 8, 1)]
@@ -162,7 +162,7 @@ void applyKernel(int2 processedTexel)
     }
 }
 
-// race-free update of quadrants' borders
+// update of quadrants' borders
 #pragma kernel ThermalBorderEroder
 #if GLOBAL_GROUP_8
     [numthreads(8, 8, 1)]

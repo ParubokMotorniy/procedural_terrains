@@ -5,8 +5,9 @@ using Unity.Mathematics;
 using UnityEngine;
 using System;
 using System.Threading.Tasks;
+using Unity.Collections;
 
-public class ThermalErosionDispatcher: UltimatePipelineStep
+public class ThermalErosionDispatcher : UltimatePipelineStep
 {
     [SerializeField]
     public ComputeShader erosionComputeShader;
@@ -29,6 +30,7 @@ public class ThermalErosionDispatcher: UltimatePipelineStep
     private static readonly int PID_talusThreshold = Shader.PropertyToID("talusThreshold");
     private static readonly int PID_heightmapDimensions = Shader.PropertyToID("heightmapDimensions");
     private static readonly int PID_iterationIdx = Shader.PropertyToID("iterationIdx");
+    private static readonly float BIG_FLOAT = 3.402823466e+38f;
 
     public override InputExpectations GetStepExpectationsGpu()
         => InputExpectations.HeightMapNormalized;
@@ -80,18 +82,144 @@ public class ThermalErosionDispatcher: UltimatePipelineStep
     {
     }
 
-    public override Task ExecuteStepCpu(CpuPipelineContext pipelineContext)
+    // diagonal texels are further away from the kernel center, and so we assume they receive less material than direct neighbors
+    static readonly float[,] heightDistributionDistanceCoefficients =
     {
-        throw new NotImplementedException();
+        {0.85f, 1.0f, 0.85f},
+        {1.0f, 0.0f, 1.0f},
+        {0.85f, 1.0f, 0.85f}};
+
+    struct TexelHeightDistribution
+    {
+        public float[,] heightSpreadValue;
+    };
+
+    float computeSingleHeightIncrement(float heightDistance, float distanceSum, float totalHeightRemoved)
+    {
+        return totalHeightRemoved * (heightDistance / distanceSum);
     }
 
-    public override CpuInputExpectations GetStepExpectationsCpu()
+    // determines how material is distirbuted around a texel due to thermal erosion
+    TexelHeightDistribution computeHeightDistribution(int2 processedTexel, uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray)
     {
-        throw new NotImplementedException();
+        TexelHeightDistribution nInfo;
+        nInfo.heightSpreadValue = new float[3, 3];
+
+        float texelHeight = nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, (uint2)processedTexel)];
+
+        float sumError = 0.0f;
+        float sumErrorOut = 0.0f;
+        float exceedingSum = 1.0e-5f;
+        float maxHeightDistance = 0.0f;
+        int numCriticalNeighbors = 0;
+        float minHeightDistance = BIG_FLOAT;
+
+        for (int x = -1; x < 2; ++x)
+        {
+            for (int y = -1; y < 2; ++y)
+            {
+                int2 ncoord = CpuComputeUtilities.terrainWrap(processedTexel + new int2(x, y), (int2)heightmapDimensions);
+                float d = texelHeight - nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, (uint2)ncoord)];
+
+                if (d > talusThreshold)
+                {
+                    maxHeightDistance = math.max(maxHeightDistance, d);
+                    minHeightDistance = math.min(minHeightDistance, d);
+                    numCriticalNeighbors++;
+                }
+                else
+                {
+                    d = 0.0f;
+                }
+
+                exceedingSum = CpuComputeUtilities.accurateSum(exceedingSum, d, out sumErrorOut);
+                sumError += sumErrorOut;
+                nInfo.heightSpreadValue[y + 1, x + 1] = d;
+            }
+        }
+        exceedingSum += sumError;
+
+        float avalancheRatio = 0.0f;
+        if (numCriticalNeighbors > 0 && maxHeightDistance > 1.0e-8)
+        {
+            // the smaller the distance betweem "average" neighbor -> the more prominent the "avalanche"
+            float averageNeighborHeight = (texelHeight * (float)numCriticalNeighbors - exceedingSum) * math.rcp(numCriticalNeighbors);
+            avalancheRatio = (float)math.clamp(1.0 - (averageNeighborHeight / texelHeight), 0.0, 1.0);
+        }
+
+        uint seed = CpuComputeUtilities.seedFromXYPass((uint)processedTexel.x, (uint)processedTexel.y, numCriticalNeighbors);
+        float u1 = CpuComputeUtilities.u01FromUint(CpuComputeUtilities.pcgHash(seed));
+
+        // zero-mean gaussian is shifted to the estimated ratio. u2 is kept at zero to ensure sigma=1
+        float dynamicDistributionCoefficient = (float)(math.clamp(CpuComputeUtilities.sampleGaussBoxMuller(new float2(u1, 0.0f)) + avalancheRatio, 0.3, 1.0) * distributionCoefficient);
+
+        float localSoftness = CpuComputeUtilities.computeSoftnessCoefficient(CpuComputeUtilities.computeGradientAtPoint(nativeHeightmapArray, heightmapDimensions, processedTexel), texelHeight, 0.1f);
+        float totalHeightRemoved = (float)((numCriticalNeighbors > 0) ? localSoftness * dynamicDistributionCoefficient * (maxHeightDistance - talusThreshold) : 0.0);
+
+        // to make sure the central texel does not end up higher than its closest neighbor
+        float heightConsistencyThreshold = (float)((minHeightDistance * exceedingSum) / (minHeightDistance + exceedingSum + 1.0e-5));
+        totalHeightRemoved = (totalHeightRemoved <= heightConsistencyThreshold) ? totalHeightRemoved : heightConsistencyThreshold;
+
+        for (int x = -1; x < 2; ++x)
+        {
+            for (int y = -1; y < 2; ++y)
+            {
+                float d = nInfo.heightSpreadValue[y + 1, x + 1];
+                nInfo.heightSpreadValue[y + 1, x + 1] = heightDistributionDistanceCoefficients[y + 1, x + 1] * computeSingleHeightIncrement(d, exceedingSum, totalHeightRemoved);
+            }
+        }
+
+        // how much height the central texel loses
+        nInfo.heightSpreadValue[1, 1] = -totalHeightRemoved;
+
+        return nInfo;
     }
+
+    void applyKernel(int2 processedTexel, uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray)
+    {
+        TexelHeightDistribution distributionAtTexel = computeHeightDistribution(processedTexel, heightmapDimensions, nativeHeightmapArray);
+        for (int i = -1; i < 2; ++i)
+        {
+            for (int j = -1; j < 2; ++j)
+            {
+                int2 p = CpuComputeUtilities.terrainWrap(processedTexel + new int2(i, j), (int2)heightmapDimensions);
+                nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, (uint2)p)] += distributionAtTexel.heightSpreadValue[j + 1, i + 1];
+            }
+        }
+    }
+
+    public override Task ExecuteStepCpu(CpuPipelineContext pipelineContext)
+    {
+        int heihgtmapSize = pipelineContext.GetHeightmapSize();
+        uint2 heightmapDimensions = new uint2((uint)heihgtmapSize, (uint)heihgtmapSize);
+        var nativeHeightmapArray = pipelineContext.intermediateHeightmap.GetRawTextureData<float>();
+
+        int numTotalTexels = (int)math.pow(heihgtmapSize, 2);
+        int permuteA = GenerationUtilities.ComputeCoprime(numTotalTexels, 101);
+        for (int i = 0; i < erosionIterationLimit; ++i)
+        {
+            float randomUniform = pipelineContext.GetRandomFloat();
+            uint permuteB = (uint)((1 + (int)(randomUniform * numTotalTexels)) % numTotalTexels);
+
+            // iterates over the grid in a permuted order
+            for (uint idx = 0; idx < numTotalTexels; ++idx)
+            {
+                uint permutedIdx = (uint)((permuteA * idx + permuteB) % numTotalTexels);
+
+                int x = (int)(permutedIdx / heihgtmapSize);
+                int y = (int)(permutedIdx % heihgtmapSize);
+
+                applyKernel(new int2(x, y), heightmapDimensions, nativeHeightmapArray);
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public override CpuInputExpectations GetStepExpectationsCpu() => CpuInputExpectations.HeightMapNormalized;
 
     public override void UpdateHeightmapStateCpu(ref CpuHeightmapProperties previousState)
     {
-        throw new NotImplementedException();
+
     }
 }
