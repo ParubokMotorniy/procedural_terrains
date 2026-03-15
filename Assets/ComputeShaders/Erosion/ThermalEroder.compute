@@ -14,7 +14,7 @@ uniform uint permuteAStripV;
 
 static const float BIG_FLOAT = 3.402823466e+38f;
 
-#pragma multi_compile GLOBAL_GROUP_8 GLOBAL_GROUP_16 GLOBAL_GROUP_32 GLOBAL_GROUP_64 
+#pragma multi_compile GLOBAL_GROUP_8 GLOBAL_GROUP_16 GLOBAL_GROUP_32 GLOBAL_GROUP_64
 
 float computeUniformFloat(uint2 targetTextureCoordinates, int passId)
 {
@@ -78,38 +78,38 @@ TexelHeightDistribution computeHeightDistribution(int2 processedTexel)
     }
     exceedingSum += sumError;
 
-    float avalancheRatio = 0.0;
-    if (numCriticalNeighbors > 0 && maxHeightDistance > 1.0e-8)
+    if (numCriticalNeighbors > 0)
     {
+        float avalancheRatio = 0.0;
         // the smaller the distance betweem "average" neighbor -> the more prominent the "avalanche"
         float averageNeighborHeight = (texelHeight * (float)numCriticalNeighbors - exceedingSum) * rcp(numCriticalNeighbors);
         avalancheRatio = clamp(1.0 - (averageNeighborHeight / texelHeight), 0.0, 1.0);
-    }
 
-    uint seed = seedFromXYPass(processedTexel.x, processedTexel.y, numCriticalNeighbors);
-    float u1 = u01FromUint(pcgHash(seed));
+        uint seed = seedFromXYPass(processedTexel.x, processedTexel.y, numCriticalNeighbors);
+        float u1 = u01FromUint(pcgHash(seed));
 
-    // zero-mean gaussian is shifted to the estimated ratio. u2 is kept at zero to ensure sigma=1
-    float dynamicDistributionCoefficient = clamp(sampleGaussBoxMuller(float2(u1, 0.0)) + avalancheRatio, 0.3, 1.0) * distributionCoefficient;
+        // zero-mean gaussian is shifted to the estimated ratio. u2 is kept at zero to ensure sigma=1
+        float dynamicDistributionCoefficient = clamp(sampleGaussBoxMuller(float2(u1, 0.0)) + avalancheRatio, 0.3, 1.0) * distributionCoefficient;
 
-    float localSoftness = computeSoftnessCoefficient(computeGradientAtPoint(resultHeightmap, heightmapDimensions, processedTexel), texelHeight, 0.1);
-    float totalHeightRemoved = (numCriticalNeighbors > 0) ? localSoftness * dynamicDistributionCoefficient * (maxHeightDistance - talusThreshold) : 0.0;
+        float localSoftness = computeSoftnessCoefficient(computeGradientAtPoint(resultHeightmap, heightmapDimensions, processedTexel), texelHeight, 0.1);
+        float totalHeightRemoved = (numCriticalNeighbors > 0) ? localSoftness * dynamicDistributionCoefficient * (maxHeightDistance - talusThreshold) : 0.0;
 
-    // to make sure the central texel does not end up higher than its closest neighbor
-    float heightConsistencyThreshold = (minHeightDistance * exceedingSum) / (minHeightDistance + exceedingSum + 1.0e-5);
-    totalHeightRemoved = (totalHeightRemoved <= heightConsistencyThreshold) ? totalHeightRemoved : heightConsistencyThreshold;
+        // to make sure the central texel does not end up higher than its closest neighbor
+        float heightConsistencyThreshold = (minHeightDistance * exceedingSum) / (minHeightDistance + exceedingSum + 1.0e-5);
+        totalHeightRemoved = (totalHeightRemoved <= heightConsistencyThreshold) ? totalHeightRemoved : heightConsistencyThreshold;
 
-    for (int x = -1; x < 2; ++x)
-    {
-        for (int y = -1; y < 2; ++y)
+        for (int x = -1; x < 2; ++x)
         {
-            float d = nInfo.heightSpreadValue[y + 1][x + 1];
-            nInfo.heightSpreadValue[y + 1][x + 1] = heightDistributionDistanceCoefficients[y + 1][x + 1] * computeSingleHeightIncrement(d, exceedingSum, totalHeightRemoved);
+            for (int y = -1; y < 2; ++y)
+            {
+                float d = nInfo.heightSpreadValue[y + 1][x + 1];
+                nInfo.heightSpreadValue[y + 1][x + 1] = heightDistributionDistanceCoefficients[y + 1][x + 1] * computeSingleHeightIncrement(d, exceedingSum, totalHeightRemoved);
+            }
         }
-    }
 
-    // how much height the central texel loses
-    nInfo.heightSpreadValue[1][1] = -totalHeightRemoved;
+        // how much height the central texel loses
+        nInfo.heightSpreadValue[1][1] = -totalHeightRemoved;
+    }
 
     return nInfo;
 }
