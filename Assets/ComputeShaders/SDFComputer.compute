@@ -1,3 +1,4 @@
+#include "./Common/Utilities.hlsl"
 #include "../../3rdparty/hlsl_noise/ashima/psrdnoise2D.hlsl"
 #include "../../3rdparty/hlsl_noise/ashima/noise2D.hlsl"
 
@@ -23,20 +24,15 @@ static const uint2 MAX_COORD = uint2(MAX_UINT, MAX_UINT);
 
 #pragma multi_compile GLOBAL_GROUP_8 GLOBAL_GROUP_16 GLOBAL_GROUP_32 GLOBAL_GROUP_64 
 
-uint tabularToLinearIdx(uint2 tabularIdx)
-{
-    return tabularIdx.x + (uint)bufferSideLength * tabularIdx.y;
-}
-
 uint2 readFromBuffer(uint2 targetCoord)
 {
     if (currentSourceBuffer == 0)
     {
-        return floodingBuffer1[tabularToLinearIdx(targetCoord)];
+        return floodingBuffer1[index2dTo1d(uint2(bufferSideLength,bufferSideLength),targetCoord)];
     }
     else
     {
-        return floodingBuffer2[tabularToLinearIdx(targetCoord)];
+        return floodingBuffer2[index2dTo1d(uint2(bufferSideLength,bufferSideLength),targetCoord)];
     }
 }
 
@@ -44,11 +40,11 @@ void writeToBuffer(uint2 targetCoord, uint2 newValue)
 {
     if (currentSourceBuffer == 0)
     {
-        floodingBuffer2[tabularToLinearIdx(targetCoord)] = newValue;
+        floodingBuffer2[index2dTo1d(uint2(bufferSideLength,bufferSideLength),targetCoord)] = newValue;
     }
     else
     {
-        floodingBuffer1[tabularToLinearIdx(targetCoord)] = newValue;
+        floodingBuffer1[index2dTo1d(uint2(bufferSideLength,bufferSideLength),targetCoord)] = newValue;
     }
 }
 
@@ -110,7 +106,6 @@ float maskCoefficient(float2 texelPosition)
 float computeFlowNoise(float2 uv, float startFreq)
 {
     float amp = 0.9;
-    float n = 0.0;
     float perturbStrength = 0.15;
     float2 gsum = float2(0.2, 0.2);
 
@@ -161,7 +156,8 @@ float coastlineComputer(float2 texelCoord)
         for (int y = 0; y < texelsPerThread; ++y)
         {
             uint2 texelCoord = topLeftCorner + uint2(x, y);
-            inputTexture[tabularToLinearIdx(texelCoord)] = coastlineComputer(texelCoord);
+            inputTexture[index2dTo1d(uint2(bufferSideLength,bufferSideLength),texelCoord)] = coastlineComputer(texelCoord);
+            // outputTexture[texelCoord]  = coastlineComputer(texelCoord);
         }
     }
 }
@@ -184,7 +180,7 @@ float coastlineComputer(float2 texelCoord)
         for (int y = 0; y < texelsPerThread; ++y)
         {
             uint2 kernelCenter = topLeftCorner + uint2(x, y);
-            uint kernelCenterLin = tabularToLinearIdx(kernelCenter);
+            uint kernelCenterLin = index2dTo1d(uint2(bufferSideLength,bufferSideLength),kernelCenter);
 
             if (texelIsWhiteForMask(inputTexture[kernelCenterLin]))
             {
@@ -195,7 +191,7 @@ float coastlineComputer(float2 texelCoord)
                     for (int j = -1; j < 2 && !blackFound; ++j)
                     {
                         uint2 targetNeighbor = uint2(clamp((int)kernelCenter.x + i, 0, bufferSideLength - 1), clamp((int)kernelCenter.y + j, 0, bufferSideLength - 1));
-                        float neighborColor = inputTexture[tabularToLinearIdx(targetNeighbor)];
+                        float neighborColor = inputTexture[index2dTo1d(uint2(bufferSideLength,bufferSideLength),targetNeighbor)];
                         if (!texelIsWhiteForMask(neighborColor))
                         {
                             floodingBuffer1[kernelCenterLin] = kernelCenter;
@@ -300,7 +296,7 @@ float coastlineComputer(float2 texelCoord)
             uint2 seedCoordinates = readFromBuffer(cellCoords);
             float actualDistance = length((int2)seedCoordinates - (int2)cellCoords);
 
-            if (texelIsWhiteForMask(inputTexture[tabularToLinearIdx(cellCoords)]))
+            if (texelIsWhiteForMask(inputTexture[index2dTo1d(uint2(bufferSideLength,bufferSideLength),cellCoords)]))
             {
                 outputTexture[cellCoords] = (actualDistance + shoreBaseHeight);
             }
@@ -330,7 +326,7 @@ float coastlineComputer(float2 texelCoord)
         {
             uint2 cellCoords = topLeftCorner + uint2(x, y);
 
-            float inputTexelColor = inputTexture[tabularToLinearIdx(cellCoords)];
+            float inputTexelColor = inputTexture[index2dTo1d(uint2(bufferSideLength,bufferSideLength),cellCoords)];
             float distanceAtTexel = outputTexture[cellCoords];
 
             //"lake" formation
