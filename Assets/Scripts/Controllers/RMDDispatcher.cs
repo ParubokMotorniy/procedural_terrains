@@ -137,7 +137,7 @@ public class RMDDispatcher : UltimatePipelineStep
 
     private float SampleGaussianNoise(float2 noiseTextureIdx)
     {
-        return CpuComputeUtilities.sampleGaussBoxMuller(noiseTextureIdx);
+        return CpuComputeUtilities.sampleGaussBoxMuller(new float2(math.min(noiseTextureIdx.x, 0.99f), noiseTextureIdx.y));
     }
 
     private float SampleNoise(float2 noiseTextureIdx)
@@ -162,14 +162,6 @@ public class RMDDispatcher : UltimatePipelineStep
         return (float)((math.max(f1_f2.x - RANGE_THRSH_FLOOR, 0.0) * RIDGE_FALLOF_SPEED) / EFFECTIVE_RANGE);
     }
 
-    private float2 ComputeNoiseCoordinates(uint2 targetTextureCoordinates, int passId)
-    {
-        uint seed = CpuComputeUtilities.seedFromXYPass(targetTextureCoordinates.x, targetTextureCoordinates.y, passId);
-        float u1 = CpuComputeUtilities.u01FromUint(CpuComputeUtilities.pcgHash(seed));
-        float u2 = CpuComputeUtilities.u01FromUint(CpuComputeUtilities.pcgHash(seed ^ 0x68BC21EBu));
-        return new float2(u1, u2);
-    }
-
     private void InitializeHeightmap(int textureSize, int texelsPerThreadDomain, uint2 textureDimensions, NativeArray<float> nativeHeightmapArray, float octaveAmplitude, float2 noiseDisplacement)
     {
         int numThreadDomains = textureSize / texelsPerThreadDomain;
@@ -184,18 +176,18 @@ public class RMDDispatcher : UltimatePipelineStep
         }
     }
 
-    private void AddExtraNoiseRoutine(int textureSize, NativeArray<float> nativeHeightmapArray, float octaveAmplitude, int passId)
+    private void AddExtraNoiseRoutine(int textureSize, NativeArray<float> nativeHeightmapArray, float octaveAmplitude, CpuPipelineContext pipelineContext)
     {
         for (int x = 0; x < textureSize; ++x)
         {
             for (int y = 0; y < textureSize; ++y)
             {
-                nativeHeightmapArray[x * textureSize + y] += SampleGaussianNoise(ComputeNoiseCoordinates((uint2)new int2(x, y), passId)) * octaveAmplitude;
+                nativeHeightmapArray[x * textureSize + y] += SampleGaussianNoise(pipelineContext.GetRandomFloats()) * octaveAmplitude;
             }
         }
     }
 
-    private void Transition12(int textureSize, int texelsPerThreadDomain, uint2 textureDimensions, NativeArray<float> nativeHeightmapArray, int texelWidthDivided, int texelWidthDivisionFactor, float octaveAmplitude, int passId)
+    private void Transition12(int textureSize, int texelsPerThreadDomain, uint2 textureDimensions, NativeArray<float> nativeHeightmapArray, int texelWidthDivided, int texelWidthDivisionFactor, float octaveAmplitude, CpuPipelineContext pipelineContext)
     {
         int numThreadDomains = textureSize / texelsPerThreadDomain;
         for (int xW = 0; xW < numThreadDomains; ++xW)
@@ -217,14 +209,14 @@ public class RMDDispatcher : UltimatePipelineStep
                              nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(textureDimensions, (uint2)CpuComputeUtilities.terrainWrap(subdivisionIdx + new int2(-texelWidthDivided, -texelWidthDivided), (int2)textureDimensions))]) /
                             4.0;
 
-                        nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(textureDimensions, (uint2)subdivisionIdx)] = (float)(averageNeighbors + SampleNoise(ComputeNoiseCoordinates((uint2)subdivisionIdx, passId)) * octaveAmplitude);
+                        nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(textureDimensions, (uint2)subdivisionIdx)] = (float)(averageNeighbors + SampleNoise(pipelineContext.GetRandomFloats()) * octaveAmplitude);
                     }
                 }
             }
         }
     }
 
-    private void Transition21(int textureSize, int texelsPerThreadDomain, uint2 textureDimensions, NativeArray<float> nativeHeightmapArray, int texelWidthDivided, int texelWidthDivisionFactor, int texelWidthDivisionIteration, float octaveAmplitude, int passId)
+    private void Transition21(int textureSize, int texelsPerThreadDomain, uint2 textureDimensions, NativeArray<float> nativeHeightmapArray, int texelWidthDivided, int texelWidthDivisionFactor, int texelWidthDivisionIteration, float octaveAmplitude, CpuPipelineContext pipelineContext)
     {
         int numThreadDomains = textureSize / texelsPerThreadDomain;
         for (int xW = 0; xW < numThreadDomains; ++xW)
@@ -279,7 +271,7 @@ public class RMDDispatcher : UltimatePipelineStep
                                                neighborTop +
                                                neighborBottom) /
                                               numberValid) +
-                                             SampleNoise(ComputeNoiseCoordinates((uint2)diamondIdx, passId)) * octaveAmplitude;
+                                             SampleNoise(pipelineContext.GetRandomFloats()) * octaveAmplitude;
                     }
                 }
             }
@@ -305,19 +297,19 @@ public class RMDDispatcher : UltimatePipelineStep
             int seed = texelWidthDivided + sub;
 
             octaveAmplitude *= H;
-            Transition12(textureSize, texelsPerThreadDomain, textureDimensions, nativeHeightmapArray, texelWidthDivided, texelWidthDivisionFactor, octaveAmplitude, seed);
+            Transition12(textureSize, texelsPerThreadDomain, textureDimensions, nativeHeightmapArray, texelWidthDivided, texelWidthDivisionFactor, octaveAmplitude, pipelineContext);
 
             if (addExtraNoise)
             {
-                AddExtraNoiseRoutine(textureSize, nativeHeightmapArray, octaveAmplitude, seed);
+                AddExtraNoiseRoutine(textureSize, nativeHeightmapArray, octaveAmplitude, pipelineContext);
             }
 
             octaveAmplitude *= H;
-            Transition21(textureSize, texelsPerThreadDomain, textureDimensions, nativeHeightmapArray, texelWidthDivided, texelWidthDivisionFactor, sub + 1, octaveAmplitude, seed);
+            Transition21(textureSize, texelsPerThreadDomain, textureDimensions, nativeHeightmapArray, texelWidthDivided, texelWidthDivisionFactor, sub + 1, octaveAmplitude, pipelineContext);
 
             if (addExtraNoise)
             {
-                AddExtraNoiseRoutine(textureSize, nativeHeightmapArray, octaveAmplitude, seed);
+                AddExtraNoiseRoutine(textureSize, nativeHeightmapArray, octaveAmplitude, pipelineContext);
             }
         }
 

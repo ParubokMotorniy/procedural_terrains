@@ -5,8 +5,9 @@ using System;
 using CpuGenerationPipeline;
 using GpuGenerationPipeline;
 using System.Threading.Tasks;
+using Unity.Collections;
 
-public class FFTDispatcher: UltimatePipelineStep
+public class FFTDispatcher : UltimatePipelineStep
 {
     [SerializeField]
     private ComputeShader shaderToDispatch;
@@ -25,6 +26,7 @@ public class FFTDispatcher: UltimatePipelineStep
 
     //implicitly cleared
     private ComputeBuffer coefficientsBuffer;
+    private float2[,] cpuCoefficientsBuffer;
 
     private static readonly int PID_resultHeightmap = Shader.PropertyToID("resultHeightmap");
     private static readonly int PID_coefficientsBuffer = Shader.PropertyToID("coefficients");
@@ -115,18 +117,139 @@ public class FFTDispatcher: UltimatePipelineStep
         previousState &= ~HeightmapProperties.Normalized;
     }
 
-    public override Task ExecuteStepCpu(CpuPipelineContext pipelineContext)
+    float2 GetEffectiveCoefficient(uint2 mathematicalCoordinates, float2[,] coefficients, uint2 heightmapDimensions)
     {
-        throw new NotImplementedException();
+        int sizeX = coefficients.GetLength(0);
+        int sizeY = coefficients.GetLength(1);
+
+        if (mathematicalCoordinates.x < sizeX && mathematicalCoordinates.y < sizeY)
+        {
+            return coefficients[mathematicalCoordinates.x, mathematicalCoordinates.y];
+        }
+
+        uint2 targetSymmetricalCoefficient = (heightmapDimensions - new uint2(1, 1)) - mathematicalCoordinates;
+
+        if (mathematicalCoordinates.x == 0)
+        {
+            targetSymmetricalCoefficient.x = 0;
+        }
+
+        if (mathematicalCoordinates.y == 0)
+        {
+            targetSymmetricalCoefficient.y = 0;
+        }
+
+        targetSymmetricalCoefficient.x = math.min(targetSymmetricalCoefficient.x, (uint)(sizeX - 1));
+        targetSymmetricalCoefficient.y = math.min(targetSymmetricalCoefficient.y, (uint)(sizeY - 1));
+
+        float2 computedCoefficient = coefficients[targetSymmetricalCoefficient.x, targetSymmetricalCoefficient.y];
+        computedCoefficient.y = -computedCoefficient.y;
+        return computedCoefficient;
     }
 
-    public override CpuInputExpectations GetStepExpectationsCpu()
+    void CoefficientGenerator(float2[,] coefficients, CpuPipelineContext pipelineContext)
     {
-        throw new NotImplementedException();
+        int sizeX = coefficients.GetLength(0);
+        int sizeY = coefficients.GetLength(1);
+
+        float exponent = -(fractalDimension + 1.0f) * 0.5f;
+
+        for (uint tX = 0; tX < sizeX; ++tX)
+        {
+            for (uint tY = 0; tY < sizeY; ++tY)
+            {
+                uint2 coefficientCoordinates = new uint2(tX, tY);
+
+                float2 randomUniform = pipelineContext.GetRandomFloats();
+                float randomGaussian = CpuComputeUtilities.sampleGaussBoxMuller(randomUniform);
+
+                float randomPhase = CpuComputeUtilities.TWO_PI * randomUniform.x;
+                float randomMagnitude = 0.0f;
+
+                if (coefficientCoordinates.x != 0 || coefficientCoordinates.y != 0)
+                {
+                    float2 c = (float2)coefficientCoordinates;
+                    float d2 = math.dot(c, c);
+                    d2 = math.max(d2, CpuComputeUtilities.EPS);
+
+                    randomMagnitude = math.pow(d2, exponent) * randomGaussian;
+                }
+
+                float2 baseCoefficient = randomMagnitude * new float2(math.cos(randomPhase), math.sin(randomPhase));
+                coefficients[tX, tY] = baseCoefficient;
+            }
+        }
     }
+
+    void InverseFFT(float2[,] coefficients, uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray)
+    {
+        int coeffSizeX = coefficients.GetLength(0);
+        int coeffSizeY = coefficients.GetLength(1);
+
+        float2 invSize = 1.0f / (float2)heightmapDimensions;
+
+        for (uint hX = 0; hX < heightmapDimensions.x; ++hX)
+        {
+            for (uint hY = 0; hY < heightmapDimensions.y; ++hY)
+            {
+                float2 exponentRatioPrecompute = new float2(hX, hY) * invSize;
+
+                float finalHeight = 0.0f;
+                float localErrorOut = 0.0f;
+                float localError = 0.0f;
+
+                for (uint x = 0; x < coeffSizeX; ++x)
+                {
+                    float fx = x;
+                    for (uint y = 0; y < coeffSizeY; ++y)
+                    {
+                        float fy = y;
+
+                        uint2 coefficientCoords = new uint2(x, y);
+                        float2 coefficient = GetEffectiveCoefficient(coefficientCoords, coefficients, heightmapDimensions);
+
+                        float ePower = CpuComputeUtilities.TWO_PI * (fx * exponentRatioPrecompute.x + fy * exponentRatioPrecompute.y);
+
+                        float2 complexExponent = new float2(math.cos(ePower), math.sin(ePower));
+
+                        float product = coefficient.x * complexExponent.x - coefficient.y * complexExponent.y;
+
+                        finalHeight = CpuComputeUtilities.accurateSum(finalHeight, product, out localErrorOut);
+                        localError += localErrorOut;
+                    }
+                }
+
+                nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, new uint2(hX, hY))] = finalHeight + localError;
+            }
+        }
+    }
+
+    public override Task ExecuteStepCpu(CpuPipelineContext pipelineContext)
+    {
+        int textureSize = pipelineContext.GetHeightmapSize();
+        uint2 heightmapDimensions = new uint2((uint)textureSize, (uint)textureSize);
+
+        int actualCoefficientsComputed = (int)math.pow(2, (int)math.floor(math.log2(fracCoefficientsConsidered * textureSize)));
+        int coefficientsBufferSizeX = math.min(actualCoefficientsComputed, textureSize / 2);
+        int coefficientsBufferSizeY = actualCoefficientsComputed;
+
+        if (cpuCoefficientsBuffer is null || cpuCoefficientsBuffer.GetLength(0) != coefficientsBufferSizeX || cpuCoefficientsBuffer.GetLength(1) != coefficientsBufferSizeY)
+        {
+            cpuCoefficientsBuffer = new float2[coefficientsBufferSizeX, coefficientsBufferSizeY];
+        }
+
+        CoefficientGenerator(cpuCoefficientsBuffer, pipelineContext);
+
+        InverseFFT(cpuCoefficientsBuffer, heightmapDimensions, pipelineContext.intermediateHeightmap.GetRawTextureData<float>());
+
+        return Task.CompletedTask;
+    }
+
+    public override CpuInputExpectations GetStepExpectationsCpu() => CpuInputExpectations.None;
 
     public override void UpdateHeightmapStateCpu(ref CpuHeightmapProperties previousState)
     {
-        throw new NotImplementedException();
+        previousState &= ~CpuHeightmapProperties.Normalized;
+
     }
 }

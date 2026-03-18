@@ -26,7 +26,7 @@ float2 computeUniformRandomCoordinates(uint2 targetTextureCoordinates, int passI
     return float2(u1, u2);
 }
 
-float getEffectiveCoefficient(uint2 mathematicalCoordinates)
+float2 getEffectiveCoefficient(uint2 mathematicalCoordinates)
 {
     if (mathematicalCoordinates.x < coefficientmapDimensions.x && mathematicalCoordinates.y < coefficientmapDimensions.y)
     {
