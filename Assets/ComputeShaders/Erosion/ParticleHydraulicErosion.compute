@@ -99,7 +99,7 @@ float removeSediment(int2 erosionCenter, float targetAmountToRemove)
             float currentTexelHeight = resultHeightmap[affectedNeighborCoordinate];
 
             float localSoftness = computeSoftnessCoefficient(computeGradientAtPoint(resultHeightmap, heightmapDimensions, affectedNeighborCoordinate), currentTexelHeight, 0.1);
-            float localAmountRemoved = min(currentTexelHeight, max(weight, 0.0) * targetAmountToRemove);
+            float localAmountRemoved = min(currentTexelHeight, max(weight, 0.0) * targetAmountToRemove * localSoftness);
 
             actualSedimentRemoved += localAmountRemoved;
 

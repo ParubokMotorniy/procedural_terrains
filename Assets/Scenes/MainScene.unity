@@ -1550,7 +1550,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ParticleHydraulicErosionDispatcher
   erosionComputeShader: {fileID: 7200000, guid: 9225322c08a776a9f920190d22c7f260, type: 3}
-  numSimultaneousParticles: 8
+  numSimultaneousParticles: 7
   inertia: 0.1
   capacity: 7
   minSlope: 0.02

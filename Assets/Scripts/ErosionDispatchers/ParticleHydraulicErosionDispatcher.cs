@@ -283,7 +283,7 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
                 float currentTexelHeight = nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, affectedNeighborCoordinate)];
 
                 float localSoftness = CpuComputeUtilities.computeSoftnessCoefficient(CpuComputeUtilities.computeGradientAtPoint(nativeHeightmapArray, heightmapDimensions, (int2)affectedNeighborCoordinate), currentTexelHeight, 0.1f);
-                float localAmountRemoved = (float)math.min(currentTexelHeight, math.max(weight, 0.0) * targetAmountToRemove);
+                float localAmountRemoved = (float)math.min(currentTexelHeight, math.max(weight, 0.0) * targetAmountToRemove * localSoftness);
 
                 actualSedimentRemoved += localAmountRemoved;
 
@@ -416,7 +416,8 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
                 }
             }
 
-            float newParticleVelocity = math.sqrt(math.abs(oldParticleVelocity * oldParticleVelocity - heightDelta * gravity));
+            float v2 = oldParticleVelocity * oldParticleVelocity - heightDelta * gravity;
+            float newParticleVelocity = math.sqrt(math.max(v2, 0.0f));
             float newW = math.max(oldWaterValue * (1.0f - evaporation), 0.0f);
 
             particlesBuffer[processedParticleIdx].pos = newParticlePosition;
@@ -457,6 +458,7 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
         int numActualParticles = (int)math.pow(2, numSimultaneousParticles);
         uint2 heightmapDimensions = new uint2((uint)textureSize, (uint)textureSize);
         var nativeHeightmapArray = pipelineContext.intermediateHeightmap.GetRawTextureData<float>();
+        Assert.IsTrue(erosionNeighborhood <= pipeMapCenterCoord);
 
         {
             if (particlesBuffer is null || particlesBuffer.Length != numActualParticles)
