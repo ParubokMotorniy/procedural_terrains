@@ -201,6 +201,7 @@ public class ThermalErosionDispatcher : UltimatePipelineStep
                 int x = (int)(permutedIdx / heightmapSize);
                 int y = (int)(permutedIdx % heightmapSize);
 
+                Array.Clear(sharedHeightSpreadValue, 0, sharedHeightSpreadValue.Length);
                 applyKernel(new int2(x, y), heightmapDimensions, nativeHeightmapArray, sharedHeightSpreadValue);
             }
         }

@@ -42,15 +42,9 @@ uniform float rainNoiseFrequency;
 static const float HEIGHT_EPS = 1.0e-3; // texels differing by less are assumed to be at the same level
 static const float MIN_WATER = 0.3;
 
+//TODO: add a texture for gradient precompute
+
 #pragma multi_compile GLOBAL_GROUP_8 GLOBAL_GROUP_16 GLOBAL_GROUP_32 GLOBAL_GROUP_64 
-
-// TODO: either figure out how to compute velocity basing on 9 neighbors, or reduce the simulation globally to Neumann neighborhood
-
-float computeUniformFloat(uint2 targetTextureCoordinates, int nonce)
-{
-    uint seed = seedFromXYPass(targetTextureCoordinates.x, targetTextureCoordinates.y, nonce);
-    return u01FromUint(pcgHash(seed));
-}
 
 // I don't want to perform CPU-side zeroing or change the render target (expensive)
 #pragma kernel ResourceInitializer

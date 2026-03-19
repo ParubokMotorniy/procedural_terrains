@@ -51,6 +51,9 @@ namespace CpuGenerationPipeline
         // bool previousReadPending = false;
 
         //TODO: consider using intermediate float array to allow async execution of the pipeline
+        //TODO: check if I need to clear internal buffers anywhere
+        //TODO: add extraction of nativeheightmap from the interface
+        //TODO: add benchmarking routines
 
         private struct ExecutablePipeline
         {

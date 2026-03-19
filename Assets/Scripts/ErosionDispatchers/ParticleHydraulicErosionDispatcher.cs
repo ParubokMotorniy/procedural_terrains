@@ -54,8 +54,8 @@ public class ParticleHydraulicErosionDispatcher: UltimatePipelineStep
     [StructLayout(LayoutKind.Sequential)]
     private struct ErosionParticle
     {
-        Vector2 pos;
-        Vector2 dir;
+        float2 pos;
+        float2 dir;
         float vel;
         float w;
         float s;
@@ -65,12 +65,12 @@ public class ParticleHydraulicErosionDispatcher: UltimatePipelineStep
 
     struct TexelPipes
     {
-        Vector3 inPipes1;
-        Vector3 inPipes2;
-        Vector3 inPipes3;
-        Vector3 outPipes1;
-        Vector3 outPipes2;
-        Vector3 outPipes3;
+        float3 inPipes1;
+        float3 inPipes2;
+        float3 inPipes3;
+        float3 outPipes1;
+        float3 outPipes2;
+        float3 outPipes3;
     };
 
     private ComputeBuffer pipesBuffer;

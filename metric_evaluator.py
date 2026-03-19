@@ -19,6 +19,8 @@ import matplotlib.pyplot as plt
 JPEG_MAX_DIM = 65500
 
 
+#TODO: introduce minmial values for erosion and gradient metrics to turn them into actual bounded metrics
+
 # global-local metric that contributes to the final metric basing on how "eroded" the terrain is
 def evaluate_erosion_score(heightmap: np.ndarray):
     height, width = heightmap.shape

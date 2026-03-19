@@ -56,6 +56,7 @@ uint seedFromXYPass(uint x, uint y, int passId)
     return v;
 }
 
+//TODO: may want to search for non-quantizing solutions
 //https://www.shadertoy.com/view/lXjGRw
 // return value 0~1 but tends toward central values
 float pinkNoise2D(uint2 x)
