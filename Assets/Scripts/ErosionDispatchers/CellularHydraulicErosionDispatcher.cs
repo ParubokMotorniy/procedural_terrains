@@ -39,6 +39,7 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
     //GPU
     private ComputeBuffer texelParametersBuffer;
     private ComputeBuffer waterPipesBuffer;
+    private ComputeBuffer gradientsBuffer;
 
     //CPU
     [StructLayout(LayoutKind.Sequential)]
@@ -66,12 +67,14 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
 
     TexelParameters[,] actualTexelParameters;
     TexelPipes[,] texelPipes;
+    float2[,] cpuGradientsBuffer;
 
     //uniform IDs
 
     private static readonly int PID_resultHeightmap = Shader.PropertyToID("resultHeightmap");
     private static readonly int PID_waterLevel = Shader.PropertyToID("texelParameters");
     private static readonly int PID_pipesBuffer = Shader.PropertyToID("pipesBuffer");
+    private static readonly int PID_gradientsBuffer = Shader.PropertyToID("gradientsBuffer");
     private static readonly int PID_texelsPerThread = Shader.PropertyToID("texelsPerThread");
     private static readonly int PID_solubilityConstant = Shader.PropertyToID("solubilityConstant");
     private static readonly int PID_rainSolubilityConstant = Shader.PropertyToID("rainSolubilityConstant");
@@ -115,6 +118,14 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
                 Assert.IsTrue(waterPipesBuffer.IsValid());
             }
         }
+        {
+            int neededBufferSize = textureSize * textureSize;
+            if (gradientsBuffer is null || !gradientsBuffer.IsValid() || gradientsBuffer.count != neededBufferSize)
+            {
+                gradientsBuffer = new ComputeBuffer(neededBufferSize, sizeof(float) * 2);
+                Assert.IsTrue(gradientsBuffer.IsValid());
+            }
+        }
 
         int rainDropKernelIdx = erosionComputeShader.FindKernel("RainDropper");
         int waterDistributorKernelIdx = erosionComputeShader.FindKernel("WaterDistributor");
@@ -129,6 +140,7 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
             pipelineContext.BindTexture(erosionComputeShader, kernelIdx, PID_resultHeightmap, pipelineContext.intermediateHeightmap);
             pipelineContext.BindComputeBuffer(erosionComputeShader, kernelIdx, PID_waterLevel, texelParametersBuffer);
             pipelineContext.BindComputeBuffer(erosionComputeShader, kernelIdx, PID_pipesBuffer, waterPipesBuffer);
+            pipelineContext.BindComputeBuffer(erosionComputeShader, kernelIdx, PID_gradientsBuffer, gradientsBuffer);
         }
 
         pipelineContext.SetUniformInt(erosionComputeShader, PID_texelsPerThread, texelsPerThread);
@@ -162,8 +174,9 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
 
     }
 
-    void RainDropper(uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray, TexelParameters[,] actualTexelParameters, float2 randomSeeds)
+    void RainDropper(uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray, TexelParameters[,] actualTexelParameters, float2 randomSeeds, float2[,] cpuGradientsBuffer)
     {
+        updateGradients(heightmapDimensions, nativeHeightmapArray, cpuGradientsBuffer);
         for (uint x = 0; x < heightmapDimensions.x; ++x)
         {
             for (uint y = 0; y < heightmapDimensions.y; ++y)
@@ -177,7 +190,7 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
 
                 float extraRainWater = math.min(maxAllowedExtraWater, CpuComputeUtilities.pinkNoise2D((uint2)(((float2)processedTexel + randomSeeds * (float2)heightmapDimensions) * rainNoiseFrequency)));
                 extraRainWater = (float)(extraRainWater < MIN_WATER ? 0.0 : extraRainWater);
-                float localSoftness = CpuComputeUtilities.computeSoftnessCoefficient(CpuComputeUtilities.computeGradientAtPoint(nativeHeightmapArray, heightmapDimensions, (int2)processedTexel), currentHeight, 0.1f);
+                float localSoftness = CpuComputeUtilities.computeSoftnessCoefficient(cpuGradientsBuffer[processedTexel.x, processedTexel.y], currentHeight, 0.1f);
                 float heightLoss = extraRainWater * rainSolubilityConstant * localSoftness;
 
                 actualTexelParameters[x, y].waterLevel = extraRainWater + currentWaterLevel;     // step 1
@@ -325,8 +338,24 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
 
         return math.sqrt(math.max(sNormSq, dNormSq));
     }
-    void SedimentDistributor(uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray, TexelParameters[,] actualTexelParameters, TexelPipes[,] texelPipes)
+
+    void updateGradients(uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray, float2[,] cpuGradientsBuffer)
     {
+        for (int x = 0; x < heightmapDimensions.x; ++x)
+        {
+            for (int y = 0; y < heightmapDimensions.y; ++y)
+            {
+                int2 processedTexel = new int2(x, y);
+                float2 heightGradientAtTexel = CpuComputeUtilities.computeGradientAtPoint(nativeHeightmapArray, heightmapDimensions, processedTexel);
+                cpuGradientsBuffer[processedTexel.x, processedTexel.y] = heightGradientAtTexel;
+
+            }
+        }
+    }
+    void SedimentDistributor(uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray, TexelParameters[,] actualTexelParameters, TexelPipes[,] texelPipes, float2[,] cpuGradientsBuffer)
+    {
+        updateGradients(heightmapDimensions, nativeHeightmapArray, cpuGradientsBuffer);
+
         int2 signedHeightmapDimension = (int2)heightmapDimensions;
         for (int x = 0; x < heightmapDimensions.x; ++x)
         {
@@ -342,7 +371,7 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
                 float sedimentAdjustment = 0.0f;
 
                 {
-                    float2 heightGradientAtTexel = CpuComputeUtilities.computeGradientAtPoint(nativeHeightmapArray, heightmapDimensions, processedTexel);
+                    float2 heightGradientAtTexel = cpuGradientsBuffer[processedTexel.x, processedTexel.y];
 
                     float velocityNorm = computeLargerVelocity(processedTexel, heightmapDimensions, texelPipes);
 
@@ -437,6 +466,12 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
             }
         }
         {
+            if (cpuGradientsBuffer is null || cpuGradientsBuffer.GetLength(0) != textureSize || cpuGradientsBuffer.GetLength(1) != textureSize)
+            {
+                cpuGradientsBuffer = new float2[textureSize, textureSize];
+            }
+        }
+        {
             if (texelPipes is null || texelPipes.GetLength(0) != textureSize || texelPipes.GetLength(1) != textureSize)
             {
                 texelPipes = new TexelPipes[textureSize, textureSize];
@@ -455,22 +490,22 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
         for (int d = 0; d < erosionIterationLimit; ++d)
         {
             for (int x = 0; x < textureSize; x++)
-            for (int y = 0; y < textureSize; y++)
-            {
-                Array.Clear(texelPipes[x, y].inWaterPipes, 0, 9);
-                Array.Clear(texelPipes[x, y].inSedimentPipes, 0, 9);
-            }
+                for (int y = 0; y < textureSize; y++)
+                {
+                    Array.Clear(texelPipes[x, y].inWaterPipes, 0, 9);
+                    Array.Clear(texelPipes[x, y].inSedimentPipes, 0, 9);
+                }
             if (d % 5 == 0)
-                RainDropper(heightmapDimensions, nativeHeightmapArray, actualTexelParameters, pipelineContext.GetRandomFloats());
+                RainDropper(heightmapDimensions, nativeHeightmapArray, actualTexelParameters, pipelineContext.GetRandomFloats(), cpuGradientsBuffer);
             WaterDistributor(heightmapDimensions, nativeHeightmapArray, actualTexelParameters, texelPipes);
-            SedimentDistributor(heightmapDimensions, nativeHeightmapArray, actualTexelParameters, texelPipes);
+            SedimentDistributor(heightmapDimensions, nativeHeightmapArray, actualTexelParameters, texelPipes, cpuGradientsBuffer);
             WaterEvaporator(heightmapDimensions, actualTexelParameters, texelPipes);
         }
 
         return Task.CompletedTask;
     }
 
-    public override CpuInputExpectations GetStepExpectationsCpu() => CpuInputExpectations.None;
+    public override CpuInputExpectations GetStepExpectationsCpu() => CpuInputExpectations.HeightMapNormalized;
 
     public override void UpdateHeightmapStateCpu(ref CpuHeightmapProperties previousState)
     {

@@ -8,6 +8,8 @@ struct TexelParameters
 
 RWStructuredBuffer<TexelParameters>
     texelParameters;
+RWStructuredBuffer<float2>
+    gradientsBuffer;
 RWTexture2D<float> resultHeightmap;
 
 struct TexelPipes
@@ -42,9 +44,7 @@ uniform float rainNoiseFrequency;
 static const float HEIGHT_EPS = 1.0e-3; // texels differing by less are assumed to be at the same level
 static const float MIN_WATER = 0.3;
 
-//TODO: add a texture for gradient precompute
-
-#pragma multi_compile GLOBAL_GROUP_8 GLOBAL_GROUP_16 GLOBAL_GROUP_32 GLOBAL_GROUP_64 
+#pragma multi_compile GLOBAL_GROUP_8 GLOBAL_GROUP_16 GLOBAL_GROUP_32 GLOBAL_GROUP_64
 
 // I don't want to perform CPU-side zeroing or change the render target (expensive)
 #pragma kernel ResourceInitializer
@@ -101,6 +101,19 @@ static const float MIN_WATER = 0.3;
     }
 }
 
+void updateGradientsBuffer(int2 threadSubdomainStart)
+{
+    for (int x = 0; x < texelsPerThread; ++x)
+    {
+        for (int y = 0; y < texelsPerThread; ++y)
+        {
+            int2 processedTexel = threadSubdomainStart + int2(x, y);
+            uint lin = index2dTo1d(heightmapDimensions, processedTexel);
+            gradientsBuffer[lin] = computeGradientAtPoint(resultHeightmap, heightmapDimensions, processedTexel);
+        }
+    }
+}
+
 #pragma kernel RainDropper
 #if GLOBAL_GROUP_8
 [numthreads(8, 8, 1)]
@@ -112,6 +125,7 @@ static const float MIN_WATER = 0.3;
     void RainDropper(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
+    updateGradientsBuffer(topLeftCorner);
 
     for (int x = 0; x < texelsPerThread; ++x)
     {
@@ -127,7 +141,7 @@ static const float MIN_WATER = 0.3;
 
             float extraRainWater = min(maxAllowedExtraWater, pinkNoise2D(((float2)processedTexel + randomSeeds * (float2)heightmapDimensions) * rainNoiseFrequency));
             extraRainWater = extraRainWater < MIN_WATER ? 0.0 : extraRainWater;
-            float localSoftness = computeSoftnessCoefficient(computeGradientAtPoint(resultHeightmap, heightmapDimensions, processedTexel), currentHeight, 0.1);
+            float localSoftness = computeSoftnessCoefficient(gradientsBuffer[lin], currentHeight, 0.1);
             float heightLoss = extraRainWater * rainSolubilityConstant * localSoftness;
 
             texelParameters[lin].waterLevel = extraRainWater + currentWaterLevel;     // step 1
@@ -304,6 +318,7 @@ float computeLargerVelocity(int2 processedTexel)
     void SedimentDistributor(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID)
 {
     int2 topLeftCorner = (int2)globalId.xy * texelsPerThread;
+    updateGradientsBuffer(topLeftCorner);
     for (int x = 0; x < texelsPerThread; ++x)
     {
         for (int y = 0; y < texelsPerThread; ++y)
@@ -318,7 +333,7 @@ float computeLargerVelocity(int2 processedTexel)
             float sedimentAdjustment = 0.0;
 
             {
-                float2 heightGradientAtTexel = computeGradientAtPoint(resultHeightmap, heightmapDimensions, processedTexel);
+                float2 heightGradientAtTexel = gradientsBuffer[centerLin];
 
                 float velocityNorm = computeLargerVelocity(processedTexel);
 
