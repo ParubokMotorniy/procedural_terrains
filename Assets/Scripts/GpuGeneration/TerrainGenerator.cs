@@ -58,9 +58,6 @@ namespace GpuGenerationPipeline
         private readonly HeightmapNormalizer normalizer = new HeightmapNormalizer();
         private readonly FormatFinalizer finalizer = new FormatFinalizer();
 
-        //TODO: getting rid of two-step grid iteration in erosion algos improves appearance but introduces non-conservitivity and races
-        //TODO: when adding basic combination UI, I may want to devise some resource clearing technique.
-
         int synchronizedIterationsLeft = 0;
         (long cpuSideMs, long cpuSideTicks, long gpuSideNs)[] synchronizedResults;
         Action postCollectionAction;

@@ -3,11 +3,13 @@ using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using CpuGenerationPipeline;
 using GpuGenerationPipeline;
+using Unity.Collections;
 using Unity.Mathematics;
+using UnityEditor.PackageManager.UI;
 using UnityEngine;
 using UnityEngine.Assertions;
 
-public class ParticleHydraulicErosionDispatcher: UltimatePipelineStep
+public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
 {
     [SerializeField]
     public ComputeShader erosionComputeShader;
@@ -54,16 +56,16 @@ public class ParticleHydraulicErosionDispatcher: UltimatePipelineStep
     [StructLayout(LayoutKind.Sequential)]
     private struct ErosionParticle
     {
-        float2 pos;
-        float2 dir;
-        float vel;
-        float w;
-        float s;
+        public float2 pos;
+        public float2 dir;
+        public float vel;
+        public float w;
+        public float s;
     };
 
-    private ComputeBuffer particlesBuffer;
+    private ComputeBuffer gpuParticlesBuffer;
 
-    struct TexelPipes
+    struct GpuTexelPipes
     {
         float3 inPipes1;
         float3 inPipes2;
@@ -73,7 +75,35 @@ public class ParticleHydraulicErosionDispatcher: UltimatePipelineStep
         float3 outPipes3;
     };
 
-    private ComputeBuffer pipesBuffer;
+    private ComputeBuffer gpuPipesBuffer;
+
+    //CPU
+    static readonly uint2[,] pipeMap =
+    {
+        { new uint2(2, 2), new uint2(2, 2), new uint2(2, 1), new uint2(2, 1), new uint2(2, 1), new uint2(2, 0), new uint2(2, 0)},
+        { new uint2(2, 2), new uint2(2, 2), new uint2(2, 1), new uint2(2, 1), new uint2(2, 1), new uint2(2, 0), new uint2(2, 0)},
+        { new uint2(1, 2), new uint2(1, 2), new uint2(2, 2), new uint2(2, 1), new uint2(2, 0), new uint2(1, 0), new uint2(1, 0)},
+        { new uint2(1, 2), new uint2(1, 2), new uint2(1, 2), new uint2(1, 1), new uint2(1, 0), new uint2(1, 0), new uint2(1, 0)},
+        { new uint2(1, 2), new uint2(1, 2), new uint2(0, 2), new uint2(0, 1), new uint2(0, 0), new uint2(1, 0), new uint2(1, 0)},
+        { new uint2(0, 2), new uint2(0, 2), new uint2(0, 1), new uint2(0, 1), new uint2(0, 1), new uint2(0, 0), new uint2(0, 0)},
+        { new uint2(0, 2), new uint2(0, 2), new uint2(0, 1), new uint2(0, 1), new uint2(0, 1), new uint2(0, 0), new uint2(0, 0)}};
+    static readonly int pipeMapCenterCoord = 3;
+    static readonly float PLAIN_HEIGHT_THRESHOLD = 1.0e-3f;
+
+    static readonly float[,] depositionMapWeights =
+    {
+        { 0.02f, 0.15f, 0.02f},
+        { 0.15f, 0.3f, 0.15f},
+        { 0.02f, 0.15f, 0.02f}};
+
+    struct CpuTexelPipes
+    {
+        public float[,] inPipes;
+        public float[,] outPipes;
+    };
+
+    ErosionParticle[] particlesBuffer;
+    CpuTexelPipes[,] pipesBuffer;
 
     private static readonly int PID_resultHeightmap = Shader.PropertyToID("resultHeightmap");
     private static readonly int PID_particlesBuffer = Shader.PropertyToID("particlesBuffer");
@@ -92,6 +122,21 @@ public class ParticleHydraulicErosionDispatcher: UltimatePipelineStep
     private static readonly int PID_erosionDistanceSumPrecompute = Shader.PropertyToID("erosionDistanceSumPrecompute");
     private static readonly int PID_randomInts = Shader.PropertyToID("randomInts");
     private static readonly int PID_rainNoiseFrequency = Shader.PropertyToID("rainNoiseFrequency");
+
+    private float precomputeDistanceSum()
+    {
+        float erosionDistanceSumPrecompute = 0.0f;
+
+        float actualNeighborRadius = 1.5f * erosionNeighborhood;
+        for (int x = -1 * erosionNeighborhood; x <= erosionNeighborhood; ++x)
+        {
+            for (int y = -1 * erosionNeighborhood; y <= erosionNeighborhood; ++y)
+            {
+                erosionDistanceSumPrecompute += actualNeighborRadius - math.sqrt(x * x + y * y);
+            }
+        }
+        return erosionDistanceSumPrecompute;
+    }
 
     public override InputExpectations GetStepExpectationsGpu()
         => InputExpectations.HeightMapNormalized;
@@ -120,41 +165,31 @@ public class ParticleHydraulicErosionDispatcher: UltimatePipelineStep
 
         {
             Debug.LogWarning("Size of a particle struct: " + Marshal.SizeOf<ErosionParticle>());
-            if (particlesBuffer is null || !particlesBuffer.IsValid() || particlesBuffer.count != numActualParticles)
+            if (gpuParticlesBuffer is null || !gpuParticlesBuffer.IsValid() || gpuParticlesBuffer.count != numActualParticles)
             {
-                particlesBuffer = new ComputeBuffer(numActualParticles, Marshal.SizeOf<ErosionParticle>());
-                Assert.IsTrue(particlesBuffer.IsValid());
+                gpuParticlesBuffer = new ComputeBuffer(numActualParticles, Marshal.SizeOf<ErosionParticle>());
+                Assert.IsTrue(gpuParticlesBuffer.IsValid());
             }
         }
 
         {
-            Debug.LogWarning("Size of a pipe struct: " + Marshal.SizeOf<TexelPipes>());
+            Debug.LogWarning("Size of a pipe struct: " + Marshal.SizeOf<GpuTexelPipes>());
             int neededBufferSize = textureSize * textureSize;
-            if (pipesBuffer is null || !pipesBuffer.IsValid() || pipesBuffer.count != neededBufferSize)
+            if (gpuPipesBuffer is null || !gpuPipesBuffer.IsValid() || gpuPipesBuffer.count != neededBufferSize)
             {
-                pipesBuffer = new ComputeBuffer(neededBufferSize, Marshal.SizeOf<TexelPipes>());
-                Assert.IsTrue(pipesBuffer.IsValid());
+                gpuPipesBuffer = new ComputeBuffer(neededBufferSize, Marshal.SizeOf<GpuTexelPipes>());
+                Assert.IsTrue(gpuPipesBuffer.IsValid());
             }
         }
 
         foreach (int kernelIdx in new[] { pipesInitializerKernelIdx, particlesInitializerKernelIdx, integratorKernelIdx, garbageCollectorKernelIdx, changeResolverKernelIdx })
         {
-            pipelineContext.BindComputeBuffer(erosionComputeShader, kernelIdx, PID_particlesBuffer, particlesBuffer);
-            pipelineContext.BindComputeBuffer(erosionComputeShader, kernelIdx, PID_pipesBuffer, pipesBuffer);
+            pipelineContext.BindComputeBuffer(erosionComputeShader, kernelIdx, PID_particlesBuffer, gpuParticlesBuffer);
+            pipelineContext.BindComputeBuffer(erosionComputeShader, kernelIdx, PID_pipesBuffer, gpuPipesBuffer);
             pipelineContext.BindTexture(erosionComputeShader, kernelIdx, PID_resultHeightmap, pipelineContext.intermediateHeightmap);
         }
 
-        float erosionDistanceSumPrecompute = 0.0f;
-        {
-            float actualNeighborRadius = 1.5f * erosionNeighborhood;
-            for (int x = -1 * erosionNeighborhood; x <= erosionNeighborhood; ++x)
-            {
-                for (int y = -1 * erosionNeighborhood; y <= erosionNeighborhood; ++y)
-                {
-                    erosionDistanceSumPrecompute += actualNeighborRadius - math.sqrt(x * x + y * y);
-                }
-            }
-        }
+        float erosionDistanceSumPrecompute = precomputeDistanceSum();
 
         pipelineContext.SetUniformInt(erosionComputeShader, PID_particlesPerThread, particlesPerThread);
         pipelineContext.SetUniformInt(erosionComputeShader, PID_texelsPerThread, numTexelsPerThread);
@@ -201,18 +236,290 @@ public class ParticleHydraulicErosionDispatcher: UltimatePipelineStep
     public override void UpdateHeightmapStateGpu(ref HeightmapProperties previousState)
     { }
 
-    public override Task ExecuteStepCpu(CpuPipelineContext pipelineContext)
+    bool checkParticleIsValid(uint2 heightmapDimensions, ErosionParticle particle)
     {
-        throw new NotImplementedException();
+        float2 particlePos = particle.pos;
+
+        return (particlePos.x >= 0.0 && particlePos.y >= 0.0) && (particlePos.x < (float)heightmapDimensions.x && particlePos.y < (float)heightmapDimensions.y) && particle.w > waterDeathThreshold;
     }
 
-    public override CpuInputExpectations GetStepExpectationsCpu()
+    float sampleHeightmapBilinear(uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray, float2 coord)
     {
-        throw new NotImplementedException();
+        int2 signedHeightmapDimensions = (int2)heightmapDimensions;
+
+        int2 basePart = new int2(math.floor(coord));
+        float2 fracPart = math.frac(coord);
+
+        uint2 wrappedBase = (uint2)CpuComputeUtilities.terrainWrap(basePart, signedHeightmapDimensions);
+
+        float v00 = nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, wrappedBase)];
+        float v10 = nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(basePart + new int2(1, 0), signedHeightmapDimensions))];
+        float v01 = nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(basePart + new int2(0, 1), signedHeightmapDimensions))];
+        float v11 = nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(basePart + new int2(1, 1), signedHeightmapDimensions))];
+
+        float v0 = math.lerp(v00, v10, fracPart.x);
+        float v1 = math.lerp(v01, v11, fracPart.x);
+
+        return math.lerp(v0, v1, fracPart.y);
     }
+
+    float removeSediment(uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray, int2 erosionCenter, float targetAmountToRemove, float erosionDistanceSumPrecompute, CpuTexelPipes[,] pipesBuffer)
+    {
+        float actualSedimentRemoved = 0.0f;
+        float actualNeighborRadius = 1.5f * (float)erosionNeighborhood;
+        int2 signedHeightmapDimensions = (int2)heightmapDimensions;
+
+        for (int x = -1 * erosionNeighborhood; x <= erosionNeighborhood; ++x)
+        {
+            for (int y = -1 * erosionNeighborhood; y <= erosionNeighborhood; ++y)
+            {
+                float fx = (float)x;
+                float fy = (float)y;
+
+                float dist = math.sqrt(fx * fx + fy * fy);
+                float weight = (actualNeighborRadius - dist) / math.max(erosionDistanceSumPrecompute, CpuComputeUtilities.EPS);
+
+                uint2 affectedNeighborCoordinate = (uint2)CpuComputeUtilities.terrainWrap(erosionCenter + new int2(x, y), signedHeightmapDimensions);
+                float currentTexelHeight = nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, affectedNeighborCoordinate)];
+
+                float localSoftness = CpuComputeUtilities.computeSoftnessCoefficient(CpuComputeUtilities.computeGradientAtPoint(nativeHeightmapArray, heightmapDimensions, (int2)affectedNeighborCoordinate), currentTexelHeight, 0.1f);
+                float localAmountRemoved = (float)math.min(currentTexelHeight, math.max(weight, 0.0) * targetAmountToRemove);
+
+                actualSedimentRemoved += localAmountRemoved;
+
+                uint2 targetOutPipe = pipeMap[x + pipeMapCenterCoord, y + pipeMapCenterCoord];
+                pipesBuffer[affectedNeighborCoordinate.x, affectedNeighborCoordinate.y].outPipes[targetOutPipe.x, targetOutPipe.y] += localAmountRemoved;
+            }
+        }
+
+        return actualSedimentRemoved;
+    }
+
+    void depositSediment(uint2 heightmapDimensions, int2 erosionCenter, float amountToDeposit, CpuTexelPipes[,] pipesBuffer)
+    {
+        int2 signedHeightmapDimensions = (int2)heightmapDimensions;
+        for (int x = -1; x <= 1; ++x)
+        {
+            for (int y = -1; y <= 1; ++y)
+            {
+                float increment = depositionMapWeights[x + 1, y + 1] * amountToDeposit;
+                uint2 affectedNeighborCoordinates = (uint2)CpuComputeUtilities.terrainWrap(erosionCenter + new int2(x, y), signedHeightmapDimensions);
+                uint2 targetInPipe = pipeMap[x + pipeMapCenterCoord, y + pipeMapCenterCoord];
+                pipesBuffer[affectedNeighborCoordinates.x, affectedNeighborCoordinates.y].inPipes[targetInPipe.x, targetInPipe.y] += increment;
+            }
+        }
+    }
+
+    void GarbageCollector(uint2 heightmapDimensions, ErosionParticle[] particlesBuffer, CpuPipelineContext pipelineContext)
+    {
+        for (uint idx = 0; idx < particlesBuffer.Length; ++idx)
+        {
+            uint processedParticleIdx = idx;
+            if (checkParticleIsValid(heightmapDimensions, particlesBuffer[processedParticleIdx]))
+                continue;
+
+            // reinitialize a dead particle
+            float2 uniformCoefficients = pipelineContext.GetRandomFloats();
+            float dropSize = math.abs(CpuComputeUtilities.sampleGaussBoxMuller(math.max(uniformCoefficients, new float2(CpuComputeUtilities.EPS))));
+
+            particlesBuffer[processedParticleIdx].pos = uniformCoefficients * (float2)heightmapDimensions;
+            particlesBuffer[processedParticleIdx].dir = float2.zero;
+            particlesBuffer[processedParticleIdx].vel = dropSize;
+            particlesBuffer[processedParticleIdx].w = dropSize;
+            particlesBuffer[processedParticleIdx].s = 0.0f;
+        }
+    }
+
+    void ParticlesInitializer(uint2 heightmapDimensions, ErosionParticle[] particlesBuffer, CpuPipelineContext pipelineContext)
+    {
+        for (uint idx = 0; idx < particlesBuffer.Length; ++idx)
+        {
+            uint processedParticleIdx = idx;
+
+            float2 uniformCoefficients = pipelineContext.GetRandomFloats();
+            // float dropSize = math.abs(sampleGaussBoxMuller(uniformCoefficients));
+
+            // here the pink noise accounts for the 'area' a particle covers.
+            // While uniform coordinates guarantee uniform coverage of the entire area of the terrain,
+            // pink-distributed size allows to achieve the typical 'rain' texture (implicitly)
+            float dropSize = CpuComputeUtilities.pinkNoise2D((uint2)((uniformCoefficients + pipelineContext.GetRandomInts()) * rainNoiseFrequency));
+
+            particlesBuffer[processedParticleIdx].pos = uniformCoefficients * (float2)heightmapDimensions;
+            particlesBuffer[processedParticleIdx].dir = float2.zero;
+            particlesBuffer[processedParticleIdx].vel = dropSize;
+            particlesBuffer[processedParticleIdx].w = dropSize;
+            particlesBuffer[processedParticleIdx].s = 0.0f;
+        }
+    }
+
+    void Integrator(uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray, ErosionParticle[] particlesBuffer, CpuTexelPipes[,] pipesBuffer, CpuPipelineContext pipelineContext, float erosionDistanceSumPrecompute)
+    {
+        int2 signedHeightmapDimensions = (int2)heightmapDimensions;
+        for (uint idx = 0; idx < particlesBuffer.Length; ++idx)
+        {
+            uint processedParticleIdx = idx;
+            if (!checkParticleIsValid(heightmapDimensions, particlesBuffer[processedParticleIdx]))
+                continue;
+
+            float2 oldParticlePosition = particlesBuffer[processedParticleIdx].pos;
+            float oldParticleVelocity = particlesBuffer[processedParticleIdx].vel;
+            float oldSedimentValue = particlesBuffer[processedParticleIdx].s;
+            float oldWaterValue = particlesBuffer[processedParticleIdx].w;
+
+            int2 floorInt = new int2(math.floor(oldParticlePosition));
+            uint2 floorOldParticlePosition = (uint2)CpuComputeUtilities.terrainWrap(floorInt, signedHeightmapDimensions);
+            float2 interpolationCoefficients = math.frac(oldParticlePosition);
+
+            int sampleSelf = (int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, floorOldParticlePosition);
+            int sampleRight = (int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(
+                     (int2)(floorOldParticlePosition + new uint2(1, 0)), signedHeightmapDimensions));
+            int sampleTop = (int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(
+                         (int2)(floorOldParticlePosition + new uint2(1, 1)), signedHeightmapDimensions));
+            int sampleBottom = (int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(
+                         (int2)(floorOldParticlePosition + new uint2(0, 1)), signedHeightmapDimensions));
+
+            float2 currentGradient = new float2(
+                (float)(nativeHeightmapArray[sampleRight] - nativeHeightmapArray[sampleSelf]) * (float)(1.0 - interpolationCoefficients.y)
+                 + (float)(nativeHeightmapArray[sampleTop] - nativeHeightmapArray[sampleBottom]) * interpolationCoefficients.y,
+
+                (float)(nativeHeightmapArray[sampleBottom] - nativeHeightmapArray[sampleSelf]) * (float)(1.0 - interpolationCoefficients.x)
+                + (float)(nativeHeightmapArray[sampleTop] - nativeHeightmapArray[sampleRight]) * interpolationCoefficients.x);
+
+            float2 dirCandidate = particlesBuffer[processedParticleIdx].dir * inertia - currentGradient * (1.0f - inertia);
+            float2 newParticleDirection = (math.dot(dirCandidate, dirCandidate) > CpuComputeUtilities.EPS) ? math.normalize(dirCandidate) : float2.zero;
+            float2 newParticlePosition = oldParticlePosition + newParticleDirection;
+            float oldHeight = sampleHeightmapBilinear(heightmapDimensions, nativeHeightmapArray, oldParticlePosition);
+            float newHeight = sampleHeightmapBilinear(heightmapDimensions, nativeHeightmapArray, newParticlePosition);
+            float heightDelta = newHeight - oldHeight;
+
+            float sedimentValueUpdate = 0.0f;
+            if (heightDelta > PLAIN_HEIGHT_THRESHOLD)
+            {
+                float amountToDeposit = math.min(oldSedimentValue, math.max(math.abs(nativeHeightmapArray[sampleSelf] - oldHeight), heightDelta));
+                depositSediment(heightmapDimensions, (int2)floorOldParticlePosition, amountToDeposit, pipesBuffer);
+                sedimentValueUpdate = -amountToDeposit;
+            }
+            else if (heightDelta < -PLAIN_HEIGHT_THRESHOLD)
+            {
+                float newCapacity = math.max(-heightDelta, minSlope) * oldParticleVelocity * oldWaterValue * capacity;
+
+                if ((oldSedimentValue - newCapacity) > CpuComputeUtilities.EPS)
+                {
+                    float amountToDeposit = (oldSedimentValue - newCapacity) * deposition;
+                    depositSediment(heightmapDimensions, (int2)floorOldParticlePosition, amountToDeposit, pipesBuffer);
+                    sedimentValueUpdate = -amountToDeposit;
+                }
+                else if ((oldSedimentValue - newCapacity) < -CpuComputeUtilities.EPS)
+                {
+                    float amountToRemove = math.min((newCapacity - oldSedimentValue) * erosion, -heightDelta);
+                    sedimentValueUpdate = removeSediment(heightmapDimensions, nativeHeightmapArray, (int2)floorOldParticlePosition, amountToRemove, erosionDistanceSumPrecompute, pipesBuffer);
+                }
+            }
+
+            float newParticleVelocity = math.sqrt(math.abs(oldParticleVelocity * oldParticleVelocity - heightDelta * gravity));
+            float newW = math.max(oldWaterValue * (1.0f - evaporation), 0.0f);
+
+            particlesBuffer[processedParticleIdx].pos = newParticlePosition;
+            particlesBuffer[processedParticleIdx].dir = newParticleDirection;
+            particlesBuffer[processedParticleIdx].vel = newParticleVelocity;
+            particlesBuffer[processedParticleIdx].w = newW;
+            particlesBuffer[processedParticleIdx].s = math.max(oldSedimentValue + sedimentValueUpdate, 0.0f);
+        }
+    }
+
+    void ChangeResolver(uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray, ErosionParticle[] particlesBuffer, CpuTexelPipes[,] pipesBuffer)
+    {
+        for (uint x = 0; x < heightmapDimensions.x; ++x)
+        {
+            for (uint y = 0; y < heightmapDimensions.y; ++y)
+            {
+                uint2 targetTexel = new uint2(x, y);
+                int targetTexelLin = (int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, targetTexel);
+                float totalSedimentRemoved = 0.0f;
+                float totalSedimentAdded = 0.0f;
+                for (int pX = 0; pX < 3; ++pX)
+                {
+                    for (int pY = 0; pY < 3; ++pY)
+                    {
+                        totalSedimentRemoved += pipesBuffer[targetTexel.x, targetTexel.y].outPipes[pX, pY];
+                        totalSedimentAdded += pipesBuffer[targetTexel.x, targetTexel.y].inPipes[pX, pY];
+                    }
+                }
+
+                nativeHeightmapArray[targetTexelLin] = math.max(nativeHeightmapArray[targetTexelLin] + totalSedimentAdded - totalSedimentRemoved, 0.0f);
+            }
+        }
+    }
+
+    public override Task ExecuteStepCpu(CpuPipelineContext pipelineContext)
+    {
+        int textureSize = pipelineContext.GetHeightmapSize();
+        int numActualParticles = (int)math.pow(2, numSimultaneousParticles);
+        uint2 heightmapDimensions = new uint2((uint)textureSize, (uint)textureSize);
+        var nativeHeightmapArray = pipelineContext.intermediateHeightmap.GetRawTextureData<float>();
+
+        {
+            if (particlesBuffer is null || particlesBuffer.Length != numActualParticles)
+            {
+                particlesBuffer = new ErosionParticle[numActualParticles];
+            }
+        }
+
+        {
+            if (pipesBuffer is null || pipesBuffer.GetLength(0) != textureSize || pipesBuffer.GetLength(1) != textureSize)
+            {
+                pipesBuffer = new CpuTexelPipes[textureSize, textureSize];
+                for (int x = 0; x < textureSize; ++x)
+                {
+                    for (int y = 0; y < textureSize; ++y)
+                    {
+                        pipesBuffer[x, y].inPipes = new float[3, 3];
+                        pipesBuffer[x, y].outPipes = new float[3, 3];
+                    }
+                }
+            }
+        }
+
+        {
+            int garbageCollectorRunPeriod = (int)math.floor(math.log2(2 * waterDeathThreshold) / math.log2(1.0f - evaporation));
+            Assert.IsTrue(math.abs(evaporation) >= 1.0e-5 && math.abs(waterDeathThreshold - 0.5) >= 1.0e-5, "Broken GC period");
+            Debug.LogWarning("GC period: " + garbageCollectorRunPeriod);
+            float erosionDistanceSumPrecompute = precomputeDistanceSum();
+            var pipePlumber = new Action(() =>
+            {
+                for (int x = 0; x < textureSize; x++)
+                    for (int y = 0; y < textureSize; y++)
+                    {
+                        Array.Clear(pipesBuffer[x, y].outPipes, 0, 9);
+                        Array.Clear(pipesBuffer[x, y].inPipes, 0, 9);
+                    }
+            });
+            for (int w = 0; w < numSimulationWaves; ++w)
+            {
+                ParticlesInitializer(heightmapDimensions, particlesBuffer, pipelineContext);
+                pipePlumber();
+                {
+                    int gcRunInsertionPeriod = 0;
+                    for (int s = 0; s < numSimulationSteps; ++s)
+                    {
+                        Integrator(heightmapDimensions, nativeHeightmapArray, particlesBuffer, pipesBuffer, pipelineContext, erosionDistanceSumPrecompute);
+                        ChangeResolver(heightmapDimensions, nativeHeightmapArray, particlesBuffer, pipesBuffer);
+                        pipePlumber();
+                        if (s / garbageCollectorRunPeriod != gcRunInsertionPeriod)
+                        {
+                            GarbageCollector(heightmapDimensions, particlesBuffer, pipelineContext);
+                            gcRunInsertionPeriod = s / garbageCollectorRunPeriod;
+                        }
+                    }
+                }
+            }
+        }
+        return Task.CompletedTask;
+    }
+
+    public override CpuInputExpectations GetStepExpectationsCpu() => CpuInputExpectations.HeightMapNormalized;
 
     public override void UpdateHeightmapStateCpu(ref CpuHeightmapProperties previousState)
     {
-        throw new NotImplementedException();
     }
 }

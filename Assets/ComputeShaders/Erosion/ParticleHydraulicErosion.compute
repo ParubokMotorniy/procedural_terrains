@@ -26,7 +26,7 @@ static const uint2 pipeMap[7][7] =
         {uint2(0, 2), uint2(0, 2), uint2(0, 1), uint2(0, 1), uint2(0, 1), uint2(0, 0), uint2(0, 0)},
         {uint2(0, 2), uint2(0, 2), uint2(0, 1), uint2(0, 1), uint2(0, 1), uint2(0, 0), uint2(0, 0)}};
 static const int pipeMapCenterCoord = 3;
-static const int PLAIN_HEIGHT_THRESHOLD = 1.0e-3;
+static const float PLAIN_HEIGHT_THRESHOLD = 1.0e-3;
 
 static const float depositionMapWeights[3][3] =
     {

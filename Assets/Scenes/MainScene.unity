@@ -174,7 +174,7 @@ MonoBehaviour:
   testTexture: {fileID: 0}
   pipelineSteps:
   - {fileID: 1592727441}
-  - {fileID: 1778127573}
+  - {fileID: 2081510694}
 --- !u!23 &252387139
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -769,14 +769,14 @@ MonoBehaviour:
   terrainScale: 1
   enableProfiling: 0
   enableMetricEvaluation: 0
-  generatorSeed: 46573
+  generatorSeed: 8376
   numSamples: 5
   dumpTextures: 0
   useTestTexture: 0
   testTexture: {fileID: 2800000, guid: 14fa032c7256704c8a0ead7b71566301, type: 3}
   pipelineSteps:
   - {fileID: 1592727441}
-  - {fileID: 1778127573}
+  - {fileID: 2081510694}
 --- !u!4 &385078007
 Transform:
   m_ObjectHideFlags: 0
@@ -1550,7 +1550,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ParticleHydraulicErosionDispatcher
   erosionComputeShader: {fileID: 7200000, guid: 9225322c08a776a9f920190d22c7f260, type: 3}
-  numSimultaneousParticles: 12
+  numSimultaneousParticles: 8
   inertia: 0.1
   capacity: 7
   minSlope: 0.02
@@ -1560,8 +1560,8 @@ MonoBehaviour:
   evaporation: 0.02
   waterDeathThreshold: 0.1
   erosionNeighborhood: 1
-  numSimulationSteps: 341
-  numSimulationWaves: 1
+  numSimulationSteps: 300
+  numSimulationWaves: 2
   rainNoiseFrequency: 0.2
 --- !u!21 &2146269790
 Material:
