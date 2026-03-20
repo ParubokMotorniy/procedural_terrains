@@ -105,6 +105,9 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
     ErosionParticle[] particlesBuffer;
     CpuTexelPipes[,] pipesBuffer;
 
+    //GUI
+    private Vector2 scroll;
+
     private static readonly int PID_resultHeightmap = Shader.PropertyToID("resultHeightmap");
     private static readonly int PID_particlesBuffer = Shader.PropertyToID("particlesBuffer");
     private static readonly int PID_pipesBuffer = Shader.PropertyToID("pipesBuffer");
@@ -523,4 +526,77 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
     public override void UpdateHeightmapStateCpu(ref CpuHeightmapProperties previousState)
     {
     }
+
+    public override void RenderParametersTuningGUI()
+    {
+        scroll = GUILayout.BeginScrollView(scroll, GUILayout.Height(400));
+
+        GUILayout.Label("Simulation");
+
+        GUILayout.Label($"Particles: {numSimultaneousParticles}");
+        numSimultaneousParticles = Mathf.RoundToInt(
+            GUILayout.HorizontalSlider(numSimultaneousParticles, 7f, 32f)
+        );
+
+        GUILayout.Label($"Steps: {numSimulationSteps}");
+        numSimulationSteps = Mathf.RoundToInt(
+            GUILayout.HorizontalSlider(numSimulationSteps, 1f, 1000f)
+        );
+
+        GUILayout.Label($"Waves: {numSimulationWaves}");
+        numSimulationWaves = Mathf.RoundToInt(
+            GUILayout.HorizontalSlider(numSimulationWaves, 1f, 10f)
+        );
+
+        GUILayout.Space(5);
+        GUILayout.Label("Physics");
+
+        GUILayout.Label($"Inertia: {inertia:F3}");
+        inertia = GUILayout.HorizontalSlider(inertia, 0.01f, 1.0f);
+
+        GUILayout.Label($"Gravity: {gravity:F3}");
+        gravity = GUILayout.HorizontalSlider(gravity, 0.01f, 1.0f);
+
+        GUILayout.Label($"Evaporation: {evaporation:F3}");
+        evaporation = GUILayout.HorizontalSlider(evaporation, 0.01f, 1.0f);
+
+        GUILayout.Space(5);
+        GUILayout.Label("Sediment");
+
+        GUILayout.Label($"Capacity: {capacity:F2}");
+        capacity = GUILayout.HorizontalSlider(capacity, 0.01f, 100.0f);
+
+        GUILayout.Label($"Min Slope: {minSlope:F4}");
+        minSlope = GUILayout.HorizontalSlider(minSlope, 0.0001f, 1.0f);
+
+        GUILayout.Label($"Deposition: {deposition:F3}");
+        deposition = GUILayout.HorizontalSlider(deposition, 0.01f, 1.0f);
+
+        GUILayout.Label($"Erosion: {erosion:F3}");
+        erosion = GUILayout.HorizontalSlider(erosion, 0.01f, 1.0f);
+
+        GUILayout.Space(5);
+        GUILayout.Label("Lifetime");
+
+        GUILayout.Label($"Water Death Threshold: {waterDeathThreshold:F3}");
+        waterDeathThreshold = GUILayout.HorizontalSlider(waterDeathThreshold, 0.01f, 0.45f);
+
+        GUILayout.Space(5);
+        GUILayout.Label("Neighborhood");
+
+        GUILayout.Label($"Erosion Neighborhood: {erosionNeighborhood}");
+        erosionNeighborhood = Mathf.RoundToInt(
+            GUILayout.HorizontalSlider(erosionNeighborhood, 1f, 3f)
+        );
+
+        GUILayout.Space(5);
+        GUILayout.Label("Noise");
+
+        GUILayout.Label($"Rain Noise Frequency: {rainNoiseFrequency:F3}");
+        rainNoiseFrequency = GUILayout.HorizontalSlider(rainNoiseFrequency, 0.001f, 10.0f);
+
+        GUILayout.EndScrollView();
+    }
+
+    public override string GUIStepTitle() => "PHE eroder";
 }

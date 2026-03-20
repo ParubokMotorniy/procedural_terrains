@@ -70,6 +70,9 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
     TexelPipes[,] texelPipes;
     float2[,] cpuGradientsBuffer;
 
+    //GUI
+    private Vector2 scroll;
+
     //uniform IDs
 
     private static readonly int PID_resultHeightmap = Shader.PropertyToID("resultHeightmap");
@@ -510,4 +513,50 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
     public override void UpdateHeightmapStateCpu(ref CpuHeightmapProperties previousState)
     {
     }
+
+    public override void RenderParametersTuningGUI()
+    {
+        scroll = GUILayout.BeginScrollView(scroll, GUILayout.Height(400));
+
+        GUILayout.Label("Iterations");
+
+        GUILayout.Label($"Erosion Iteration Limit: {erosionIterationLimit}");
+        erosionIterationLimit = Mathf.RoundToInt(
+            GUILayout.HorizontalSlider(erosionIterationLimit, 5f, 100f)
+        );
+
+        GUILayout.Space(5);
+        GUILayout.Label("Core Constants");
+
+        GUILayout.Label($"Solubility: {solubilityConstant:F4}");
+        solubilityConstant = GUILayout.HorizontalSlider(solubilityConstant, 0.0001f, 1.0f);
+
+        GUILayout.Label($"Evaporation: {evaporationConstant:F4}");
+        evaporationConstant = GUILayout.HorizontalSlider(evaporationConstant, 0.0001f, 1.0f);
+
+        GUILayout.Label($"Capacity: {capacityConstant:F4}");
+        capacityConstant = GUILayout.HorizontalSlider(capacityConstant, 0.0001f, 1.0f);
+
+        GUILayout.Label($"Deposition: {depositionConstant:F4}");
+        depositionConstant = GUILayout.HorizontalSlider(depositionConstant, 0.0001f, 1.0f);
+
+        GUILayout.Space(5);
+        GUILayout.Label("Rain");
+
+        GUILayout.Label($"Rain Solubility: {rainSolubilityConstant:F4}");
+        rainSolubilityConstant = GUILayout.HorizontalSlider(rainSolubilityConstant, 0.0001f, 1.0f);
+
+        GUILayout.Label($"Rain Noise Frequency: {rainNoiseFrequency:F3}");
+        rainNoiseFrequency = GUILayout.HorizontalSlider(rainNoiseFrequency, 0.001f, 1.0f);
+
+        GUILayout.Space(5);
+        GUILayout.Label("Water");
+
+        GUILayout.Label($"Max Water Depth: {maxWaterDepth:F4}");
+        maxWaterDepth = GUILayout.HorizontalSlider(maxWaterDepth, 0.0001f, 10.0f);
+
+        GUILayout.EndScrollView();
+    }
+
+    public override string GUIStepTitle() => "CHE eroder";
 }

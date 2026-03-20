@@ -139,4 +139,40 @@ public class UNDispatcher : UltimatePipelineStep
     {
         previousState &= ~CpuHeightmapProperties.Normalized;
     }
+
+    public override void RenderParametersTuningGUI()
+    {
+        GUILayout.Label("Noise");
+
+        GUILayout.Label($"Frequency: {noiseFrequency:F4}");
+        noiseFrequency = GUILayout.HorizontalSlider(noiseFrequency, 0.001f, 2.0f);
+
+        GUILayout.Label($"Persistence: {persistence:F3}");
+        persistence = GUILayout.HorizontalSlider(persistence, 0.01f, 1.0f);
+
+        GUILayout.Label($"Octaves: {numOctaves}");
+        numOctaves = Mathf.RoundToInt(
+            GUILayout.HorizontalSlider(numOctaves, 1f, 20f)
+        );
+
+        GUILayout.Space(5);
+        GUILayout.Label("Shape");
+
+        GUILayout.Label($"Sharpness: {sharpness:F3}");
+        sharpness = GUILayout.HorizontalSlider(sharpness, -1.0f, 1.0f);
+
+        GUILayout.Space(5);
+        GUILayout.Label("Erosion");
+
+        GUILayout.Label($"Slope Erosion: {slopeErosion:F4}");
+        slopeErosion = GUILayout.HorizontalSlider(slopeErosion, 0.001f, 10.0f);
+
+        GUILayout.Space(5);
+        GUILayout.Label("Perturbation");
+
+        GUILayout.Label($"Strength: {perturbationStrength:F3}");
+        perturbationStrength = GUILayout.HorizontalSlider(perturbationStrength, 0.01f, 10.0f);
+    }
+
+    public override string GUIStepTitle() => "UN generator";
 }

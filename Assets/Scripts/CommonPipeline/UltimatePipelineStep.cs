@@ -12,4 +12,7 @@ public abstract class UltimatePipelineStep : MonoBehaviour, CpuPipelineStep, Pip
     public abstract void ExecuteStepGpu(PipelineContext pipelineContext);
     public abstract InputExpectations GetStepExpectationsGpu();
     public abstract void UpdateHeightmapStateGpu(ref HeightmapProperties previousState);
+
+    public abstract void RenderParametersTuningGUI();
+    public abstract string GUIStepTitle();
 }

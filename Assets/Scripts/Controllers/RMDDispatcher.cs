@@ -203,7 +203,7 @@ public class RMDDispatcher : UltimatePipelineStep
                         int2 subdivisionIdx = (int2)(topLeftCellIdx.xy + new uint2((uint)(texelWidthDivided + 2 * texelWidthDivided * x), (uint)(texelWidthDivided + 2 * texelWidthDivided * y)));
 
                         double averageNeighbors =
-                            (intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(subdivisionIdx + new int2(texelWidthDivided, texelWidthDivided),  (int2)intermediateHeightmap.heightmapDimensions))] +
+                            (intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(subdivisionIdx + new int2(texelWidthDivided, texelWidthDivided), (int2)intermediateHeightmap.heightmapDimensions))] +
                              intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(subdivisionIdx + new int2(texelWidthDivided, -texelWidthDivided), (int2)intermediateHeightmap.heightmapDimensions))] +
                              intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(subdivisionIdx + new int2(-texelWidthDivided, texelWidthDivided), (int2)intermediateHeightmap.heightmapDimensions))] +
                              intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(subdivisionIdx + new int2(-texelWidthDivided, -texelWidthDivided), (int2)intermediateHeightmap.heightmapDimensions))]) /
@@ -324,4 +324,24 @@ public class RMDDispatcher : UltimatePipelineStep
     {
         previousState &= ~CpuHeightmapProperties.Normalized;
     }
+
+    public override void RenderParametersTuningGUI()
+    {
+        GUILayout.Label($"Num Subdivisions: {numSubdivisions}");
+        float ns = GUILayout.HorizontalSlider(numSubdivisions, 1f, 16f);
+        numSubdivisions = (uint)Mathf.RoundToInt(ns);
+
+        GUILayout.Label($"H: {H:F3}");
+        H = GUILayout.HorizontalSlider(H, 0.01f, 1.0f);
+
+        addExtraNoise = GUILayout.Toggle(addExtraNoise, "Add Extra Noise");
+
+        GUILayout.Label($"Worley Frequency: {worleyFrequency:F3}");
+        worleyFrequency = GUILayout.HorizontalSlider(worleyFrequency, 0.01f, 10.0f);
+
+        GUILayout.Label($"Perlin Frequency: {perlinFrequency:F3}");
+        perlinFrequency = GUILayout.HorizontalSlider(perlinFrequency, 0.01f, 10.0f);
+    }
+
+    public override string GUIStepTitle() => "RMD generator";
 }

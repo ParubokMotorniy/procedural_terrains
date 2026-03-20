@@ -251,4 +251,19 @@ public class FFTDispatcher : UltimatePipelineStep
         previousState &= ~CpuHeightmapProperties.Normalized;
 
     }
+
+    public override void RenderParametersTuningGUI()
+    {
+        GUILayout.Label($"Inverse Group Scale Factor: {inverseGroupScaleFactor}");
+        float igsf = GUILayout.HorizontalSlider(inverseGroupScaleFactor, 4f, 8f);
+        inverseGroupScaleFactor = Mathf.RoundToInt(igsf);
+
+        GUILayout.Label($"Fractal Dimension: {fractalDimension:F3}");
+        fractalDimension = GUILayout.HorizontalSlider(fractalDimension, 0.01f, 5.0f);
+
+        GUILayout.Label($"Frac Coefficients Considered: {fracCoefficientsConsidered:F3}");
+        fracCoefficientsConsidered = GUILayout.HorizontalSlider(fracCoefficientsConsidered, 0.01f, 1.0f);
+    }
+
+    public override string GUIStepTitle() => "FFT generator";
 }

@@ -213,4 +213,28 @@ public class ThermalErosionDispatcher : UltimatePipelineStep
     {
 
     }
+
+    public override void RenderParametersTuningGUI()
+    {
+        GUILayout.Label("Material Transport");
+
+        GUILayout.Label($"Distribution Coefficient: {distributionCoefficient:F3}");
+        distributionCoefficient = GUILayout.HorizontalSlider(distributionCoefficient, 0.01f, 1.0f);
+
+        GUILayout.Space(5);
+        GUILayout.Label("Stability");
+
+        GUILayout.Label($"Talus Threshold: {talusThreshold:F3}");
+        talusThreshold = GUILayout.HorizontalSlider(talusThreshold, 0.001f, 1.0f);
+
+        GUILayout.Space(5);
+        GUILayout.Label("Iterations");
+
+        GUILayout.Label($"Erosion Iteration Limit: {erosionIterationLimit}");
+        erosionIterationLimit = Mathf.RoundToInt(
+            GUILayout.HorizontalSlider(erosionIterationLimit, 1f, 100f)
+        );
+    }
+
+    public override string GUIStepTitle() => "TE eroder";
 }

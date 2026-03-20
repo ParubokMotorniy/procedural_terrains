@@ -466,4 +466,12 @@ public class SDFDispatcher : UltimatePipelineStep
     {
         previousState &= ~CpuHeightmapProperties.Normalized;
     }
+
+    public override void RenderParametersTuningGUI()
+    {
+        GUILayout.Label($"Worley Frequency: {baseSimplexFrequency:F3}");
+        baseSimplexFrequency = GUILayout.HorizontalSlider(baseSimplexFrequency, 0.01f, 10.0f);
+    }
+
+    public override string GUIStepTitle() => "SDF generator";
 }
