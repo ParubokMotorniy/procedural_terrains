@@ -87,14 +87,13 @@ public class UNDispatcher : UltimatePipelineStep
         // {
 
         // });
-        int2 textureDimensions = new int2(pipelineContext.GetHeightmapSize(), pipelineContext.GetHeightmapSize());
-        var nativeHeightmapArray = pipelineContext.intermediateHeightmap.GetRawTextureData<float>();
+        var intermediateHeightmap = pipelineContext.GetCpuIntemediateHeightmap();
 
-        float2 extraDisplacement = (float2)textureDimensions * pipelineContext.GetRandomFloats();
+        float2 extraDisplacement = (float2)intermediateHeightmap.heightmapDimensions * pipelineContext.GetRandomFloats();
 
-        for (int x = 0; x < textureDimensions.x; ++x)
+        for (int x = 0; x < intermediateHeightmap.heightmapDimensions.x; ++x)
         {
-            for (int y = 0; y < textureDimensions.y; ++y)
+            for (int y = 0; y < intermediateHeightmap.heightmapDimensions.y; ++y)
             {
                 float2 floatIdx = extraDisplacement + new float2(x, y);
 
@@ -128,7 +127,7 @@ public class UNDispatcher : UltimatePipelineStep
                     octaveFrequency *= 2.0f;
                 }
 
-                nativeHeightmapArray[x * textureDimensions.y + y] = noiseResult;
+                intermediateHeightmap.nativeHeightmapArray[(int)(x * intermediateHeightmap.heightmapDimensions.y + y)] = noiseResult;
             }
         }
         return Task.CompletedTask;

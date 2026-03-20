@@ -23,6 +23,7 @@ public class SDFDispatcher : UltimatePipelineStep
     private ComputeBuffer floodingBuffer2;
     private ComputeBuffer inputContinentHeightmap;
 
+    //both are implicitly cleared
     private uint2[,] cpuFloodingBuffer1;
     private uint2[,] cpuFloodingBuffer2;
 
@@ -246,29 +247,29 @@ public class SDFDispatcher : UltimatePipelineStep
         return math.clamp(smoke, 0.0f, 1.0f);
     }
 
-    void CoastlineGenerator(uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray, CpuPipelineContext pipelineContext)
+    void CoastlineGenerator(CpuPipelineContext.CpuIntermediateHeightmap intermediateHeightmap, CpuPipelineContext pipelineContext)
     {
         var randomUVOffset = pipelineContext.GetRandomFloats();
-        for (uint x = 0; x < heightmapDimensions.x; ++x)
+        for (uint x = 0; x < intermediateHeightmap.heightmapDimensions.x; ++x)
         {
-            for (uint y = 0; y < heightmapDimensions.y; ++y)
+            for (uint y = 0; y < intermediateHeightmap.heightmapDimensions.y; ++y)
             {
                 var texelCoord = new uint2(x, y);
-                nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, texelCoord)] = coastlineComputer(texelCoord, heightmapDimensions, randomUVOffset);
+                intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, texelCoord)] = coastlineComputer(texelCoord, intermediateHeightmap.heightmapDimensions, randomUVOffset);
             }
         }
     }
 
-    void MaskToSeedBuffer(uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray, uint2[,] floodingBuffer1)
+    void MaskToSeedBuffer(CpuPipelineContext.CpuIntermediateHeightmap intermediateHeightmap, uint2[,] floodingBuffer1)
     {
-        for (uint x = 0; x < heightmapDimensions.x; ++x)
+        for (uint x = 0; x < intermediateHeightmap.heightmapDimensions.x; ++x)
         {
-            for (uint y = 0; y < heightmapDimensions.y; ++y)
+            for (uint y = 0; y < intermediateHeightmap.heightmapDimensions.y; ++y)
             {
                 uint2 kernelCenter = new uint2(x, y);
-                uint kernelCenterLin = CpuComputeUtilities.index2dTo1d(heightmapDimensions, kernelCenter);
+                uint kernelCenterLin = CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, kernelCenter);
 
-                if (texelIsWhiteForMask(nativeHeightmapArray[(int)kernelCenterLin]))
+                if (texelIsWhiteForMask(intermediateHeightmap.nativeHeightmapArray[(int)kernelCenterLin]))
                 {
                     // center is white
                     bool blackFound = false;
@@ -278,8 +279,8 @@ public class SDFDispatcher : UltimatePipelineStep
                         {
                             // uint2 targetNeighbor = new uint2(math.clamp((int)kernelCenter.x + i, 0, bufferSideLength - 1),
                             //  math.clamp((int)kernelCenter.y + j, 0, bufferSideLength - 1)); <- old
-                            uint2 targetNeighbor = (uint2)math.clamp((int2)kernelCenter + new int2(i, j), 0, heightmapDimensions - new uint2(1, 1));
-                            float neighborColor = nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, targetNeighbor)];
+                            uint2 targetNeighbor = (uint2)math.clamp((int2)kernelCenter + new int2(i, j), 0, intermediateHeightmap.heightmapDimensions - new uint2(1, 1));
+                            float neighborColor = intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, targetNeighbor)];
                             if (!texelIsWhiteForMask(neighborColor))
                             {
                                 floodingBuffer1[kernelCenter.x, kernelCenter.y] = kernelCenter;
@@ -302,11 +303,11 @@ public class SDFDispatcher : UltimatePipelineStep
         }
     }
 
-    void FloodingStep(uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray, int floodStepSize, uint2[,] currentReadBuffer, uint2[,] currentWriteBuffer)
+    void FloodingStep(CpuPipelineContext.CpuIntermediateHeightmap intermediateHeightmap, int floodStepSize, uint2[,] currentReadBuffer, uint2[,] currentWriteBuffer)
     {
-        for (uint x = 0; x < heightmapDimensions.x; ++x)
+        for (uint x = 0; x < intermediateHeightmap.heightmapDimensions.x; ++x)
         {
-            for (uint y = 0; y < heightmapDimensions.y; ++y)
+            for (uint y = 0; y < intermediateHeightmap.heightmapDimensions.y; ++y)
             {
                 uint2 cellCoords = new uint2(x, y);
 
@@ -317,7 +318,7 @@ public class SDFDispatcher : UltimatePipelineStep
                 {
                     int targetX = (int)cellCoords.x + i * floodStepSize;
 
-                    if (targetX < 0 || targetX >= heightmapDimensions.x)
+                    if (targetX < 0 || targetX >= intermediateHeightmap.heightmapDimensions.x)
                     {
                         continue;
                     }
@@ -326,7 +327,7 @@ public class SDFDispatcher : UltimatePipelineStep
                     {
                         int targetY = (int)cellCoords.y + j * floodStepSize;
 
-                        if (targetY < 0 || targetY >= heightmapDimensions.y)
+                        if (targetY < 0 || targetY >= intermediateHeightmap.heightmapDimensions.y)
                         {
                             continue;
                         }
@@ -353,20 +354,20 @@ public class SDFDispatcher : UltimatePipelineStep
         }
     }
 
-    void SeedBufferToHieghtmap(uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray, uint2[,] currentReadBuffer, float shoreBaseHeight, float shoreDistanceThreshold)
+    void SeedBufferToHieghtmap(CpuPipelineContext.CpuIntermediateHeightmap intermediateHeightmap, uint2[,] currentReadBuffer, float shoreBaseHeight, float shoreDistanceThreshold)
     {
         float maxHeight = Single.MinValue;
-        for (uint x = 0; x < heightmapDimensions.x; ++x)
+        for (uint x = 0; x < intermediateHeightmap.heightmapDimensions.x; ++x)
         {
-            for (uint y = 0; y < heightmapDimensions.y; ++y)
+            for (uint y = 0; y < intermediateHeightmap.heightmapDimensions.y; ++y)
             {
                 uint2 cellCoords = new uint2(x, y);
 
                 uint2 seedCoordinates = currentReadBuffer[cellCoords.x, cellCoords.y];
                 float actualDistance = math.length((int2)seedCoordinates - (int2)cellCoords);
 
-                var targetCellLin = (int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, cellCoords);
-                float currentHeight = nativeHeightmapArray[targetCellLin];
+                var targetCellLin = (int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, cellCoords);
+                float currentHeight = intermediateHeightmap.nativeHeightmapArray[targetCellLin];
                 float distanceAtTexel;
                 if (texelIsWhiteForMask(currentHeight))
                 {
@@ -381,17 +382,17 @@ public class SDFDispatcher : UltimatePipelineStep
             }
         }
 
-        for (uint x = 0; x < heightmapDimensions.x; ++x)
+        for (uint x = 0; x < intermediateHeightmap.heightmapDimensions.x; ++x)
         {
-            for (uint y = 0; y < heightmapDimensions.y; ++y)
+            for (uint y = 0; y < intermediateHeightmap.heightmapDimensions.y; ++y)
             {
                 uint2 cellCoords = new uint2(x, y);
 
                 uint2 seedCoordinates = currentReadBuffer[cellCoords.x, cellCoords.y];
                 float actualDistance = math.length((int2)seedCoordinates - (int2)cellCoords);
 
-                var targetCellLin = (int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, cellCoords);
-                float currentHeight = nativeHeightmapArray[targetCellLin];
+                var targetCellLin = (int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, cellCoords);
+                float currentHeight = intermediateHeightmap.nativeHeightmapArray[targetCellLin];
                 float distanceAtTexel;
                 if (texelIsWhiteForMask(currentHeight))
                 {
@@ -408,7 +409,7 @@ public class SDFDispatcher : UltimatePipelineStep
                 currentHeight *= texelIsWhiteForLake(currentHeight) ? 1.0f : 0.0f;
 
                 // clamp goes here since we expect more 'noisy' features to appear where tectonic processes were the most porminent - at mountains
-                nativeHeightmapArray[targetCellLin] = (float)(distanceAtTexel + currentHeight * math.clamp(distanceAtTexel, 0.45, 1.0));
+                intermediateHeightmap.nativeHeightmapArray[targetCellLin] = (float)(distanceAtTexel + currentHeight * math.clamp(distanceAtTexel, 0.45, 1.0));
             }
         }
     }
@@ -416,9 +417,8 @@ public class SDFDispatcher : UltimatePipelineStep
     public override Task ExecuteStepCpu(CpuPipelineContext pipelineContext)
     {
         int textureSize = pipelineContext.GetHeightmapSize();
-        uint2 heightmapDimensions = new uint2((uint)textureSize, (uint)textureSize);
-        var nativeHeightmapArray = pipelineContext.intermediateHeightmap.GetRawTextureData<float>();
         float maxDistanceToSeed = math.sqrt(2 * textureSize * textureSize);
+        var intermediateHeightmap = pipelineContext.GetCpuIntemediateHeightmap();
 
         {
             if (cpuFloodingBuffer1 is null || cpuFloodingBuffer1.GetLength(0) != textureSize || cpuFloodingBuffer1.GetLength(1) != textureSize)
@@ -439,23 +439,23 @@ public class SDFDispatcher : UltimatePipelineStep
             currentReadBuffer = (currentReadBuffer + 1) % 2;
         };
 
-        CoastlineGenerator(heightmapDimensions, nativeHeightmapArray, pipelineContext);
-        MaskToSeedBuffer(heightmapDimensions, nativeHeightmapArray, cpuFloodingBuffer1);
+        CoastlineGenerator(intermediateHeightmap, pipelineContext);
+        MaskToSeedBuffer(intermediateHeightmap, cpuFloodingBuffer1);
 
         while (currentFloodStep > 1)
         {
             updateSourceBuffer();
             currentFloodStep /= 2;
-            FloodingStep(heightmapDimensions, nativeHeightmapArray, currentFloodStep, currentReadBuffer == 0 ? cpuFloodingBuffer1 : cpuFloodingBuffer2, currentReadBuffer == 0 ? cpuFloodingBuffer2 : cpuFloodingBuffer1);
+            FloodingStep(intermediateHeightmap, currentFloodStep, currentReadBuffer == 0 ? cpuFloodingBuffer1 : cpuFloodingBuffer2, currentReadBuffer == 0 ? cpuFloodingBuffer2 : cpuFloodingBuffer1);
         }
 
         // Extra iteration to improve SDF accuracy
         updateSourceBuffer();
-        FloodingStep(heightmapDimensions, nativeHeightmapArray, 1, currentReadBuffer == 0 ? cpuFloodingBuffer1 : cpuFloodingBuffer2, currentReadBuffer == 0 ? cpuFloodingBuffer2 : cpuFloodingBuffer1);
+        FloodingStep(intermediateHeightmap, 1, currentReadBuffer == 0 ? cpuFloodingBuffer1 : cpuFloodingBuffer2, currentReadBuffer == 0 ? cpuFloodingBuffer2 : cpuFloodingBuffer1);
 
         // Distance computation and postprocessing
         updateSourceBuffer();
-        SeedBufferToHieghtmap(heightmapDimensions, nativeHeightmapArray, currentReadBuffer == 0 ? cpuFloodingBuffer1 : cpuFloodingBuffer2, maxDistanceToSeed * 0.005f, textureSize * 0.1f);
+        SeedBufferToHieghtmap(intermediateHeightmap, currentReadBuffer == 0 ? cpuFloodingBuffer1 : cpuFloodingBuffer2, maxDistanceToSeed * 0.005f, textureSize * 0.1f);
 
         return Task.CompletedTask;
     }

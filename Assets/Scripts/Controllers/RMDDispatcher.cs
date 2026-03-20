@@ -162,7 +162,7 @@ public class RMDDispatcher : UltimatePipelineStep
         return (float)((math.max(f1_f2.x - RANGE_THRSH_FLOOR, 0.0) * RIDGE_FALLOF_SPEED) / EFFECTIVE_RANGE);
     }
 
-    private void InitializeHeightmap(int textureSize, int texelsPerThreadDomain, uint2 textureDimensions, NativeArray<float> nativeHeightmapArray, float octaveAmplitude, float2 noiseDisplacement)
+    private void InitializeHeightmap(int textureSize, int texelsPerThreadDomain, CpuPipelineContext.CpuIntermediateHeightmap intermediateHeightmap, float octaveAmplitude, float2 noiseDisplacement)
     {
         int numThreadDomains = textureSize / texelsPerThreadDomain;
         for (int x = 0; x < numThreadDomains; ++x)
@@ -170,8 +170,8 @@ public class RMDDispatcher : UltimatePipelineStep
             for (int y = 0; y < numThreadDomains; ++y)
             {
                 uint2 topLeftCellIdx = (uint2)(new int2(x, y) * texelsPerThreadDomain);
-                float2 worleyCoordinates = (topLeftCellIdx / (float2)textureDimensions) * worleyFrequency + noiseDisplacement * worleyFrequency;
-                nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(textureDimensions, topLeftCellIdx)] = SampleWorleyNoise(worleyCoordinates) * octaveAmplitude;
+                float2 worleyCoordinates = (topLeftCellIdx / (float2)intermediateHeightmap.heightmapDimensions) * worleyFrequency + noiseDisplacement * worleyFrequency;
+                intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, topLeftCellIdx)] = SampleWorleyNoise(worleyCoordinates) * octaveAmplitude;
             }
         }
     }
@@ -187,7 +187,7 @@ public class RMDDispatcher : UltimatePipelineStep
         }
     }
 
-    private void Transition12(int textureSize, int texelsPerThreadDomain, uint2 textureDimensions, NativeArray<float> nativeHeightmapArray, int texelWidthDivided, int texelWidthDivisionFactor, float octaveAmplitude, CpuPipelineContext pipelineContext)
+    private void Transition12(int textureSize, int texelsPerThreadDomain, CpuPipelineContext.CpuIntermediateHeightmap intermediateHeightmap, int texelWidthDivided, int texelWidthDivisionFactor, float octaveAmplitude, CpuPipelineContext pipelineContext)
     {
         int numThreadDomains = textureSize / texelsPerThreadDomain;
         for (int xW = 0; xW < numThreadDomains; ++xW)
@@ -203,20 +203,20 @@ public class RMDDispatcher : UltimatePipelineStep
                         int2 subdivisionIdx = (int2)(topLeftCellIdx.xy + new uint2((uint)(texelWidthDivided + 2 * texelWidthDivided * x), (uint)(texelWidthDivided + 2 * texelWidthDivided * y)));
 
                         double averageNeighbors =
-                            (nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(textureDimensions, (uint2)CpuComputeUtilities.terrainWrap(subdivisionIdx + new int2(texelWidthDivided, texelWidthDivided), (int2)textureDimensions))] +
-                             nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(textureDimensions, (uint2)CpuComputeUtilities.terrainWrap(subdivisionIdx + new int2(texelWidthDivided, -texelWidthDivided), (int2)textureDimensions))] +
-                             nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(textureDimensions, (uint2)CpuComputeUtilities.terrainWrap(subdivisionIdx + new int2(-texelWidthDivided, texelWidthDivided), (int2)textureDimensions))] +
-                             nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(textureDimensions, (uint2)CpuComputeUtilities.terrainWrap(subdivisionIdx + new int2(-texelWidthDivided, -texelWidthDivided), (int2)textureDimensions))]) /
+                            (intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(subdivisionIdx + new int2(texelWidthDivided, texelWidthDivided),  (int2)intermediateHeightmap.heightmapDimensions))] +
+                             intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(subdivisionIdx + new int2(texelWidthDivided, -texelWidthDivided), (int2)intermediateHeightmap.heightmapDimensions))] +
+                             intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(subdivisionIdx + new int2(-texelWidthDivided, texelWidthDivided), (int2)intermediateHeightmap.heightmapDimensions))] +
+                             intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(subdivisionIdx + new int2(-texelWidthDivided, -texelWidthDivided), (int2)intermediateHeightmap.heightmapDimensions))]) /
                             4.0;
 
-                        nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(textureDimensions, (uint2)subdivisionIdx)] = (float)(averageNeighbors + SampleNoise(pipelineContext.GetRandomFloats()) * octaveAmplitude);
+                        intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)subdivisionIdx)] = (float)(averageNeighbors + SampleNoise(pipelineContext.GetRandomFloats()) * octaveAmplitude);
                     }
                 }
             }
         }
     }
 
-    private void Transition21(int textureSize, int texelsPerThreadDomain, uint2 textureDimensions, NativeArray<float> nativeHeightmapArray, int texelWidthDivided, int texelWidthDivisionFactor, int texelWidthDivisionIteration, float octaveAmplitude, CpuPipelineContext pipelineContext)
+    private void Transition21(int textureSize, int texelsPerThreadDomain, CpuPipelineContext.CpuIntermediateHeightmap intermediateHeightmap, int texelWidthDivided, int texelWidthDivisionFactor, int texelWidthDivisionIteration, float octaveAmplitude, CpuPipelineContext pipelineContext)
     {
         int numThreadDomains = textureSize / texelsPerThreadDomain;
         for (int xW = 0; xW < numThreadDomains; ++xW)
@@ -244,29 +244,29 @@ public class RMDDispatcher : UltimatePipelineStep
 
                         if (diamondIdx.x != 0)
                         {
-                            neighborLeft = nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(textureDimensions, (uint2)CpuComputeUtilities.terrainWrap(diamondIdx + new int2(-texelWidthDivided, 0), (int2)textureDimensions))];
+                            neighborLeft = intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(diamondIdx + new int2(-texelWidthDivided, 0), (int2)intermediateHeightmap.heightmapDimensions))];
                             numberValid++;
                         }
 
-                        if (diamondIdx.x != textureDimensions.x - 1)
+                        if (diamondIdx.x != intermediateHeightmap.heightmapDimensions.x - 1)
                         {
-                            neighborRight = nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(textureDimensions, (uint2)CpuComputeUtilities.terrainWrap(diamondIdx + new int2(+texelWidthDivided, 0), (int2)textureDimensions))];
+                            neighborRight = intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(diamondIdx + new int2(+texelWidthDivided, 0), (int2)intermediateHeightmap.heightmapDimensions))];
                             numberValid++;
                         }
 
                         if (diamondIdx.y != 0)
                         {
-                            neighborTop = nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(textureDimensions, (uint2)CpuComputeUtilities.terrainWrap(diamondIdx + new int2(0, -texelWidthDivided), (int2)textureDimensions))];
+                            neighborTop = intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(diamondIdx + new int2(0, -texelWidthDivided), (int2)intermediateHeightmap.heightmapDimensions))];
                             numberValid++;
                         }
 
-                        if (diamondIdx.y != textureDimensions.y - 1)
+                        if (diamondIdx.y != intermediateHeightmap.heightmapDimensions.y - 1)
                         {
-                            neighborBottom = nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(textureDimensions, (uint2)CpuComputeUtilities.terrainWrap(diamondIdx + new int2(0, +texelWidthDivided), (int2)textureDimensions))];
+                            neighborBottom = intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(diamondIdx + new int2(0, +texelWidthDivided), (int2)intermediateHeightmap.heightmapDimensions))];
                             numberValid++;
                         }
 
-                        nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(textureDimensions, (uint2)diamondIdx)] = ((neighborLeft +
+                        intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)diamondIdx)] = ((neighborLeft +
                                                neighborRight +
                                                neighborTop +
                                                neighborBottom) /
@@ -282,13 +282,12 @@ public class RMDDispatcher : UltimatePipelineStep
     {
         int textureSize = pipelineContext.GetHeightmapSize();
         int texelsPerThreadDomain = (int)math.pow(2, numSubdivisions);
-        uint2 textureDimensions = new uint2((uint)textureSize, (uint)textureSize);
-        var nativeHeightmapArray = pipelineContext.intermediateHeightmap.GetRawTextureData<float>();
+        var intermediateHeightmap = pipelineContext.GetCpuIntemediateHeightmap();
 
         Assert.IsTrue(textureSize % texelsPerThreadDomain == 0, "Can't fit integer number of domains into the texture!");
 
         float octaveAmplitude = 1.0f;
-        InitializeHeightmap(textureSize, texelsPerThreadDomain, textureDimensions, nativeHeightmapArray, 1.0f, pipelineContext.GetRandomFloats());
+        InitializeHeightmap(textureSize, texelsPerThreadDomain, intermediateHeightmap, 1.0f, pipelineContext.GetRandomFloats());
 
         for (int sub = 0; sub < numSubdivisions; ++sub)
         {
@@ -297,19 +296,19 @@ public class RMDDispatcher : UltimatePipelineStep
             int seed = texelWidthDivided + sub;
 
             octaveAmplitude *= H;
-            Transition12(textureSize, texelsPerThreadDomain, textureDimensions, nativeHeightmapArray, texelWidthDivided, texelWidthDivisionFactor, octaveAmplitude, pipelineContext);
+            Transition12(textureSize, texelsPerThreadDomain, intermediateHeightmap, texelWidthDivided, texelWidthDivisionFactor, octaveAmplitude, pipelineContext);
 
             if (addExtraNoise)
             {
-                AddExtraNoiseRoutine(textureSize, nativeHeightmapArray, octaveAmplitude, pipelineContext);
+                AddExtraNoiseRoutine(textureSize, intermediateHeightmap.nativeHeightmapArray, octaveAmplitude, pipelineContext);
             }
 
             octaveAmplitude *= H;
-            Transition21(textureSize, texelsPerThreadDomain, textureDimensions, nativeHeightmapArray, texelWidthDivided, texelWidthDivisionFactor, sub + 1, octaveAmplitude, pipelineContext);
+            Transition21(textureSize, texelsPerThreadDomain, intermediateHeightmap, texelWidthDivided, texelWidthDivisionFactor, sub + 1, octaveAmplitude, pipelineContext);
 
             if (addExtraNoise)
             {
-                AddExtraNoiseRoutine(textureSize, nativeHeightmapArray, octaveAmplitude, pipelineContext);
+                AddExtraNoiseRoutine(textureSize, intermediateHeightmap.nativeHeightmapArray, octaveAmplitude, pipelineContext);
             }
         }
 

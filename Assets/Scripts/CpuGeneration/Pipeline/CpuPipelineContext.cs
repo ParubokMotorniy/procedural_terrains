@@ -11,6 +11,23 @@ namespace CpuGenerationPipeline
 {
     public class CpuPipelineContext
     {
+        public struct CpuIntermediateHeightmap
+        {
+            public NativeArray<float> nativeHeightmapArray;
+            public uint2 heightmapDimensions;
+
+            public CpuIntermediateHeightmap(NativeArray<float> nativeArray, uint2 uint2) : this()
+            {
+                this.nativeHeightmapArray = nativeArray;
+                this.heightmapDimensions = uint2;
+            }
+        }
+
+        public CpuIntermediateHeightmap GetCpuIntemediateHeightmap()
+        {
+            return new CpuIntermediateHeightmap(intermediateHeightmap.GetRawTextureData<float>(), new uint2((uint)GetHeightmapSize(), (uint)GetHeightmapSize()));
+        }
+
         public Texture2D intermediateHeightmap
         {
             get;

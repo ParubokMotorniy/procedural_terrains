@@ -243,19 +243,19 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
         return (particlePos.x >= 0.0 && particlePos.y >= 0.0) && (particlePos.x < (float)heightmapDimensions.x && particlePos.y < (float)heightmapDimensions.y) && particle.w > waterDeathThreshold;
     }
 
-    float sampleHeightmapBilinear(uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray, float2 coord)
+    float sampleHeightmapBilinear(CpuPipelineContext.CpuIntermediateHeightmap intermediateHeightmap, float2 coord)
     {
-        int2 signedHeightmapDimensions = (int2)heightmapDimensions;
+        int2 signedHeightmapDimensions = (int2)intermediateHeightmap.heightmapDimensions;
 
         int2 basePart = new int2(math.floor(coord));
         float2 fracPart = math.frac(coord);
 
         uint2 wrappedBase = (uint2)CpuComputeUtilities.terrainWrap(basePart, signedHeightmapDimensions);
 
-        float v00 = nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, wrappedBase)];
-        float v10 = nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(basePart + new int2(1, 0), signedHeightmapDimensions))];
-        float v01 = nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(basePart + new int2(0, 1), signedHeightmapDimensions))];
-        float v11 = nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(basePart + new int2(1, 1), signedHeightmapDimensions))];
+        float v00 = intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, wrappedBase)];
+        float v10 = intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(basePart + new int2(1, 0), signedHeightmapDimensions))];
+        float v01 = intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(basePart + new int2(0, 1), signedHeightmapDimensions))];
+        float v11 = intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(basePart + new int2(1, 1), signedHeightmapDimensions))];
 
         float v0 = math.lerp(v00, v10, fracPart.x);
         float v1 = math.lerp(v01, v11, fracPart.x);
@@ -263,11 +263,11 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
         return math.lerp(v0, v1, fracPart.y);
     }
 
-    float removeSediment(uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray, int2 erosionCenter, float targetAmountToRemove, float erosionDistanceSumPrecompute, CpuTexelPipes[,] pipesBuffer)
+    float removeSediment(CpuPipelineContext.CpuIntermediateHeightmap intermediateHeightmap, int2 erosionCenter, float targetAmountToRemove, float erosionDistanceSumPrecompute, CpuTexelPipes[,] pipesBuffer)
     {
         float actualSedimentRemoved = 0.0f;
         float actualNeighborRadius = 1.5f * (float)erosionNeighborhood;
-        int2 signedHeightmapDimensions = (int2)heightmapDimensions;
+        int2 signedHeightmapDimensions = (int2)intermediateHeightmap.heightmapDimensions;
 
         for (int x = -1 * erosionNeighborhood; x <= erosionNeighborhood; ++x)
         {
@@ -280,9 +280,9 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
                 float weight = (actualNeighborRadius - dist) / math.max(erosionDistanceSumPrecompute, CpuComputeUtilities.EPS);
 
                 uint2 affectedNeighborCoordinate = (uint2)CpuComputeUtilities.terrainWrap(erosionCenter + new int2(x, y), signedHeightmapDimensions);
-                float currentTexelHeight = nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, affectedNeighborCoordinate)];
+                float currentTexelHeight = intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, affectedNeighborCoordinate)];
 
-                float localSoftness = CpuComputeUtilities.computeSoftnessCoefficient(CpuComputeUtilities.computeGradientAtPoint(nativeHeightmapArray, heightmapDimensions, (int2)affectedNeighborCoordinate), currentTexelHeight, 0.1f);
+                float localSoftness = CpuComputeUtilities.computeSoftnessCoefficient(CpuComputeUtilities.computeGradientAtPoint(intermediateHeightmap.nativeHeightmapArray, intermediateHeightmap.heightmapDimensions, (int2)affectedNeighborCoordinate), currentTexelHeight, 0.1f);
                 float localAmountRemoved = (float)math.min(currentTexelHeight, math.max(weight, 0.0) * targetAmountToRemove * localSoftness);
 
                 actualSedimentRemoved += localAmountRemoved;
@@ -352,13 +352,13 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
         }
     }
 
-    void Integrator(uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray, ErosionParticle[] particlesBuffer, CpuTexelPipes[,] pipesBuffer, CpuPipelineContext pipelineContext, float erosionDistanceSumPrecompute)
+    void Integrator(CpuPipelineContext.CpuIntermediateHeightmap intermediateHeightmap, ErosionParticle[] particlesBuffer, CpuTexelPipes[,] pipesBuffer, float erosionDistanceSumPrecompute)
     {
-        int2 signedHeightmapDimensions = (int2)heightmapDimensions;
+        int2 signedHeightmapDimensions = (int2)intermediateHeightmap.heightmapDimensions;
         for (uint idx = 0; idx < particlesBuffer.Length; ++idx)
         {
             uint processedParticleIdx = idx;
-            if (!checkParticleIsValid(heightmapDimensions, particlesBuffer[processedParticleIdx]))
+            if (!checkParticleIsValid(intermediateHeightmap.heightmapDimensions, particlesBuffer[processedParticleIdx]))
                 continue;
 
             float2 oldParticlePosition = particlesBuffer[processedParticleIdx].pos;
@@ -370,33 +370,33 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
             uint2 floorOldParticlePosition = (uint2)CpuComputeUtilities.terrainWrap(floorInt, signedHeightmapDimensions);
             float2 interpolationCoefficients = math.frac(oldParticlePosition);
 
-            int sampleSelf = (int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, floorOldParticlePosition);
-            int sampleRight = (int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(
+            int sampleSelf = (int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, floorOldParticlePosition);
+            int sampleRight = (int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(
                      (int2)(floorOldParticlePosition + new uint2(1, 0)), signedHeightmapDimensions));
-            int sampleTop = (int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(
+            int sampleTop = (int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(
                          (int2)(floorOldParticlePosition + new uint2(1, 1)), signedHeightmapDimensions));
-            int sampleBottom = (int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(
+            int sampleBottom = (int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(
                          (int2)(floorOldParticlePosition + new uint2(0, 1)), signedHeightmapDimensions));
 
             float2 currentGradient = new float2(
-                (float)(nativeHeightmapArray[sampleRight] - nativeHeightmapArray[sampleSelf]) * (float)(1.0 - interpolationCoefficients.y)
-                 + (float)(nativeHeightmapArray[sampleTop] - nativeHeightmapArray[sampleBottom]) * interpolationCoefficients.y,
+                (float)(intermediateHeightmap.nativeHeightmapArray[sampleRight] - intermediateHeightmap.nativeHeightmapArray[sampleSelf]) * (float)(1.0 - interpolationCoefficients.y)
+                 + (float)(intermediateHeightmap.nativeHeightmapArray[sampleTop] - intermediateHeightmap.nativeHeightmapArray[sampleBottom]) * interpolationCoefficients.y,
 
-                (float)(nativeHeightmapArray[sampleBottom] - nativeHeightmapArray[sampleSelf]) * (float)(1.0 - interpolationCoefficients.x)
-                + (float)(nativeHeightmapArray[sampleTop] - nativeHeightmapArray[sampleRight]) * interpolationCoefficients.x);
+                (float)(intermediateHeightmap.nativeHeightmapArray[sampleBottom] - intermediateHeightmap.nativeHeightmapArray[sampleSelf]) * (float)(1.0 - interpolationCoefficients.x)
+                + (float)(intermediateHeightmap.nativeHeightmapArray[sampleTop] - intermediateHeightmap.nativeHeightmapArray[sampleRight]) * interpolationCoefficients.x);
 
             float2 dirCandidate = particlesBuffer[processedParticleIdx].dir * inertia - currentGradient * (1.0f - inertia);
             float2 newParticleDirection = (math.dot(dirCandidate, dirCandidate) > CpuComputeUtilities.EPS) ? math.normalize(dirCandidate) : float2.zero;
             float2 newParticlePosition = oldParticlePosition + newParticleDirection;
-            float oldHeight = sampleHeightmapBilinear(heightmapDimensions, nativeHeightmapArray, oldParticlePosition);
-            float newHeight = sampleHeightmapBilinear(heightmapDimensions, nativeHeightmapArray, newParticlePosition);
+            float oldHeight = sampleHeightmapBilinear(intermediateHeightmap, oldParticlePosition);
+            float newHeight = sampleHeightmapBilinear(intermediateHeightmap, newParticlePosition);
             float heightDelta = newHeight - oldHeight;
 
             float sedimentValueUpdate = 0.0f;
             if (heightDelta > PLAIN_HEIGHT_THRESHOLD)
             {
-                float amountToDeposit = math.min(oldSedimentValue, math.max(math.abs(nativeHeightmapArray[sampleSelf] - oldHeight), heightDelta));
-                depositSediment(heightmapDimensions, (int2)floorOldParticlePosition, amountToDeposit, pipesBuffer);
+                float amountToDeposit = math.min(oldSedimentValue, math.max(math.abs(intermediateHeightmap.nativeHeightmapArray[sampleSelf] - oldHeight), heightDelta));
+                depositSediment(intermediateHeightmap.heightmapDimensions, (int2)floorOldParticlePosition, amountToDeposit, pipesBuffer);
                 sedimentValueUpdate = -amountToDeposit;
             }
             else if (heightDelta < -PLAIN_HEIGHT_THRESHOLD)
@@ -406,13 +406,13 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
                 if ((oldSedimentValue - newCapacity) > CpuComputeUtilities.EPS)
                 {
                     float amountToDeposit = (oldSedimentValue - newCapacity) * deposition;
-                    depositSediment(heightmapDimensions, (int2)floorOldParticlePosition, amountToDeposit, pipesBuffer);
+                    depositSediment(intermediateHeightmap.heightmapDimensions, (int2)floorOldParticlePosition, amountToDeposit, pipesBuffer);
                     sedimentValueUpdate = -amountToDeposit;
                 }
                 else if ((oldSedimentValue - newCapacity) < -CpuComputeUtilities.EPS)
                 {
                     float amountToRemove = math.min((newCapacity - oldSedimentValue) * erosion, -heightDelta);
-                    sedimentValueUpdate = removeSediment(heightmapDimensions, nativeHeightmapArray, (int2)floorOldParticlePosition, amountToRemove, erosionDistanceSumPrecompute, pipesBuffer);
+                    sedimentValueUpdate = removeSediment(intermediateHeightmap, (int2)floorOldParticlePosition, amountToRemove, erosionDistanceSumPrecompute, pipesBuffer);
                 }
             }
 
@@ -428,14 +428,14 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
         }
     }
 
-    void ChangeResolver(uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray, ErosionParticle[] particlesBuffer, CpuTexelPipes[,] pipesBuffer)
+    void ChangeResolver(CpuPipelineContext.CpuIntermediateHeightmap intermediateHeightmap, ErosionParticle[] particlesBuffer, CpuTexelPipes[,] pipesBuffer)
     {
-        for (uint x = 0; x < heightmapDimensions.x; ++x)
+        for (uint x = 0; x < intermediateHeightmap.heightmapDimensions.x; ++x)
         {
-            for (uint y = 0; y < heightmapDimensions.y; ++y)
+            for (uint y = 0; y < intermediateHeightmap.heightmapDimensions.y; ++y)
             {
                 uint2 targetTexel = new uint2(x, y);
-                int targetTexelLin = (int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, targetTexel);
+                int targetTexelLin = (int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, targetTexel);
                 float totalSedimentRemoved = 0.0f;
                 float totalSedimentAdded = 0.0f;
                 for (int pX = 0; pX < 3; ++pX)
@@ -447,7 +447,7 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
                     }
                 }
 
-                nativeHeightmapArray[targetTexelLin] = math.max(nativeHeightmapArray[targetTexelLin] + totalSedimentAdded - totalSedimentRemoved, 0.0f);
+                intermediateHeightmap.nativeHeightmapArray[targetTexelLin] = math.max(intermediateHeightmap.nativeHeightmapArray[targetTexelLin] + totalSedimentAdded - totalSedimentRemoved, 0.0f);
             }
         }
     }
@@ -456,8 +456,7 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
     {
         int textureSize = pipelineContext.GetHeightmapSize();
         int numActualParticles = (int)math.pow(2, numSimultaneousParticles);
-        uint2 heightmapDimensions = new uint2((uint)textureSize, (uint)textureSize);
-        var nativeHeightmapArray = pipelineContext.intermediateHeightmap.GetRawTextureData<float>();
+        var intermediateHeightmap = pipelineContext.GetCpuIntemediateHeightmap();
         Assert.IsTrue(erosionNeighborhood <= pipeMapCenterCoord);
 
         {
@@ -498,18 +497,18 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
             });
             for (int w = 0; w < numSimulationWaves; ++w)
             {
-                ParticlesInitializer(heightmapDimensions, particlesBuffer, pipelineContext);
+                ParticlesInitializer(intermediateHeightmap.heightmapDimensions, particlesBuffer, pipelineContext);
                 pipePlumber();
                 {
                     int gcRunInsertionPeriod = 0;
                     for (int s = 0; s < numSimulationSteps; ++s)
                     {
-                        Integrator(heightmapDimensions, nativeHeightmapArray, particlesBuffer, pipesBuffer, pipelineContext, erosionDistanceSumPrecompute);
-                        ChangeResolver(heightmapDimensions, nativeHeightmapArray, particlesBuffer, pipesBuffer);
+                        Integrator(intermediateHeightmap, particlesBuffer, pipesBuffer, erosionDistanceSumPrecompute);
+                        ChangeResolver(intermediateHeightmap, particlesBuffer, pipesBuffer);
                         pipePlumber();
                         if (s / garbageCollectorRunPeriod != gcRunInsertionPeriod)
                         {
-                            GarbageCollector(heightmapDimensions, particlesBuffer, pipelineContext);
+                            GarbageCollector(intermediateHeightmap.heightmapDimensions, particlesBuffer, pipelineContext);
                             gcRunInsertionPeriod = s / garbageCollectorRunPeriod;
                         }
                     }

@@ -95,10 +95,10 @@ public class ThermalErosionDispatcher : UltimatePipelineStep
     }
 
     // determines how material is distirbuted around a texel due to thermal erosion
-    void computeHeightDistribution(int2 processedTexel, uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray, float[,] heightSpreadValue)
+    void computeHeightDistribution(int2 processedTexel, CpuPipelineContext.CpuIntermediateHeightmap intermediateHeightmap, float[,] heightSpreadValue)
     {
 
-        float texelHeight = nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, (uint2)processedTexel)];
+        float texelHeight = intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)processedTexel)];
 
         float sumError = 0.0f;
         float sumErrorOut = 0.0f;
@@ -111,8 +111,8 @@ public class ThermalErosionDispatcher : UltimatePipelineStep
         {
             for (int y = -1; y < 2; ++y)
             {
-                int2 ncoord = CpuComputeUtilities.terrainWrap(processedTexel + new int2(x, y), (int2)heightmapDimensions);
-                float d = texelHeight - nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, (uint2)ncoord)];
+                int2 ncoord = CpuComputeUtilities.terrainWrap(processedTexel + new int2(x, y), (int2)intermediateHeightmap.heightmapDimensions);
+                float d = texelHeight - intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)ncoord)];
 
                 if (d > talusThreshold)
                 {
@@ -144,7 +144,7 @@ public class ThermalErosionDispatcher : UltimatePipelineStep
             // zero-mean gaussian is shifted to the estimated ratio. u2 is kept at zero to ensure sigma=1
             float dynamicDistributionCoefficient = (float)(math.clamp(CpuComputeUtilities.sampleGaussBoxMuller(new float2(u1, 0.0f)) + avalancheRatio, 0.3, 1.0) * distributionCoefficient);
 
-            float localSoftness = CpuComputeUtilities.computeSoftnessCoefficient(CpuComputeUtilities.computeGradientAtPoint(nativeHeightmapArray, heightmapDimensions, processedTexel), texelHeight, 0.1f);
+            float localSoftness = CpuComputeUtilities.computeSoftnessCoefficient(CpuComputeUtilities.computeGradientAtPoint(intermediateHeightmap.nativeHeightmapArray, intermediateHeightmap.heightmapDimensions, processedTexel), texelHeight, 0.1f);
             float totalHeightRemoved = (float)((numCriticalNeighbors > 0) ? localSoftness * dynamicDistributionCoefficient * (maxHeightDistance - talusThreshold) : 0.0);
 
             // to make sure the central texel does not end up higher than its closest neighbor
@@ -165,15 +165,15 @@ public class ThermalErosionDispatcher : UltimatePipelineStep
         }
     }
 
-    void applyKernel(int2 processedTexel, uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray, float[,] sharedHeightSpreadValue)
+    void applyKernel(int2 processedTexel, CpuPipelineContext.CpuIntermediateHeightmap intermediateHeightmap, float[,] sharedHeightSpreadValue)
     {
-        computeHeightDistribution(processedTexel, heightmapDimensions, nativeHeightmapArray, sharedHeightSpreadValue);
+        computeHeightDistribution(processedTexel, intermediateHeightmap, sharedHeightSpreadValue);
         for (int i = -1; i < 2; ++i)
         {
             for (int j = -1; j < 2; ++j)
             {
-                int2 p = CpuComputeUtilities.terrainWrap(processedTexel + new int2(i, j), (int2)heightmapDimensions);
-                nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, (uint2)p)] += sharedHeightSpreadValue[j + 1, i + 1];
+                int2 p = CpuComputeUtilities.terrainWrap(processedTexel + new int2(i, j), (int2)intermediateHeightmap.heightmapDimensions);
+                intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)p)] += sharedHeightSpreadValue[j + 1, i + 1];
             }
         }
     }
@@ -181,9 +181,7 @@ public class ThermalErosionDispatcher : UltimatePipelineStep
     public override Task ExecuteStepCpu(CpuPipelineContext pipelineContext)
     {
         int heightmapSize = pipelineContext.GetHeightmapSize();
-        uint2 heightmapDimensions = new uint2((uint)heightmapSize, (uint)heightmapSize);
-        var nativeHeightmapArray = pipelineContext.intermediateHeightmap.GetRawTextureData<float>();
-
+        var intermediateHeightmap = pipelineContext.GetCpuIntemediateHeightmap();
         float[,] sharedHeightSpreadValue = new float[3, 3];
 
         int numTotalTexels = (int)math.pow(heightmapSize, 2);
@@ -202,7 +200,7 @@ public class ThermalErosionDispatcher : UltimatePipelineStep
                 int y = (int)(permutedIdx % heightmapSize);
 
                 Array.Clear(sharedHeightSpreadValue, 0, sharedHeightSpreadValue.Length);
-                applyKernel(new int2(x, y), heightmapDimensions, nativeHeightmapArray, sharedHeightSpreadValue);
+                applyKernel(new int2(x, y), intermediateHeightmap, sharedHeightSpreadValue);
             }
         }
 

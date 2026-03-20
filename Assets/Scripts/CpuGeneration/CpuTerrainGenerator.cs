@@ -51,8 +51,6 @@ namespace CpuGenerationPipeline
         // bool previousReadPending = false;
 
         //TODO: consider using intermediate float array to allow async execution of the pipeline
-        //TODO: check if I need to clear internal buffers anywhere
-        //TODO: add extraction of nativeheightmap from the interface + wrap the two together
         //TODO: add benchmarking routines
         //TODO: when adding basic combination UI, I may want to devise some resource clearing technique.
 

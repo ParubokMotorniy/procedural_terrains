@@ -5,6 +5,7 @@ using CpuGenerationPipeline;
 using GpuGenerationPipeline;
 using Unity.Collections;
 using Unity.Mathematics;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.Assertions;
 
@@ -174,38 +175,38 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
 
     }
 
-    void RainDropper(uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray, TexelParameters[,] actualTexelParameters, float2 randomSeeds, float2[,] cpuGradientsBuffer)
+    void RainDropper(CpuPipelineContext.CpuIntermediateHeightmap intermediateHeightmap, TexelParameters[,] actualTexelParameters, float2 randomSeeds, float2[,] cpuGradientsBuffer)
     {
-        updateGradients(heightmapDimensions, nativeHeightmapArray, cpuGradientsBuffer);
-        for (uint x = 0; x < heightmapDimensions.x; ++x)
+        updateGradients(intermediateHeightmap, cpuGradientsBuffer);
+        for (uint x = 0; x < intermediateHeightmap.heightmapDimensions.x; ++x)
         {
-            for (uint y = 0; y < heightmapDimensions.y; ++y)
+            for (uint y = 0; y < intermediateHeightmap.heightmapDimensions.y; ++y)
             {
                 uint2 processedTexel = new uint2(x, y);
-                int lin = (int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, processedTexel);
+                int lin = (int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, processedTexel);
 
                 float currentWaterLevel = actualTexelParameters[x, y].waterLevel;
-                float currentHeight = nativeHeightmapArray[lin];
+                float currentHeight = intermediateHeightmap.nativeHeightmapArray[lin];
                 float maxAllowedExtraWater = currentHeight / rainSolubilityConstant;
 
-                float extraRainWater = math.min(maxAllowedExtraWater, CpuComputeUtilities.pinkNoise2D((uint2)(((float2)processedTexel + randomSeeds * (float2)heightmapDimensions) * rainNoiseFrequency)));
+                float extraRainWater = math.min(maxAllowedExtraWater, CpuComputeUtilities.pinkNoise2D((uint2)(((float2)processedTexel + randomSeeds * (float2)intermediateHeightmap.heightmapDimensions) * rainNoiseFrequency)));
                 extraRainWater = (float)(extraRainWater < MIN_WATER ? 0.0 : extraRainWater);
                 float localSoftness = CpuComputeUtilities.computeSoftnessCoefficient(cpuGradientsBuffer[processedTexel.x, processedTexel.y], currentHeight, 0.1f);
                 float heightLoss = extraRainWater * rainSolubilityConstant * localSoftness;
 
                 actualTexelParameters[x, y].waterLevel = extraRainWater + currentWaterLevel;     // step 1
                 actualTexelParameters[x, y].sedimentLevel += math.min(currentHeight, heightLoss);     // step 2
-                nativeHeightmapArray[lin] = (float)math.max(currentHeight - heightLoss, 0.0); // step 2
+                intermediateHeightmap.nativeHeightmapArray[lin] = (float)math.max(currentHeight - heightLoss, 0.0); // step 2
             }
         }
     }
 
     // computes how water is distributed from texel
-    void computeWaterDistribution(int2 processedTexel, uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray, TexelParameters[,] actualTexelParameters, float[,] waterSpreadValue)
+    void computeWaterDistribution(int2 processedTexel, CpuPipelineContext.CpuIntermediateHeightmap intermediateHeightmap, TexelParameters[,] actualTexelParameters, float[,] waterSpreadValue)
     {
-        int centerLin = (int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, (uint2)processedTexel);
+        int centerLin = (int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)processedTexel);
         float waterLevelAtTexel = actualTexelParameters[processedTexel.x, processedTexel.y].waterLevel;
-        float texelHeight = nativeHeightmapArray[centerLin] + waterLevelAtTexel;
+        float texelHeight = intermediateHeightmap.nativeHeightmapArray[centerLin] + waterLevelAtTexel;
 
         float sumError = 0.0f;
         float sumErrorOut = 0.0f;
@@ -217,10 +218,10 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
             {
                 for (int y = -1; y < 2; ++y)
                 {
-                    int2 neighborCoord = CpuComputeUtilities.terrainWrap(processedTexel + new int2(x, y), (int2)heightmapDimensions);
-                    int nLin = (int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, (uint2)neighborCoord);
+                    int2 neighborCoord = CpuComputeUtilities.terrainWrap(processedTexel + new int2(x, y), (int2)intermediateHeightmap.heightmapDimensions);
+                    int nLin = (int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)neighborCoord);
 
-                    float d = texelHeight - (nativeHeightmapArray[nLin] + actualTexelParameters[neighborCoord.x, neighborCoord.y].waterLevel);
+                    float d = texelHeight - (intermediateHeightmap.nativeHeightmapArray[nLin] + actualTexelParameters[neighborCoord.x, neighborCoord.y].waterLevel);
                     if (d > HEIGHT_EPS)
                     {
                         numCriticalNeighbors++;
@@ -278,30 +279,30 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
         return;
     }
 
-    void applyWaterKernel(int2 processedTexel, uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray, TexelParameters[,] actualTexelParameters, TexelPipes[,] texelPipes, float[,] sharedWaterSpreadLevel)
+    void applyWaterKernel(int2 processedTexel, CpuPipelineContext.CpuIntermediateHeightmap intermediateHeightmap, TexelParameters[,] actualTexelParameters, TexelPipes[,] texelPipes, float[,] sharedWaterSpreadLevel)
     {
-        computeWaterDistribution(processedTexel, heightmapDimensions, nativeHeightmapArray, actualTexelParameters, sharedWaterSpreadLevel); // step 3
+        computeWaterDistribution(processedTexel, intermediateHeightmap, actualTexelParameters, sharedWaterSpreadLevel); // step 3
 
         for (int i = -1; i < 2; ++i)
         {
             for (int j = -1; j < 2; ++j)
             {
-                int2 target = CpuComputeUtilities.terrainWrap(processedTexel + new int2(i, j), (int2)heightmapDimensions);
+                int2 target = CpuComputeUtilities.terrainWrap(processedTexel + new int2(i, j), (int2)intermediateHeightmap.heightmapDimensions);
                 uint2 targetInPipe = pipeMap[i + 1, j + 1];
                 texelPipes[target.x, target.y].inWaterPipes[targetInPipe.x, targetInPipe.y] = sharedWaterSpreadLevel[j + 1, i + 1];
             }
         }
     }
 
-    void WaterDistributor(uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray, TexelParameters[,] actualTexelParameters, TexelPipes[,] texelPipes)
+    void WaterDistributor(CpuPipelineContext.CpuIntermediateHeightmap intermediateHeightmap, TexelParameters[,] actualTexelParameters, TexelPipes[,] texelPipes)
     {
         float[,] sharedWaterSpreadLevel = new float[3, 3];
-        for (int x = 0; x < heightmapDimensions.x; ++x)
+        for (int x = 0; x < intermediateHeightmap.heightmapDimensions.x; ++x)
         {
-            for (int y = 0; y < heightmapDimensions.y; ++y)
+            for (int y = 0; y < intermediateHeightmap.heightmapDimensions.y; ++y)
             {
-                Array.Clear(sharedWaterSpreadLevel, 0, sharedWaterSpreadLevel.Length); //I just wanna do it explicitly
-                applyWaterKernel(new int2(x, y), heightmapDimensions, nativeHeightmapArray, actualTexelParameters, texelPipes, sharedWaterSpreadLevel);
+                Array.Clear(sharedWaterSpreadLevel, 0, 9); //I just wanna do it explicitly
+                applyWaterKernel(new int2(x, y), intermediateHeightmap, actualTexelParameters, texelPipes, sharedWaterSpreadLevel);
             }
         }
     }
@@ -339,41 +340,41 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
         return math.sqrt(math.max(sNormSq, dNormSq));
     }
 
-    void updateGradients(uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray, float2[,] cpuGradientsBuffer)
+    void updateGradients(CpuPipelineContext.CpuIntermediateHeightmap intermediateHeightmap, float2[,] cpuGradientsBuffer)
     {
-        for (int x = 0; x < heightmapDimensions.x; ++x)
+        for (int x = 0; x < intermediateHeightmap.heightmapDimensions.x; ++x)
         {
-            for (int y = 0; y < heightmapDimensions.y; ++y)
+            for (int y = 0; y < intermediateHeightmap.heightmapDimensions.y; ++y)
             {
                 int2 processedTexel = new int2(x, y);
-                float2 heightGradientAtTexel = CpuComputeUtilities.computeGradientAtPoint(nativeHeightmapArray, heightmapDimensions, processedTexel);
+                float2 heightGradientAtTexel = CpuComputeUtilities.computeGradientAtPoint(intermediateHeightmap.nativeHeightmapArray, intermediateHeightmap.heightmapDimensions, processedTexel);
                 cpuGradientsBuffer[processedTexel.x, processedTexel.y] = heightGradientAtTexel;
 
             }
         }
     }
-    void SedimentDistributor(uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray, TexelParameters[,] actualTexelParameters, TexelPipes[,] texelPipes, float2[,] cpuGradientsBuffer)
+    void SedimentDistributor(CpuPipelineContext.CpuIntermediateHeightmap intermediateHeightmap, TexelParameters[,] actualTexelParameters, TexelPipes[,] texelPipes, float2[,] cpuGradientsBuffer)
     {
-        updateGradients(heightmapDimensions, nativeHeightmapArray, cpuGradientsBuffer);
+        updateGradients(intermediateHeightmap, cpuGradientsBuffer);
 
-        int2 signedHeightmapDimension = (int2)heightmapDimensions;
-        for (int x = 0; x < heightmapDimensions.x; ++x)
+        int2 signedHeightmapDimension = (int2)intermediateHeightmap.heightmapDimensions;
+        for (int x = 0; x < intermediateHeightmap.heightmapDimensions.x; ++x)
         {
-            for (int y = 0; y < heightmapDimensions.y; ++y)
+            for (int y = 0; y < intermediateHeightmap.heightmapDimensions.y; ++y)
             {
                 int2 processedTexel = new int2(x, y);
-                int centerLin = (int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, (uint2)processedTexel);
+                int centerLin = (int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)processedTexel);
 
                 float waterLevelAtTexel = actualTexelParameters[processedTexel.x, processedTexel.y].waterLevel;
                 float sedimentLevelAtTexel = actualTexelParameters[processedTexel.x, processedTexel.y].sedimentLevel;
-                float terrainHeightAtTexel = nativeHeightmapArray[centerLin];
+                float terrainHeightAtTexel = intermediateHeightmap.nativeHeightmapArray[centerLin];
 
                 float sedimentAdjustment = 0.0f;
 
                 {
                     float2 heightGradientAtTexel = cpuGradientsBuffer[processedTexel.x, processedTexel.y];
 
-                    float velocityNorm = computeLargerVelocity(processedTexel, heightmapDimensions, texelPipes);
+                    float velocityNorm = computeLargerVelocity(processedTexel, intermediateHeightmap.heightmapDimensions, texelPipes);
 
                     float gradientNorm = math.length(heightGradientAtTexel);
                     float sinAlpha = (float)(gradientNorm / math.sqrt(1.0 + gradientNorm * gradientNorm));
@@ -417,7 +418,7 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
                 float invWater = waterLevelAtTexel > CpuComputeUtilities.EPS ? 1.0f / waterLevelAtTexel : 0.0f;
                 // this change will be taken into account during evaporation stage
                 texelPipes[processedTexel.x, processedTexel.y].inSedimentPipes[1, 1] = /*due depth*/ sedimentAdjustment - /*due water flow*/ (intermediateSedimentLevel * waterLostAtTexel * invWater);
-                nativeHeightmapArray[centerLin] = math.max(0.0f, terrainHeightAtTexel - sedimentAdjustment);
+                intermediateHeightmap.nativeHeightmapArray[centerLin] = math.max(0.0f, terrainHeightAtTexel - sedimentAdjustment);
             }
         }
     }
@@ -456,8 +457,7 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
     public override Task ExecuteStepCpu(CpuPipelineContext pipelineContext)
     {
         int textureSize = pipelineContext.GetHeightmapSize();
-        uint2 heightmapDimensions = new uint2((uint)textureSize, (uint)textureSize);
-        var nativeHeightmapArray = pipelineContext.intermediateHeightmap.GetRawTextureData<float>();
+        var intermediateHeightmap = pipelineContext.GetCpuIntemediateHeightmap();
 
         {
             if (actualTexelParameters is null || actualTexelParameters.GetLength(0) != textureSize || actualTexelParameters.GetLength(1) != textureSize)
@@ -496,10 +496,10 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
                     Array.Clear(texelPipes[x, y].inSedimentPipes, 0, 9);
                 }
             if (d % 5 == 0)
-                RainDropper(heightmapDimensions, nativeHeightmapArray, actualTexelParameters, pipelineContext.GetRandomFloats(), cpuGradientsBuffer);
-            WaterDistributor(heightmapDimensions, nativeHeightmapArray, actualTexelParameters, texelPipes);
-            SedimentDistributor(heightmapDimensions, nativeHeightmapArray, actualTexelParameters, texelPipes, cpuGradientsBuffer);
-            WaterEvaporator(heightmapDimensions, actualTexelParameters, texelPipes);
+                RainDropper(intermediateHeightmap, actualTexelParameters, pipelineContext.GetRandomFloats(), cpuGradientsBuffer);
+            WaterDistributor(intermediateHeightmap, actualTexelParameters, texelPipes);
+            SedimentDistributor(intermediateHeightmap, actualTexelParameters, texelPipes, cpuGradientsBuffer);
+            WaterEvaporator(intermediateHeightmap.heightmapDimensions, actualTexelParameters, texelPipes);
         }
 
         return Task.CompletedTask;

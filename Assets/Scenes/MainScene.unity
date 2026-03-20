@@ -174,7 +174,6 @@ MonoBehaviour:
   testTexture: {fileID: 0}
   pipelineSteps:
   - {fileID: 1592727441}
-  - {fileID: 2081510694}
 --- !u!23 &252387139
 MeshRenderer:
   m_ObjectHideFlags: 0

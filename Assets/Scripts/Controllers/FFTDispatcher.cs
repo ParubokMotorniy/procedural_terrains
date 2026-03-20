@@ -181,16 +181,16 @@ public class FFTDispatcher : UltimatePipelineStep
         }
     }
 
-    void InverseFFT(float2[,] coefficients, uint2 heightmapDimensions, NativeArray<float> nativeHeightmapArray)
+    void InverseFFT(float2[,] coefficients, CpuPipelineContext.CpuIntermediateHeightmap intermediateHeightmap)
     {
         int coeffSizeX = coefficients.GetLength(0);
         int coeffSizeY = coefficients.GetLength(1);
 
-        float2 invSize = 1.0f / (float2)heightmapDimensions;
+        float2 invSize = 1.0f / (float2)intermediateHeightmap.heightmapDimensions;
 
-        for (uint hX = 0; hX < heightmapDimensions.x; ++hX)
+        for (uint hX = 0; hX < intermediateHeightmap.heightmapDimensions.x; ++hX)
         {
-            for (uint hY = 0; hY < heightmapDimensions.y; ++hY)
+            for (uint hY = 0; hY < intermediateHeightmap.heightmapDimensions.y; ++hY)
             {
                 float2 exponentRatioPrecompute = new float2(hX, hY) * invSize;
 
@@ -206,7 +206,7 @@ public class FFTDispatcher : UltimatePipelineStep
                         float fy = y;
 
                         uint2 coefficientCoords = new uint2(x, y);
-                        float2 coefficient = GetEffectiveCoefficient(coefficientCoords, coefficients, heightmapDimensions);
+                        float2 coefficient = GetEffectiveCoefficient(coefficientCoords, coefficients, intermediateHeightmap.heightmapDimensions);
 
                         float ePower = CpuComputeUtilities.TWO_PI * (fx * exponentRatioPrecompute.x + fy * exponentRatioPrecompute.y);
 
@@ -219,7 +219,7 @@ public class FFTDispatcher : UltimatePipelineStep
                     }
                 }
 
-                nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(heightmapDimensions, new uint2(hX, hY))] = finalHeight + localError;
+                intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, new uint2(hX, hY))] = finalHeight + localError;
             }
         }
     }
@@ -227,7 +227,6 @@ public class FFTDispatcher : UltimatePipelineStep
     public override Task ExecuteStepCpu(CpuPipelineContext pipelineContext)
     {
         int textureSize = pipelineContext.GetHeightmapSize();
-        uint2 heightmapDimensions = new uint2((uint)textureSize, (uint)textureSize);
 
         int actualCoefficientsComputed = (int)math.pow(2, (int)math.floor(math.log2(fracCoefficientsConsidered * textureSize)));
         int coefficientsBufferSizeX = math.min(actualCoefficientsComputed, textureSize / 2);
@@ -240,7 +239,7 @@ public class FFTDispatcher : UltimatePipelineStep
 
         CoefficientGenerator(cpuCoefficientsBuffer, pipelineContext);
 
-        InverseFFT(cpuCoefficientsBuffer, heightmapDimensions, pipelineContext.intermediateHeightmap.GetRawTextureData<float>());
+        InverseFFT(cpuCoefficientsBuffer, pipelineContext.GetCpuIntemediateHeightmap());
 
         return Task.CompletedTask;
     }
