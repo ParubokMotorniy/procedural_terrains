@@ -12,7 +12,7 @@ namespace CpuGenerationPipeline
     [RequireComponent(typeof(Renderer))]
     [RequireComponent(typeof(MeshFilter))]
     [ExecuteAlways]
-    public class CpuTerrainGenerator : MonoBehaviour
+    public class CpuTerrainGenerator : TunableGenerator
     {
         [Range(5, 12)]
         public int terrainSize = 5;
@@ -53,6 +53,7 @@ namespace CpuGenerationPipeline
         //TODO: consider using intermediate float array to allow async execution of the pipeline
         //TODO: add benchmarking routines
         //TODO: when adding basic combination UI, I may want to devise some resource clearing technique.
+
 
         private struct ExecutablePipeline
         {
@@ -165,14 +166,6 @@ namespace CpuGenerationPipeline
             }
         }
 
-        void OnGUI()
-        {
-            if (GUI.Button(new Rect(25, 25, 200, 25), "Generate terrain"))
-            {
-                RegenerateTerrain();
-            }
-        }
-
         void OnDrawGizmos()
         {
             MeshFilter meshFilter = GetComponent<MeshFilter>();
@@ -204,6 +197,71 @@ namespace CpuGenerationPipeline
 
             Gizmos.matrix = oldMatrix;
         }
+
+        public override void RenderParametersTuningGUI()
+        {
+            GUILayout.Label("Terrain");
+
+            GUILayout.Label($"Terrain Size: {terrainSize}");
+            terrainSize = Mathf.RoundToInt(
+                GUILayout.HorizontalSlider(terrainSize, 5f, 12f)
+            );
+
+            GUILayout.Label($"Terrain Scale: {terrainScale:F3}");
+            terrainScale = GUILayout.HorizontalSlider(terrainScale, 0.001f, 32.0f);
+
+            GUILayout.Space(5);
+            GUILayout.Label("Sampling");
+
+            GUILayout.Label($"Num Samples: {numSamples}");
+            numSamples = Mathf.RoundToInt(
+                GUILayout.HorizontalSlider(numSamples, 5f, 100f)
+            );
+
+            GUILayout.Space(5);
+            GUILayout.Label("Seed");
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Generator Seed", GUILayout.Width(120));
+
+            string seedStr = generatorSeed.ToString();
+            string newSeedStr = GUILayout.TextField(seedStr, GUILayout.Width(80));
+
+            if (int.TryParse(newSeedStr, out int parsedSeed))
+                generatorSeed = parsedSeed;
+
+            GUILayout.EndHorizontal();
+        }
+
+        public override string GUIStepTitle() => "CPU pipeline parameters";
+
+        public override void drawExtraCustomUI()
+        {
+            GUILayout.Label("Procedures");
+            if (GUILayout.Button("Generate terrain"))
+            {
+                if (pipeline.Count == 0)
+                    return;
+                pipelineSteps = CommonDefines.buildPipelineFromEnum(pipeline);
+                RegenerateTerrain();
+            }
+            //   if (GUILayout.Button("Collect statistics"))
+            //   {
+            //       if (gpuGuiPipeline.Count == 0)
+            //           return;
+            //       pipelineSteps = CommonDefines.buildPipelineFromEnum(gpuGuiPipeline);
+            //       CollectStatistics();
+            //   }
+            //   if (GUILayout.Button("Collect sync statistics"))
+            //   {
+            //       if (gpuGuiPipeline.Count == 0)
+            //           return;
+            //       pipelineSteps = CommonDefines.buildPipelineFromEnum(gpuGuiPipeline);
+            //       CollectSynchronizedStatistics();
+            //   }
+        }
+
+        public override string getPipelineName() => "CPU pipeline constructor";
 
 
         // [ContextMenu("Collect statistics")]

@@ -15,7 +15,7 @@ namespace GpuGenerationPipeline
     [RequireComponent(typeof(Renderer))]
     [RequireComponent(typeof(MeshFilter))]
     [ExecuteAlways]
-    public class TerrainGenerator : MonoBehaviour
+    public class TerrainGenerator : TunableGenerator
     {
         [Range(5, 12)]
         public int terrainSize = 5;
@@ -64,6 +64,7 @@ namespace GpuGenerationPipeline
 
         //this flag synchronizes submissions of command buffers, in order to avoid starting overwriting the heightmap while it's being read back.
         bool previousReadPending = false;
+
 
         private PipelineContext buildPipeline(bool enablePipelineProfiling, int pipelineSeed)
         {
@@ -315,22 +316,6 @@ namespace GpuGenerationPipeline
             GetComponent<Renderer>().sharedMaterial.SetFloat("_HeightScale", terrainScale);
         }
 
-        void OnGUI()
-        {
-            if (GUI.Button(new Rect(25, 25, 200, 25), "Generate terrain"))
-            {
-                RegenerateTerrain();
-            }
-            if (GUI.Button(new Rect(25, 75, 200, 25), "Collect statistics"))
-            {
-                CollectStatistics();
-            }
-            if (GUI.Button(new Rect(25, 125, 200, 25), "Collect sync statistics"))
-            {
-                CollectSynchronizedStatistics();
-            }
-        }
-
         void OnDrawGizmos()
         {
             MeshFilter meshFilter = GetComponent<MeshFilter>();
@@ -362,5 +347,78 @@ namespace GpuGenerationPipeline
 
             Gizmos.matrix = oldMatrix;
         }
+
+        public override void RenderParametersTuningGUI()
+        {
+
+            GUILayout.Label("Terrain");
+
+            GUILayout.Label($"Terrain Size: {terrainSize}");
+            terrainSize = Mathf.RoundToInt(
+                GUILayout.HorizontalSlider(terrainSize, 5f, 12f)
+            );
+
+            GUILayout.Label($"Group Size Power: {preferredGroupSizePower}");
+            preferredGroupSizePower = Mathf.RoundToInt(
+                GUILayout.HorizontalSlider(preferredGroupSizePower, 3f, 6f)
+            );
+
+            GUILayout.Label($"Terrain Scale: {terrainScale:F3}");
+            terrainScale = GUILayout.HorizontalSlider(terrainScale, 0.001f, 32.0f);
+
+            GUILayout.Space(5);
+            GUILayout.Label("Sampling");
+
+            GUILayout.Label($"Num Samples: {numSamples}");
+            numSamples = Mathf.RoundToInt(
+                GUILayout.HorizontalSlider(numSamples, 5f, 100f)
+            );
+
+            GUILayout.Space(5);
+            GUILayout.Label("Seed");
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Generator Seed", GUILayout.Width(120));
+
+            string seedStr = generatorSeed.ToString();
+            string newSeedStr = GUILayout.TextField(seedStr, GUILayout.Width(80));
+
+            if (int.TryParse(newSeedStr, out int parsedSeed))
+                generatorSeed = parsedSeed;
+
+            GUILayout.EndHorizontal();
+
+        }
+
+        public override string GUIStepTitle() => "GPU pipeline parameters";
+
+        public override void drawExtraCustomUI()
+        {
+            GUILayout.Label("Procedures");
+            if (GUILayout.Button("Generate terrain"))
+            {
+                if (pipeline.Count == 0)
+                    return;
+                pipelineSteps = CommonDefines.buildPipelineFromEnum(pipeline);
+                RegenerateTerrain();
+            }
+            if (GUILayout.Button("Collect statistics"))
+            {
+                if (pipeline.Count == 0)
+                    return;
+                pipelineSteps = CommonDefines.buildPipelineFromEnum(pipeline);
+                CollectStatistics();
+            }
+            if (GUILayout.Button("Collect sync statistics"))
+            {
+                if (pipeline.Count == 0)
+                    return;
+                pipelineSteps = CommonDefines.buildPipelineFromEnum(pipeline);
+                CollectSynchronizedStatistics();
+            }
+
+        }
+
+        public override string getPipelineName() => "GPU pipeline constructor";
     }
 }
