@@ -269,6 +269,7 @@ namespace CpuGenerationPipeline
             }
 
             Stopwatch cpuProfilingStopwatch = new Stopwatch();
+            System.Random randomSeedGenerator = new(generatorSeed);
 
             (long cpuMs, long cpuTicks)[] runtimeResults = new (long cpuMs, long cpuTicks)[numSamples];
             Directory.CreateDirectory(Path.Combine(Application.persistentDataPath, "./samples_cpu"));
@@ -276,7 +277,7 @@ namespace CpuGenerationPipeline
             //runs a number of samples, syncing each time to avoid obtaining corrupted heightmaps
             for (int s = 0; s < numSamples; ++s)
             {
-                var currentPipeline = buildPipeline(generatorSeed);
+                var currentPipeline = buildPipeline(randomSeedGenerator.Next());
                 cpuProfilingStopwatch.Restart();
                 await currentPipeline.RunPipeline();
                 runtimeResults[s] = (cpuProfilingStopwatch.ElapsedMilliseconds, cpuProfilingStopwatch.ElapsedTicks);

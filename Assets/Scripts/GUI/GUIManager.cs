@@ -11,8 +11,8 @@ public class GUIManager : MonoBehaviour
     [SerializeField]
     List<TunableGenerator> generatorsToRender;
 
-    private static Rect stepsRect = new Rect(10, 10, 300, 500);
-    private static Rect pipelineRect = new Rect(850, 50, 300, 600);
+    private static Rect stepsRect = new Rect(10, 10, 300, 600);
+    private static Rect pipelineRect = new Rect(900, 10, 300, 600);
 
     void Start()
     {
