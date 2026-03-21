@@ -60,9 +60,6 @@ RWTexture2D<float> Result;
                 featureNoise = lerp(featureNoise, ridgedNoise, abs(min(0.0, sharpness)));
                 // featureNoise *= exp(-dot(featureDerivative, featureDerivative)) * sharpness;
 
-                // TODO: rework to use amplitude damping technique. Generally, define the usage of amplitude(s).
-                // TODO: add feature amplification
-
                 slopeErosionDerivativeSum += featureDerivative * slopeErosion;
                 perturbDerivativeSum += featureDerivative * perturbationStrength * octaveAmplitude;
                 float derivativeNorm = dot(slopeErosionDerivativeSum, slopeErosionDerivativeSum);

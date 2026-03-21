@@ -47,7 +47,7 @@ namespace CpuGenerationPipeline
         private readonly CpuHeightmapNormalizer normalizer = new CpuHeightmapNormalizer();
         private readonly CpuFormatFinalizer finalizer = new CpuFormatFinalizer();
 
-        //TODO: consider using intermediate float array to allow async execution of the pipeline
+        //TODO: consider using intermediate float array to allow async execution of the pipeline for non-profiling purposes
 
         private struct ExecutablePipeline
         {

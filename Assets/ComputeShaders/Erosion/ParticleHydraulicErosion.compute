@@ -187,9 +187,10 @@ float2 computeUniformRandomCoordinates(uint2 targetCoordinates, int nonce)
         // here the pink noise accounts for the 'area' a particle covers.
         // While uniform coordinates guarantee uniform coverage of the entire area of the terrain,
         // pink-distributed size allows to achieve the typical 'rain' texture (implicitly)
-        float dropSize = pinkNoise2D((uniformCoefficients + randomInts) * rainNoiseFrequency);
+        float2 particlePosition = uniformCoefficients * (float2)heightmapDimensions;
+        float dropSize = pinkNoise2D(randomInts + particlePosition * rainNoiseFrequency);
 
-        particlesBuffer[processedParticleIdx].pos = uniformCoefficients * (float2)heightmapDimensions;
+        particlesBuffer[processedParticleIdx].pos = particlePosition;
         particlesBuffer[processedParticleIdx].dir = float2(0.0, 0.0);
         particlesBuffer[processedParticleIdx].vel = dropSize;
         particlesBuffer[processedParticleIdx].w = dropSize;

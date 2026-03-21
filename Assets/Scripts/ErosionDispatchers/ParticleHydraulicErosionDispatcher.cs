@@ -50,7 +50,7 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
     [Range(1, 10)]
     public int numSimulationWaves = 1;
 
-    [Range(0.001f, 10.0f)]
+    [Range(1.0f, 10.0f)]
     public float rainNoiseFrequency = 1.0f;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -335,19 +335,20 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
 
     void ParticlesInitializer(uint2 heightmapDimensions, ErosionParticle[] particlesBuffer, CpuPipelineContext pipelineContext)
     {
+        uint2 randomNoiseOffset = (uint2)pipelineContext.GetRandomInts();
         for (uint idx = 0; idx < particlesBuffer.Length; ++idx)
         {
             uint processedParticleIdx = idx;
 
             float2 uniformCoefficients = pipelineContext.GetRandomFloats();
-            // float dropSize = math.abs(sampleGaussBoxMuller(uniformCoefficients));
 
             // here the pink noise accounts for the 'area' a particle covers.
             // While uniform coordinates guarantee uniform coverage of the entire area of the terrain,
             // pink-distributed size allows to achieve the typical 'rain' texture (implicitly)
-            float dropSize = CpuComputeUtilities.pinkNoise2D((uint2)((uniformCoefficients + pipelineContext.GetRandomInts()) * rainNoiseFrequency));
+            float2 particlePosition = uniformCoefficients * (float2)heightmapDimensions;
+            float dropSize = CpuComputeUtilities.pinkNoise2D((uint2)(randomNoiseOffset + particlePosition * rainNoiseFrequency));
 
-            particlesBuffer[processedParticleIdx].pos = uniformCoefficients * (float2)heightmapDimensions;
+            particlesBuffer[processedParticleIdx].pos = particlePosition;
             particlesBuffer[processedParticleIdx].dir = float2.zero;
             particlesBuffer[processedParticleIdx].vel = dropSize;
             particlesBuffer[processedParticleIdx].w = dropSize;
@@ -593,7 +594,7 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
         GUILayout.Label("Noise");
 
         GUILayout.Label($"Rain Noise Frequency: {rainNoiseFrequency:F3}");
-        rainNoiseFrequency = GUILayout.HorizontalSlider(rainNoiseFrequency, 0.001f, 10.0f);
+        rainNoiseFrequency = GUILayout.HorizontalSlider(rainNoiseFrequency, 1.0f, 10.0f);
 
         GUILayout.EndScrollView();
     }

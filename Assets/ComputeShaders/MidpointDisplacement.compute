@@ -23,7 +23,6 @@ uniform float worleyFrequency;
 uniform float perlinFrequency;
 
 // TODO: can I employ gradients of noise here?
-// TODO: further try to understand whta causes the spikes and lattice artifacts at times
 
 float sampleGaussianNoise(float2 noiseTextureIdx)
 {

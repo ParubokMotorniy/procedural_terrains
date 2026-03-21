@@ -34,7 +34,7 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
     [Range(0.0001f, 1.0f)]
     public float depositionConstant;
 
-    [Range(0.001f, 1.0f)]
+    [Range(1.0f, 10.0f)]
     public float rainNoiseFrequency = 0.25f;
 
     //GPU
@@ -547,7 +547,7 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
         rainSolubilityConstant = GUILayout.HorizontalSlider(rainSolubilityConstant, 0.0001f, 1.0f);
 
         GUILayout.Label($"Rain Noise Frequency: {rainNoiseFrequency:F3}");
-        rainNoiseFrequency = GUILayout.HorizontalSlider(rainNoiseFrequency, 0.001f, 1.0f);
+        rainNoiseFrequency = GUILayout.HorizontalSlider(rainNoiseFrequency, 1.0f, 1.0f);
 
         GUILayout.Space(5);
         GUILayout.Label("Water");
@@ -566,7 +566,7 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
         actualTexelParameters = null;
         texelPipes = null;
         cpuGradientsBuffer = null;
-        
+
         texelParametersBuffer?.Release();
         texelParametersBuffer?.Release();
         waterPipesBuffer?.Release();
