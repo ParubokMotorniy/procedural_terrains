@@ -266,4 +266,10 @@ public class FFTDispatcher : UltimatePipelineStep
     }
 
     public override string GUIStepTitle() => "FFT generator";
+
+    public override void FreeResources()
+    {
+        coefficientsBuffer?.Release();
+        cpuCoefficientsBuffer = null;
+    }
 }

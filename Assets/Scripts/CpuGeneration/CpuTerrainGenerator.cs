@@ -48,9 +48,6 @@ namespace CpuGenerationPipeline
         private readonly CpuFormatFinalizer finalizer = new CpuFormatFinalizer();
 
         //TODO: consider using intermediate float array to allow async execution of the pipeline
-        //TODO: add benchmarking routines
-        //TODO: when adding basic combination UI, I may want to devise some resource clearing technique.
-
 
         private struct ExecutablePipeline
         {
@@ -309,6 +306,7 @@ namespace CpuGenerationPipeline
                 { light.enabled = true; }
             }
 
+            UltimatePipelineStep.FreeAllResourcesInScene();
             Debug.Log("Collection done");
         }
     }

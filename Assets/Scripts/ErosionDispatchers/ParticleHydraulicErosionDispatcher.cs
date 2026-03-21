@@ -599,4 +599,13 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
     }
 
     public override string GUIStepTitle() => "PHE eroder";
+
+    public override void FreeResources()
+    {
+        pipesBuffer = null;
+        particlesBuffer = null;
+
+        gpuPipesBuffer?.Release();
+        gpuParticlesBuffer?.Release();
+    }
 }

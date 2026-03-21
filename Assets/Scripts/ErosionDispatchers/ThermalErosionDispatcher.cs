@@ -237,4 +237,8 @@ public class ThermalErosionDispatcher : UltimatePipelineStep
     }
 
     public override string GUIStepTitle() => "TE eroder";
+
+    public override void FreeResources()
+    {
+    }
 }

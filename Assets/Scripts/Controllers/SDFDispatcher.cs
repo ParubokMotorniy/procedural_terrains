@@ -474,4 +474,14 @@ public class SDFDispatcher : UltimatePipelineStep
     }
 
     public override string GUIStepTitle() => "SDF generator";
+
+    public override void FreeResources()
+    {
+        floodingBuffer1?.Release();
+        floodingBuffer2?.Release();
+        inputContinentHeightmap?.Release();
+
+        cpuFloodingBuffer1 = null;
+        cpuFloodingBuffer2 = null;
+    }
 }

@@ -559,4 +559,17 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
     }
 
     public override string GUIStepTitle() => "CHE eroder";
+
+    public override void FreeResources()
+    {
+
+        actualTexelParameters = null;
+        texelPipes = null;
+        cpuGradientsBuffer = null;
+        
+        texelParametersBuffer?.Release();
+        texelParametersBuffer?.Release();
+        waterPipesBuffer?.Release();
+        gradientsBuffer?.Release();
+    }
 }

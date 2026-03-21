@@ -226,6 +226,7 @@ namespace GpuGenerationPipeline
                 { light.enabled = true; }
             }
 
+            UltimatePipelineStep.FreeAllResourcesInScene();
             Debug.Log("Collection done");
         }
 
@@ -305,6 +306,7 @@ namespace GpuGenerationPipeline
 
                     postCollectionAction();
 
+                    UltimatePipelineStep.FreeAllResourcesInScene();
                     Debug.Log("Collection done!");
                 }
 

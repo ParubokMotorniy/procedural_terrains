@@ -175,4 +175,8 @@ public class UNDispatcher : UltimatePipelineStep
     }
 
     public override string GUIStepTitle() => "UN generator";
+
+    public override void FreeResources()
+    {
+    }
 }

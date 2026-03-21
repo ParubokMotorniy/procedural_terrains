@@ -344,4 +344,8 @@ public class RMDDispatcher : UltimatePipelineStep
     }
 
     public override string GUIStepTitle() => "RMD generator";
+
+    public override void FreeResources()
+    {
+    }
 }
