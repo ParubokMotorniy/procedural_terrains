@@ -6,6 +6,8 @@ using Unity.Mathematics;
 using UnityEngine.Rendering;
 using System.IO;
 using System.Text;
+using System.Diagnostics;
+using Debug = UnityEngine.Debug;
 
 namespace CpuGenerationPipeline
 {
@@ -44,11 +46,6 @@ namespace CpuGenerationPipeline
         //built-ins
         private readonly CpuHeightmapNormalizer normalizer = new CpuHeightmapNormalizer();
         private readonly CpuFormatFinalizer finalizer = new CpuFormatFinalizer();
-
-        // int synchronizedIterationsLeft = 0;
-        // (long cpuSideMs, long cpuSideTicks)[] synchronizedResults;
-        // Action postCollectionAction;
-        // bool previousReadPending = false;
 
         //TODO: consider using intermediate float array to allow async execution of the pipeline
         //TODO: add benchmarking routines
@@ -245,163 +242,74 @@ namespace CpuGenerationPipeline
                 pipelineSteps = CommonDefines.buildPipelineFromEnum(pipeline);
                 RegenerateTerrain();
             }
-            //   if (GUILayout.Button("Collect statistics"))
-            //   {
-            //       if (gpuGuiPipeline.Count == 0)
-            //           return;
-            //       pipelineSteps = CommonDefines.buildPipelineFromEnum(gpuGuiPipeline);
-            //       CollectStatistics();
-            //   }
-            //   if (GUILayout.Button("Collect sync statistics"))
-            //   {
-            //       if (gpuGuiPipeline.Count == 0)
-            //           return;
-            //       pipelineSteps = CommonDefines.buildPipelineFromEnum(gpuGuiPipeline);
-            //       CollectSynchronizedStatistics();
-            //   }
+            if (GUILayout.Button("Collect statistics"))
+            {
+                if (pipeline.Count == 0)
+                    return;
+                pipelineSteps = CommonDefines.buildPipelineFromEnum(pipeline);
+                CollectStatistics();
+            }
         }
 
         public override string getPipelineName() => "CPU pipeline constructor";
 
+        [ContextMenu("Collect statistics")]
+        async void CollectStatistics()
+        {
+            //minimize draw calls
+            int oldVSync = QualitySettings.vSyncCount;
+            int oldFrameRate = Application.targetFrameRate;
+            var currentCameras = Camera.allCameras;
+            {
+                QualitySettings.vSyncCount = 0;
+                Application.targetFrameRate = -1;
+                foreach (var cam in currentCameras)
+                {
+                    cam.enabled = false;
+                }
+                foreach (var light in FindObjectsByType<Light>(FindObjectsSortMode.None))
+                { light.enabled = false; }
+            }
 
-        // [ContextMenu("Collect statistics")]
-        // async void CollectStatistics()
-        // {
-        //     //minimize draw calls
-        //     int oldVSync = QualitySettings.vSyncCount;
-        //     int oldFrameRate = Application.targetFrameRate;
-        //     var currentCameras = Camera.allCameras;
-        //     {
-        //         QualitySettings.vSyncCount = 0;
-        //         Application.targetFrameRate = -1;
-        //         foreach (var cam in currentCameras)
-        //         {
-        //             cam.enabled = false;
-        //         }
-        //         foreach (var light in FindObjectsByType<Light>(FindObjectsSortMode.None))
-        //         { light.enabled = false; }
-        //     }
+            Stopwatch cpuProfilingStopwatch = new Stopwatch();
 
-        //     (long cpuSide, long gpuSide)[] result = new (long cpuSide, long gpuSide)[numSamples];
-        //     Directory.CreateDirectory(Path.Combine(Application.persistentDataPath, "./samples"));
+            (long cpuMs, long cpuTicks)[] runtimeResults = new (long cpuMs, long cpuTicks)[numSamples];
+            Directory.CreateDirectory(Path.Combine(Application.persistentDataPath, "./samples_cpu"));
 
-        //     //runs a number of samples, syncing each time to avoid obtaining corrupted heightmaps
-        //     for (int s = 0; s < numSamples; ++s)
-        //     {
-        //         var newContext = buildPipeline(true, numSamples + generatorSeed + s);
-        //         //executes the complete pipeline
-        //         foreach (CpuPipelineStep step in augmentedPipeline)
-        //         {
-        //             step.ExecuteStepCpu(currentContext);
-        //         }
-        //         result[s] = (newContext.gpuMilliseconds, newContext.gpuFrameTime);
-        //         RenderTextureDumper.SaveRFloatToExr(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples/cpu_terrain_" + s + ".exr"));
-        //     }
-        //     {
-        //         string path = Path.Combine(Application.persistentDataPath, "performance_evaluation.txt");
-        //         var sb = new StringBuilder();
-        //         sb.AppendLine("CpuTime (ms)\tGpuTime (ns)");
-        //         foreach (var (cpuSide, gpuSide) in result)
-        //         {
-        //             sb.Append(cpuSide);
-        //             sb.Append('\t');
-        //             sb.AppendLine(gpuSide.ToString());
-        //         }
-        //         File.WriteAllText(path, sb.ToString());
-        //     }
+            //runs a number of samples, syncing each time to avoid obtaining corrupted heightmaps
+            for (int s = 0; s < numSamples; ++s)
+            {
+                var currentPipeline = buildPipeline(generatorSeed);
+                cpuProfilingStopwatch.Restart();
+                await currentPipeline.RunPipeline();
+                runtimeResults[s] = (cpuProfilingStopwatch.ElapsedMilliseconds, cpuProfilingStopwatch.ElapsedTicks);
+                RenderTextureDumper.SaveRFloatToExr(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples_cpu/cpu_terrain_" + s + ".exr"));
+            }
+            {
+                string path = Path.Combine(Application.persistentDataPath, "cpu_performance_evaluation.txt");
+                var sb = new StringBuilder();
+                sb.AppendLine("CpuTime (ms)\tCpuTime (ticks)");
+                foreach (var (cpuMs, cpuTicks) in runtimeResults)
+                {
+                    sb.Append(cpuMs);
+                    sb.Append('\t');
+                    sb.AppendLine(cpuTicks.ToString());
+                }
+                File.WriteAllText(path, sb.ToString());
+            }
 
-        //     {
-        //         QualitySettings.vSyncCount = oldVSync;
-        //         Application.targetFrameRate = oldFrameRate;
-        //         foreach (var cam in currentCameras)
-        //         {
-        //             cam.enabled = true;
-        //         }
-        //         foreach (var light in FindObjectsByType<Light>(FindObjectsSortMode.None))
-        //         { light.enabled = true; }
-        //     }
+            {
+                QualitySettings.vSyncCount = oldVSync;
+                Application.targetFrameRate = oldFrameRate;
+                foreach (var cam in currentCameras)
+                {
+                    cam.enabled = true;
+                }
+                foreach (var light in FindObjectsByType<Light>(FindObjectsSortMode.None))
+                { light.enabled = true; }
+            }
 
-        //     Debug.Log("Collection done");
-        // }
-
-
-        // [ContextMenu("Collect synchronized statistics")]
-        // async void CollectSynchronizedStatistics()
-        // {
-        //     if (synchronizedIterationsLeft > 0)
-        //         return;
-
-        //     //minimize draw calls
-        //     int oldVSync = QualitySettings.vSyncCount;
-        //     int oldFrameRate = Application.targetFrameRate;
-        //     var currentCameras = Camera.allCameras;
-        //     {
-        //         QualitySettings.vSyncCount = 0;
-        //         Application.targetFrameRate = -1;
-        //         foreach (var cam in currentCameras)
-        //         {
-        //             cam.enabled = false;
-        //         }
-        //         foreach (var light in FindObjectsByType<Light>(FindObjectsSortMode.None))
-        //         { light.enabled = false; }
-        //     }
-
-        //     synchronizedResults = new (long cpuSideMs, long cpuSideTicks, long gpuSideNs)[numSamples];
-        //     Directory.CreateDirectory(Path.Combine(Application.persistentDataPath, "./samples"));
-
-        //     postCollectionAction = () =>
-        //     {
-        //         QualitySettings.vSyncCount = oldVSync;
-        //         Application.targetFrameRate = oldFrameRate;
-        //         foreach (var cam in currentCameras)
-        //         {
-        //             cam.enabled = true;
-        //         }
-        //         foreach (var light in FindObjectsByType<Light>(FindObjectsSortMode.None))
-        //         { light.enabled = true; }
-        //     };
-
-        //     synchronizedIterationsLeft = numSamples;
-        //     previousReadPending = false;
-        // }
-
-        // [ExecuteAlways]
-        // async void Update()
-        // {
-        //     if (synchronizedIterationsLeft > 0 && !previousReadPending)
-        //     {
-        //         synchronizedIterationsLeft -= 1;
-
-        //         int myIteration = synchronizedIterationsLeft;
-
-        //         var newContext = (CpuProfilingPipelineContext)buildPipeline(true, numSamples + generatorSeed + myIteration);
-        //         previousReadPending = true;
-        //         await newContext.ExecuteBuffer();
-
-        //         synchronizedResults[myIteration] = (newContext.gpuMilliseconds, newContext.gpuTicks);
-
-        //         RenderTextureDumper.SaveRFloatToExr(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples/cpu_terrain_" + myIteration + ".exr"), false);
-        //         previousReadPending = false;
-
-        //         if (myIteration == 0)
-        //         {
-        //             string path = Path.Combine(Application.persistentDataPath, "performance_evaluation_cpu.txt");
-        //             var sb = new StringBuilder();
-        //             sb.AppendLine("CpuTime (ms)\tCpuTime (ticks)");
-        //             foreach (var (cpuSide, cpuTicks) in synchronizedResults)
-        //             {
-        //                 sb.Append(cpuSide);
-        //                 sb.Append('\t');
-        //                 sb.AppendLine(cpuTicks.ToString());
-        //             }
-        //             File.WriteAllText(path, sb.ToString());
-
-        //             postCollectionAction();
-
-        //             Debug.Log("Collection done!");
-        //         }
-
-        //     }
-        // }
+            Debug.Log("Collection done");
+        }
     }
 }

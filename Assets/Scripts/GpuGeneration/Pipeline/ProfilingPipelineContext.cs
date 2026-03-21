@@ -21,8 +21,8 @@ namespace GpuGenerationPipeline
         public long cpuMilliseconds { get; private set; }
         public long cpuTicks { get; private set; }
 
-        public long gpuMilliseconds { get; private set; }
-        public long gpuTicks { get; private set; }
+        public long gpuFenceMilliseconds { get; private set; }
+        public long gpuFenceTicks { get; private set; }
 
         public long gpuFrameTime { get; private set; }
 
@@ -59,11 +59,11 @@ namespace GpuGenerationPipeline
             cpuMilliseconds = cpuProfilingStopwatch.ElapsedMilliseconds;
             cpuTicks = cpuProfilingStopwatch.ElapsedTicks;
 
-            gpuMilliseconds = (long)(millisecondsAtEnd.TotalMilliseconds - millisecondsAtStart.TotalMilliseconds);
-            gpuTicks = millisecondsAtEnd.Ticks - millisecondsAtStart.Ticks;
+            gpuFenceMilliseconds = (long)(millisecondsAtEnd.TotalMilliseconds - millisecondsAtStart.TotalMilliseconds);
+            gpuFenceTicks = millisecondsAtEnd.Ticks - millisecondsAtStart.Ticks;
 
             Debug.Log("CPU housekeeping time (ms): " + cpuMilliseconds + ". Ticks: " + cpuTicks);
-            Debug.Log("GPU processing time (ms): " + gpuMilliseconds + ". Ticks: " + gpuTicks);
+            Debug.Log("GPU processing time (ms): " + gpuFenceMilliseconds + ". Ticks: " + gpuFenceTicks);
             Debug.Log("Total frame time (ns) : " + gpuFrameTime);
         }
     }

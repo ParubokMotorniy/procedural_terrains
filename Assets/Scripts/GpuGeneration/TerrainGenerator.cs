@@ -189,26 +189,26 @@ namespace GpuGenerationPipeline
                 { light.enabled = false; }
             }
 
-            (long cpuSide, long gpuSide)[] result = new (long cpuSide, long gpuSide)[numSamples];
-            Directory.CreateDirectory(Path.Combine(Application.persistentDataPath, "./samples"));
+            (long gpuFenceTime, long gpuSide)[] result = new (long gpuFenceTime, long gpuSide)[numSamples];
+            Directory.CreateDirectory(Path.Combine(Application.persistentDataPath, "./samples_gpu"));
 
             //runs a number of samples, syncing each time to avoid obtaining corrupted heightmaps
             for (int s = 0; s < numSamples; ++s)
             {
                 var newContext = (ProfilingPipelineContext)buildPipeline(true, numSamples + generatorSeed + s);
                 await newContext.ExecuteBuffer();
-                result[s] = (newContext.gpuMilliseconds, newContext.gpuFrameTime);
-                RenderTextureDumper.SaveRFloatToExr(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples/terrain_" + s + ".exr"));
+                result[s] = (newContext.gpuFenceMilliseconds, newContext.gpuFrameTime);
+                RenderTextureDumper.SaveRFloatToExr(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples_gpu/gpu_terrain_" + s + ".exr"));
             }
 
             //TODO: I might want to make first barrier optional and instead measure time from the moment of dispatch
             {
                 string path = Path.Combine(Application.persistentDataPath, "performance_evaluation.txt");
                 var sb = new StringBuilder();
-                sb.AppendLine("CpuTime (ms)\tGpuTime (ns)");
-                foreach (var (cpuSide, gpuSide) in result)
+                sb.AppendLine("GpuFenceTime (ms)\tGpuFrameTime (ns)");
+                foreach (var (gpuFenceTime, gpuSide) in result)
                 {
-                    sb.Append(cpuSide);
+                    sb.Append(gpuFenceTime);
                     sb.Append('\t');
                     sb.AppendLine(gpuSide.ToString());
                 }
@@ -283,7 +283,7 @@ namespace GpuGenerationPipeline
                 previousReadPending = true;
                 await newContext.ExecuteBuffer();
 
-                synchronizedResults[myIteration] = (newContext.gpuMilliseconds, newContext.gpuTicks, newContext.gpuFrameTime);
+                synchronizedResults[myIteration] = (newContext.gpuFenceMilliseconds, newContext.gpuFenceTicks, newContext.gpuFrameTime);
 
                 RenderTextureDumper.SaveRFloatToExr(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples/terrain_" + myIteration + ".exr"), false);
                 previousReadPending = false;
@@ -293,9 +293,9 @@ namespace GpuGenerationPipeline
                     string path = Path.Combine(Application.persistentDataPath, "performance_evaluation.txt");
                     var sb = new StringBuilder();
                     sb.AppendLine("CpuTime (ms)\tCpuTime (ticks)\tGpuTime (ns)");
-                    foreach (var (cpuSide, cpuTicks, gpuSide) in synchronizedResults)
+                    foreach (var (gpuFenceTime, cpuTicks, gpuSide) in synchronizedResults)
                     {
-                        sb.Append(cpuSide);
+                        sb.Append(gpuFenceTime);
                         sb.Append('\t');
                         sb.Append(cpuTicks);
                         sb.Append('\t');
