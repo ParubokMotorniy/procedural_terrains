@@ -19,15 +19,17 @@ import matplotlib.pyplot as plt
 JPEG_MAX_DIM = 65500
 
 
-#TODO: introduce minmial values for erosion and gradient metrics to turn them into actual bounded metrics
-
 # global-local metric that contributes to the final metric basing on how "eroded" the terrain is
 def evaluate_erosion_score(heightmap: np.ndarray):
+    assert heightmap.min() >= 0.0 and heightmap.max() <= 1.0
+
+    min_mean_delta = 1.0e-6  # the actual delta depends on ULPs of the float representation in python, but I stick to a fixed value
+    max_std = 1.0  # for normalized heightmaps, the deviation of a single texel from the mean can equal at most 1.0
+    max_score = max_std / min_mean_delta
+
     height, width = heightmap.shape
 
-    n = 0
-    mean = 0.0
-    m2 = 0.0
+    deltas = []
 
     for y in range(height):
         for x in range(width):
@@ -51,22 +53,28 @@ def evaluate_erosion_score(heightmap: np.ndarray):
 
                     if delta > max_delta:
                         max_delta = delta
-            n += 1
-            d = max_delta - mean
-            mean += d / n
-            d2 = max_delta - mean
-            m2 += d * d2
+            deltas.append(max_delta)
 
-    variance = (m2 / n) if n > 1 else 0.0
+    mean = np.mean(deltas)
+    variance = np.var(deltas)
     std_dev = math.sqrt(variance)
 
-    erosion_score = std_dev / mean if mean != 0 else 0.0
+    erosion_score = (
+        max(min_mean_delta, std_dev / mean if mean != 0 else 0.0) / max_score
+    )
+
+    assert erosion_score <= 1.0 and erosion_score >= 0.0
 
     return erosion_score
 
 
 # TODO: think how the magnitude can be included
 def evaluate_gradient_score(heightmap: np.ndarray, subdomainSize: int):
+    assert heightmap.min() >= 0.0 and heightmap.max() <= 1.0
+    min_mean_gradient_span = 1.0e-6
+    max_gradient_std = math.sqrt(8)
+    max_gradient_score = max_gradient_std / min_mean_gradient_span
+
     gy, gx = np.gradient(heightmap)
     height, width = heightmap.shape
 
@@ -77,6 +85,7 @@ def evaluate_gradient_score(heightmap: np.ndarray, subdomainSize: int):
     average_gradients = np.empty((num_domains, 2))
     spans = np.empty(num_domains)
 
+    # computes the average angular span of gradients per subdomain
     for y in range(domains_y):
         for x in range(domains_x):
 
@@ -94,7 +103,7 @@ def evaluate_gradient_score(heightmap: np.ndarray, subdomainSize: int):
             g = np.vstack((gx_local / norm, gy_local / norm))
             dot_matrix = g @ g.T
             min_dot = np.clip(np.min(dot_matrix), -1.0, 1.0)
-            max_dot_angle = np.abs((min_dot - 1.0) / 2.0) 
+            max_dot_angle = np.abs((min_dot - 1.0) / 2.0)
 
             linear_idx = y * domains_x + x
 
@@ -128,17 +137,20 @@ def evaluate_gradient_score(heightmap: np.ndarray, subdomainSize: int):
     #             if angle > max_global_angle:
     #                 max_global_angle = angle
 
-    average_angle = np.mean(spans)
+    average_angular_span = np.mean(spans)
     angle_std = np.linalg.norm(np.std(average_gradients, axis=0))
-    print(average_angle ,np.std(average_gradients, axis=0), angle_std)
 
-    gradient_score = angle_std / max(1e-12, average_angle)
+    gradient_score = (
+        angle_std / max(min_mean_gradient_span, average_angular_span)
+    ) / max_gradient_score
+
+    assert gradient_score >= 0.0 and gradient_score <= 1.0
 
     return gradient_score
 
 
 def evaluate_fractal_score(heightmap: np.ndarray, threshold: float = 0.25):
-    # fractal dimension
+    # fractal dimension. max=1.0 is intentional here, for the score can only be avaluated for binary maps
     quantized_heightmap = quantize_heightmap(heightmap, 1.0, np.float32)
     binary_heightmap = quantized_heightmap >= threshold
 
@@ -167,11 +179,15 @@ def evaluate_fractal_score(heightmap: np.ndarray, threshold: float = 0.25):
     # plt.plot(np.log(freqs), np.log(psd))
     # plt.show()
 
-    slope = np.polyfit(np.log(freqs), np.log(psd), 1)[0]
+    slope, residuals = np.polyfit(
+        np.log(freqs), np.log(psd), deg=1, full=True
+    )[0]
     beta = -slope
 
+    mse = residuals / len(freqs)
+
     # return
-    return fractal_dimension, beta
+    return fractal_dimension, beta, mse
 
 
 def compressed_size_png(arr):
@@ -206,6 +222,12 @@ def quantize_heightmap(heightmap: np.ndarray, max_value: float = 255.0, type=np.
     return np.round(max_value * (heightmap / max_h)).astype(type)
 
 
+# assumes the values are strictly positive
+def normalize_heightmap(heightmap: np.ndarray):
+    max_h = np.max(heightmap)
+    return heightmap / max_h
+
+
 def shannon_entropy(arr):
     values, counts = np.unique(arr, return_counts=True)
     probabilities = counts / counts.sum()
@@ -220,7 +242,7 @@ def evaluate_global_aesthetic_measure(quantized_heightmap: np.ndarray):
 
     heightmap_png_size = compressed_size_png(quantized_heightmap.reshape(1, -1))
     heightmap_zlib_size = compressed_size_zlib(quantized_heightmap.reshape(1, -1))
-    heightmap_lzma_size = compressed_size_zlib(quantized_heightmap.reshape(1, -1))
+    heightmap_lzma_size = compressed_size_lzma(quantized_heightmap.reshape(1, -1))
 
     zurek_png = (
         initial_information_content - heightmap_png_size
@@ -446,21 +468,22 @@ def process_heightmap(
     heightmap: np.ndarray, filename: str, chunk_size: int, division_depth: int
 ):
     quantized_heightmap = quantize_heightmap(heightmap, 255.0)
+    normalized_heightmap = normalize_heightmap(heightmap)
 
     print("-" * 32)
     print(f"Processing heightmap {filename}")
     print("Shape:", heightmap.shape)
     print("Min:", heightmap.min(), "Max:", heightmap.max())
 
-    erosion_score = evaluate_erosion_score(heightmap)
+    erosion_score = evaluate_erosion_score(normalized_heightmap)
     print(f"Erosion score: {erosion_score}")
 
-    gradient_score = evaluate_gradient_score(heightmap, chunk_size)
+    gradient_score = evaluate_gradient_score(normalized_heightmap, chunk_size)
     print(f"Gradient score: {gradient_score}")
 
-    fractal_dimension, beta = evaluate_fractal_score(heightmap)
+    fractal_dimension, beta, mse = evaluate_fractal_score(heightmap)
     print(f"Fractal dimenison: {fractal_dimension}")
-    print(f"Noise beta exponent: {beta}")
+    print(f"Noise beta exponent: {beta}. Fit MSE: {mse}")
 
     zurek_png, zurek_lzma, zurek_zlib = evaluate_global_aesthetic_measure(
         quantized_heightmap
