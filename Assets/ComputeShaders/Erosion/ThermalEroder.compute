@@ -92,9 +92,9 @@ TexelHeightDistribution computeHeightDistribution(int2 processedTexel)
         float dynamicDistributionCoefficient = clamp(sampleGaussBoxMuller(float2(u1, 0.0)) + avalancheRatio, 0.3, 1.0) * distributionCoefficient;
 
         float localSoftness = computeSoftnessCoefficient(computeGradientAtPoint(resultHeightmap, heightmapDimensions, processedTexel), texelHeight, 0.1);
-        float totalHeightRemoved = (numCriticalNeighbors > 0) ? localSoftness * dynamicDistributionCoefficient * (maxHeightDistance - talusThreshold) : 0.0;
+        float totalHeightRemoved = localSoftness * dynamicDistributionCoefficient * (maxHeightDistance - talusThreshold);
 
-        // to make sure the central texel does not end up higher than its closest neighbor
+        // to make sure the central texel does not end up lower than its closest neighbor
         float heightConsistencyThreshold = (minHeightDistance * exceedingSum) / (minHeightDistance + exceedingSum + 1.0e-5);
         totalHeightRemoved = (totalHeightRemoved <= heightConsistencyThreshold) ? totalHeightRemoved : heightConsistencyThreshold;
 

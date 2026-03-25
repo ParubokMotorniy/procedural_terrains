@@ -21,6 +21,10 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from sklearn.inspection import permutation_importance
 
+family_weights_glob = {"mlp": 0.45, "svm": 0.55}
+subsets_glob = [[0, 1], [2, 3], [4, 5]]
+subset_weights_glob = [0.2, 0.5, 0.3]
+
 
 def evaluate_separability(
     class0: np.ndarray,
@@ -68,7 +72,8 @@ def evaluate_separability(
             early_stopping=True,
             n_iter_no_change=10,
             random_state=42,
-            alpha=0.05,
+            alpha=0.01,
+            verbose=True,
         )
         mlp.fit(X_train, y_train)
         mlp_scores.append(accuracy_score(y_val, mlp.predict(X_val)))
@@ -162,12 +167,17 @@ def train_and_save_models(
         X_train, X_val = X[train_idx], X[val_idx]
         y_train, y_val = y[train_idx], y[val_idx]
 
-        svm = SVC(kernel="rbf", probability=True)
+        svm = SVC(kernel="rbf", probability=True, verbose=True)
         svm.fit(X_train, y_train)
         svm_proba = svm.predict_proba(X_val)[:, 1]
 
         mlp = MLPClassifier(
-            hidden_layer_sizes=(32, 16), max_iter=500, early_stopping=True, alpha=0.005
+            hidden_layer_sizes=(16, 8),
+            max_iter=500,
+            early_stopping=True,
+            alpha=0.005,
+            verbose=True,
+            random_state=253,
         )
         mlp.fit(X_train, y_train)
         mlp_proba = mlp.predict_proba(X_val)[:, 1]
@@ -181,7 +191,7 @@ def train_and_save_models(
     svm_final.fit(X, y)
 
     mlp_final = MLPClassifier(
-        hidden_layer_sizes=(16, 8), max_iter=500, early_stopping=True
+        hidden_layer_sizes=(16, 16), max_iter=500, early_stopping=True
     )
     mlp_final.fit(X, y)
 
@@ -202,7 +212,12 @@ def train_and_save_models(
 
 
 def train_subset_ensemble(
-    class0, class1, subsets, subset_weights, family_weights, model_prefix="ensemble"
+    class0,
+    class1,
+    subsets=subsets_glob,
+    subset_weights=subset_weights_glob,
+    family_weights=family_weights_glob,
+    model_prefix="ensemble",
 ):
     X = np.vstack([class0, class1])
     y = np.array([0] * len(class0) + [1] * len(class1))
@@ -280,7 +295,11 @@ def classify_with_saved_models(X, model_prefix="model"):
 
 
 def classify_with_ensemble(
-    X, subsets, subset_weights, family_weights, model_prefix="ensemble"
+    X,
+    subsets=subsets_glob,
+    subset_weights=subset_weights_glob,
+    family_weights=family_weights_glob,
+    model_prefix="ensemble",
 ):
     scaler = joblib.load(f"{model_prefix}_scaler.joblib")
     X = scaler.transform(X)
@@ -314,22 +333,41 @@ def classify_with_ensemble(
     print(df)
 
 
-def build_metric_vectors(directory: str, chunk_size: int, division_depth: int):
+def build_metric_vectors(
+    directory: str, chunk_size: int, division_depth: int, fmt: str
+):
     if not os.path.isdir(directory):
         raise ValueError(f"{directory} is not a valid directory")
 
-    files = [f for f in os.listdir(directory) if f.lower().strip().endswith('.jpg')]
+    extensions = {
+        "exr": ([".exr"], elib.read_exr_grayscale),
+        "jpg": ([".jpg", ".jpeg"], elib.read_jpg_grayscale),
+        "jpeg": ([".jpg", ".jpeg"], elib.read_jpg_grayscale),
+        "tif": ([".tif", ".tiff"], elib.read_tiff_grayscale),
+        "tiff": ([".tif", ".tiff"], elib.read_tiff_grayscale),
+    }
+
+    if fmt not in extensions:
+        raise ValueError("Unsupported format")
+
+    possible_extensions, file_reader = extensions[fmt]
+
+    files = sorted(
+        f
+        for f in os.listdir(directory)
+        if any(f.lower().strip().endswith(ext) for ext in possible_extensions)
+    )
+
+    print(f"Total heightmaps to evaluate: {len(files)}")
 
     metric_vectors = []
 
     for filename in tqdm.tqdm(files):
-        # if not filename.strip().endswith('.jpg'):
-            # print(f"Skipping: {filename}")
-            # continue
         path = os.path.join(directory, filename)
-        heightmap = elib.read_jpg_grayscale(path)
+        heightmap = file_reader(path)
+        print(f"Processing heightmap: {filename}")
         metric_vector = elib.get_metric_vector(
-            heightmap, chunk_size, division_depth, True
+            heightmap, chunk_size, division_depth, False
         )
 
         metric_vectors.append(metric_vector)
@@ -343,6 +381,19 @@ def main():
     parser = argparse.ArgumentParser(description="Evaluate metrics for the heightmaps.")
 
     parser.add_argument(
+        "--mode",
+        type=str,
+        help="<train|classify>",
+    )
+
+    parser.add_argument(
+        "--format",
+        type=str,
+        default="exr",
+        help="Heightmap format (exr, jpg, jpeg, tif, tiff)",
+    )
+
+    parser.add_argument(
         "--directory-interesting",
         type=str,
         help="Directory containing interesting heightmaps",
@@ -352,6 +403,12 @@ def main():
         "--directory-boring",
         type=str,
         help="Directory containing boring heightmaps",
+    )
+
+    parser.add_argument(
+        "--directory-classify",
+        type=str,
+        help="Directory containing heightmaps to classify",
     )
 
     parser.add_argument(
@@ -368,53 +425,64 @@ def main():
         help="The depth of the order-analyzing tree",
     )
 
-    parser.add_argument("--use-saved-vectors", action="store_true", default=False)
+    parser.add_argument(
+        "--use-saved",
+        action="store_true",
+        default=False,
+        help="If use previously stored vectors for training.",
+    )
 
     args = parser.parse_args()
+
+    fmt = args.format.lower().strip()
 
     directory_interesting = args.directory_interesting
     directory_boring = args.directory_boring
 
-    if not args.use_saved_vectors:
-        interesting_vectors = build_metric_vectors(
-            directory_interesting, args.chunk_size, args.division_depth
-        )
-        interesting_vectors_pd = pd.DataFrame(interesting_vectors)
-        interesting_vectors_pd.to_csv(
-            os.path.join(directory_interesting, "interesting_metric_vectors.csv")
-        )
+    if args.mode == "train":
+        if not args.use_saved:
+            print(f"Building vectors anew!")
+            interesting_vectors = build_metric_vectors(
+                directory_interesting, args.chunk_size, args.division_depth, fmt
+            )
+            interesting_vectors_pd = pd.DataFrame(interesting_vectors)
+            interesting_vectors_pd.to_csv(
+                os.path.join(directory_interesting, "interesting_metric_vectors_new.csv")
+            )
 
-        boring_vectors = build_metric_vectors(
-            directory_boring, args.chunk_size, args.division_depth
+            boring_vectors = build_metric_vectors(
+                directory_boring, args.chunk_size, args.division_depth, fmt
+            )
+            boring_vectors_pd = pd.DataFrame(boring_vectors)
+            boring_vectors_pd.to_csv(
+                os.path.join(directory_boring, "boring_metric_vectors_new.csv")
+            )
+        else:
+            print(f"Loading the stored vectors!")
+            interesting_vectors_pd = pd.read_csv(
+                os.path.join(directory_interesting, "interesting_metric_vectors.csv")
+            )
+            interesting_vectors = interesting_vectors_pd.to_numpy()
+
+            boring_vectors_pd = pd.read_csv(
+                os.path.join(directory_boring, "boring_metric_vectors.csv")
+            )
+            boring_vectors = boring_vectors_pd.to_numpy()
+
+        train_and_save_models(
+            boring_vectors, interesting_vectors, None, "test_train", 6
         )
-        boring_vectors_pd = pd.DataFrame(boring_vectors)
-        boring_vectors_pd.to_csv(
-            os.path.join(directory_boring, "boring_metric_vectors.csv")
+        train_subset_ensemble(
+            boring_vectors, interesting_vectors, model_prefix="test_ensemble"
         )
+    elif args.mode == "classify":
+        vectors_to_classify = build_metric_vectors(
+            args.directory_classify, args.chunk_size, args.division_depth, fmt
+        )
+        classify_with_saved_models(vectors_to_classify, "test_train")
+        classify_with_ensemble(vectors_to_classify, model_prefix="test_ensemble")
     else:
-        interesting_vectors_pd = pd.read_csv(
-            os.path.join(directory_interesting, "interesting_metric_vectors.csv")
-        )
-        interesting_vectors = interesting_vectors_pd.to_numpy()
-
-        boring_vectors_pd = pd.read_csv(
-            os.path.join(directory_boring, "boring_metric_vectors.csv")
-        )
-        boring_vectors = boring_vectors_pd.to_numpy()
-
-    family_weights = {"mlp": 0.65, "svm": 0.35}
-    feature_splits = [[0, 1], [2, 3], [4, 5]]
-    splits_weights = [0.2, 0.4, 0.4]
-
-    train_and_save_models(boring_vectors, interesting_vectors, None, "test_train", 6)
-    train_subset_ensemble(
-        boring_vectors,
-        interesting_vectors,
-        feature_splits,
-        splits_weights,
-        family_weights,
-        "test_ensemble",
-    )
+        raise ValueError("Wrong script mode")
 
     # evaluate_separability(interesting_vectors, boring_vectors)
 

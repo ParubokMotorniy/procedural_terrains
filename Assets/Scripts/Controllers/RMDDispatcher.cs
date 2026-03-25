@@ -7,6 +7,7 @@ using GpuGenerationPipeline;
 using UnityEngine.Rendering;
 using System.Threading.Tasks;
 using Unity.Collections;
+using Microsoft.Unity.VisualStudio.Editor;
 
 public class RMDDispatcher : UltimatePipelineStep
 {
@@ -16,7 +17,7 @@ public class RMDDispatcher : UltimatePipelineStep
     [Range(1, 16)]
     public uint numSubdivisions = 2;
 
-    [Range(0.01f, 1.0f)]
+    [Range(0.01f, 10.0f)]
     public float H = 0.85f;
 
     [SerializeField]
@@ -90,6 +91,7 @@ public class RMDDispatcher : UltimatePipelineStep
         pipelineContext.SetUniformInts(shaderToDispatch, PID_targetDimensions, new int[] { textureSize, textureSize });
 
         float octaveAmplitude = 1.0f;
+        float scalingFactor = (float)math.pow(0.5, 0.5 * H);
         pipelineContext.SetUniformFloat(shaderToDispatch, PID_octaveAmplitude, octaveAmplitude);
         pipelineContext.SetRandomFloats(shaderToDispatch, PID_noiseDisplacement);
 
@@ -104,7 +106,7 @@ public class RMDDispatcher : UltimatePipelineStep
             pipelineContext.SetUniformInt(shaderToDispatch, PID_texelWidthDivisionIteration, sub + 1);
             pipelineContext.SetUniformInt(shaderToDispatch, PID_texelWidthDivided, divided);
 
-            octaveAmplitude *= H;
+            octaveAmplitude *= scalingFactor;
             pipelineContext.SetUniformFloat(shaderToDispatch, PID_octaveAmplitude, octaveAmplitude);
             pipelineContext.SetRandomFloats(shaderToDispatch, PID_noiseDisplacement);
             pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, transition12KernelIdx, new Vector3(numGroups, numGroups, 1));
@@ -115,7 +117,7 @@ public class RMDDispatcher : UltimatePipelineStep
                 pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, extraNoiseKernelIdx, new Vector3(numGroups, numGroups, 1));
             }
 
-            octaveAmplitude *= H;
+            octaveAmplitude *= scalingFactor;
             pipelineContext.SetUniformFloat(shaderToDispatch, PID_octaveAmplitude, octaveAmplitude);
             pipelineContext.SetRandomFloats(shaderToDispatch, PID_noiseDisplacement);
             pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, transition21KernelIdx, new Vector3(numGroups, numGroups, 1));

@@ -60,8 +60,9 @@ RWTexture2D<float> Result;
                 featureNoise = lerp(featureNoise, ridgedNoise, abs(min(0.0, sharpness)));
                 // featureNoise *= exp(-dot(featureDerivative, featureDerivative)) * sharpness;
 
-                slopeErosionDerivativeSum += featureDerivative * slopeErosion;
                 perturbDerivativeSum += featureDerivative * perturbationStrength * octaveAmplitude;
+                
+                slopeErosionDerivativeSum += featureDerivative * slopeErosion;
                 float derivativeNorm = dot(slopeErosionDerivativeSum, slopeErosionDerivativeSum);
                 noiseResult += octaveAmplitude * featureNoise * (1.0 / (1.0 + derivativeNorm));
 

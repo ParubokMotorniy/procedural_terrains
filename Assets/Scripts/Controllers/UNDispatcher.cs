@@ -14,7 +14,7 @@ public class UNDispatcher : UltimatePipelineStep
     [Range(0.001f, 2.0f)]
     public float noiseFrequency = 0.001f;
 
-    [Range(0.01f, 1.0f)]
+    [Range(0.5f, 1.0f)]
     public float persistence = 0.2f;
 
     [Range(-1.0f, 1.0f)]
@@ -147,8 +147,8 @@ public class UNDispatcher : UltimatePipelineStep
         GUILayout.Label($"Frequency: {noiseFrequency:F4}");
         noiseFrequency = GUILayout.HorizontalSlider(noiseFrequency, 0.001f, 2.0f);
 
-        GUILayout.Label($"Persistence: {persistence:F3}");
-        persistence = GUILayout.HorizontalSlider(persistence, 0.01f, 1.0f);
+        GUILayout.Label($"Persistence (G): {persistence:F3}");
+        persistence = GUILayout.HorizontalSlider(persistence, 0.5f, 1.0f);
 
         GUILayout.Label($"Octaves: {numOctaves}");
         numOctaves = Mathf.RoundToInt(
