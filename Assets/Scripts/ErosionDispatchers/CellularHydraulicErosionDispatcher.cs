@@ -135,9 +135,11 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
         int waterDistributorKernelIdx = erosionComputeShader.FindKernel("WaterDistributor");
         int sedimentDistributorKernelIdx = erosionComputeShader.FindKernel("SedimentDistributor");
         int waterEvaporatorKernelIdx = erosionComputeShader.FindKernel("WaterEvaporator");
+
         int resourceInitializerKernelIdx = erosionComputeShader.FindKernel("ResourceInitializer");
-        int finalWaterEvaporatorKernelIdx = erosionComputeShader.FindKernel("FinalWaterEvaporator");
         int pipePlumberKernelIdx = erosionComputeShader.FindKernel("PipePlumber");
+        
+        int finalWaterEvaporatorKernelIdx = erosionComputeShader.FindKernel("FinalWaterEvaporator");
 
         foreach (int kernelIdx in new[] { rainDropKernelIdx, waterEvaporatorKernelIdx, resourceInitializerKernelIdx, finalWaterEvaporatorKernelIdx, waterDistributorKernelIdx, sedimentDistributorKernelIdx, pipePlumberKernelIdx })
         {
@@ -166,6 +168,7 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, pipePlumberKernelIdx, dispatchGroups);
             if (d % 5 == 0)
                 pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, rainDropKernelIdx, dispatchGroups);
+                
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, waterDistributorKernelIdx, dispatchGroups);
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, sedimentDistributorKernelIdx, dispatchGroups);
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, waterEvaporatorKernelIdx, dispatchGroups);

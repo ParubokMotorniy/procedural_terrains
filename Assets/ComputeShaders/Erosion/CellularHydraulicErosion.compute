@@ -274,7 +274,7 @@ void applyWaterKernel(int2 processedTexel)
     }
 }
 
-float computeLargerVelocity(int2 processedTexel)
+float computeLargerVelocity(int2 processedTexel, out int2 flowDirection)
 {
     uint centerLin = index2dTo1d(heightmapDimensions, (uint2)processedTexel);
 
@@ -288,13 +288,11 @@ float computeLargerVelocity(int2 processedTexel)
 
     float vY = 0.5 * (pipesBuffer[neighborBottom].inWaterPipes[0][1] + pipesBuffer[centerLin].inWaterPipes[0][1] - pipesBuffer[neighborTop].inWaterPipes[2][1] - pipesBuffer[centerLin].inWaterPipes[2][1]);
 
-    float sNormSq = vX * vX + vY * vY;
-
     int neighborTopLeft = index2dTo1d(heightmapDimensions, terrainWrap(processedTexel - int2(1, 1), heightmapDimensions));
     int neighborBottomRight = index2dTo1d(heightmapDimensions, terrainWrap(processedTexel + int2(1, 1), heightmapDimensions));
 
     int neighborTopRight = index2dTo1d(heightmapDimensions, terrainWrap(processedTexel + int2(1, -1), heightmapDimensions));
-    int neighborBottomLeft = index2dTo1d(heightmapDimensions, terrainWrap(processedTexel + int2(-1, 1), heightmapDimensions));
+    int neighborBottomLeft = index2dTo1d(heightmapDimensions, terrainWrap(processedTexel - int2(1, -1), heightmapDimensions));
 
     // from top left to bottom right
     float vL = 0.5 * (pipesBuffer[neighborBottomRight].inWaterPipes[0][0] + pipesBuffer[centerLin].inWaterPipes[0][0] - pipesBuffer[neighborTopLeft].inWaterPipes[2][2] - pipesBuffer[centerLin].inWaterPipes[2][2]);
@@ -302,9 +300,10 @@ float computeLargerVelocity(int2 processedTexel)
     // from bottom left to top right
     float vR = 0.5 * (pipesBuffer[neighborTopRight].inWaterPipes[2][0] + pipesBuffer[centerLin].inWaterPipes[2][0] - pipesBuffer[neighborBottomLeft].inWaterPipes[0][2] - pipesBuffer[centerLin].inWaterPipes[0][2]);
 
-    float dNormSq = vL * vL + vR * vR;
+    float2 velocityVector = float2(1, 0) * vX + float2(0, 1) * vY + float2(1, 1) * vL + float2(1, -1) * vR;
+    flowDirection = round(normalize(velocityVector));
 
-    return sqrt(max(sNormSq, dNormSq));
+    return sqrt(dot(velocityVector, velocityVector));
 }
 
 #pragma kernel SedimentDistributor
@@ -331,11 +330,12 @@ float computeLargerVelocity(int2 processedTexel)
             float terrainHeightAtTexel = resultHeightmap[processedTexel];
 
             float sedimentAdjustment = 0.0;
+            int2 transportationDirection;
 
             {
                 float2 heightGradientAtTexel = gradientsBuffer[centerLin];
 
-                float velocityNorm = computeLargerVelocity(processedTexel);
+                float velocityNorm = computeLargerVelocity(processedTexel, transportationDirection);
 
                 float gradientNorm = length(heightGradientAtTexel);
                 float sinAlpha = gradientNorm / sqrt(1.0 + gradientNorm * gradientNorm);
@@ -355,30 +355,21 @@ float computeLargerVelocity(int2 processedTexel)
                     // sediment amount is reduced
                     sedimentAdjustment = -(sedimentLevelAtTexel - localSedimentCapacity) * depositionConstant;
                 }
-                // resultHeightmap[processedTexel] = gradientNorm;
             }
 
             float waterLostAtTexel = abs(pipesBuffer[centerLin].inWaterPipes[1][1]);
             float intermediateSedimentLevel = sedimentLevelAtTexel + sedimentAdjustment;
+            float sedimentLostDueToFlow = intermediateSedimentLevel * (waterLostAtTexel / waterLevelAtTexel);
 
-            for (int i = -1; i < 2; ++i)
             {
-                for (int j = -1; j < 2; ++j)
-                {
-                    int2 processedNeighbor = terrainWrap(processedTexel + int2(i, j), heightmapDimensions);
-                    int nLin = index2dTo1d(heightmapDimensions, processedNeighbor);
-
-                    uint2 targetInPipe = pipeMap[i + 1][j + 1];
-
-                    float waterReceived = pipesBuffer[nLin].inWaterPipes[targetInPipe.x][targetInPipe.y];
-                    float sedimentReceived = intermediateSedimentLevel * (waterReceived / waterLevelAtTexel);
-
-                    pipesBuffer[nLin].inSedimentPipes[targetInPipe.x][targetInPipe.y] = sedimentReceived;
-                }
+                int2 processedNeighbor = terrainWrap(processedTexel + transportationDirection, heightmapDimensions);
+                int nLin = index2dTo1d(heightmapDimensions, processedNeighbor);
+                uint2 targetInPipe = pipeMap[transportationDirection.x + 1][transportationDirection.y + 1];
+                pipesBuffer[nLin].inSedimentPipes[targetInPipe.x][targetInPipe.y] = sedimentLostDueToFlow;
             }
 
             // this change will be taken into account during evaporation stage
-            pipesBuffer[centerLin].inSedimentPipes[1][1] = /*due depth*/ sedimentAdjustment - /*due water flow*/ (intermediateSedimentLevel * (waterLostAtTexel / waterLevelAtTexel));
+            pipesBuffer[centerLin].inSedimentPipes[1][1] = /*due depth*/ sedimentAdjustment - /*due water flow*/ sedimentLostDueToFlow;
             resultHeightmap[processedTexel] = max(0.0, terrainHeightAtTexel - sedimentAdjustment);
         }
     }
