@@ -773,13 +773,13 @@ MonoBehaviour:
   terrainScale: 1
   enableProfiling: 0
   enableMetricEvaluation: 0
-  generatorSeed: 48768425
+  generatorSeed: 46735
   numSamples: 15
   dumpTextures: 0
   useTestTexture: 0
   testTexture: {fileID: 2800000, guid: 14fa032c7256704c8a0ead7b71566301, type: 3}
   pipelineSteps:
-  - {fileID: 280840668}
+  - {fileID: 852555921}
   - {fileID: 1412956747}
   - {fileID: 2081510694}
 --- !u!4 &385078007
@@ -1251,11 +1251,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MidpointDisplacementController
   shaderToDispatch: {fileID: 7200000, guid: 2da1ab904200f97c69eeb6b358aa73d3, type: 3}
-  numSubdivisions: 3
-  H: 7.54
+  numSubdivisions: 4
+  H: 8.68
   addExtraNoise: 1
-  worleyFrequency: 2.52
-  perlinFrequency: 0.28
+  worleyFrequency: 3.03
 --- !u!1 &1078476957
 GameObject:
   m_ObjectHideFlags: 0
@@ -1449,8 +1448,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FFTDispatcher
   shaderToDispatch: {fileID: 7200000, guid: 7eab4ea28e40baeefb1eed8a3ff23269, type: 3}
   inverseGroupScaleFactor: 6
-  fractalDimension: 1.3
-  fracCoefficientsConsidered: 0.2
+  fractalDimension: 1.6
+  fracCoefficientsConsidered: 0.1
 --- !u!1 &1690684112
 GameObject:
   m_ObjectHideFlags: 0
