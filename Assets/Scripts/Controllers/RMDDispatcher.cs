@@ -26,8 +26,8 @@ public class RMDDispatcher : UltimatePipelineStep
     [Range(0.01f, 10.0f)]
     public float worleyFrequency;
 
-    [Range(0.01f, 10.0f)]
-    public float perlinFrequency;
+    // [Range(0.01f, 10.0f)]
+    // public float perlinFrequency;
 
     private readonly int[] groupSizes = new int[] { 32, 16, 8 };
 
@@ -41,7 +41,7 @@ public class RMDDispatcher : UltimatePipelineStep
     private static readonly int PID_threadSubdomainsX = Shader.PropertyToID("threadSubdomainsX");
     private static readonly int PID_threadSubdomainsY = Shader.PropertyToID("threadSubdomainsY");
     private static readonly int PID_worleyFrequency = Shader.PropertyToID("worleyFrequency");
-    private static readonly int PID_perlinFrequency = Shader.PropertyToID("perlinFrequency");
+    // private static readonly int PID_perlinFrequency = Shader.PropertyToID("perlinFrequency");
     private static readonly int PID_noiseDisplacement = Shader.PropertyToID("noiseDisplacement");
     private static readonly int PID_octaveAmplitude = Shader.PropertyToID("octaveAmplitude");
     private static readonly int PID_texelWidthDivisionFactor = Shader.PropertyToID("texelWidthDivisionFactor");
@@ -87,7 +87,7 @@ public class RMDDispatcher : UltimatePipelineStep
         pipelineContext.SetUniformInt(shaderToDispatch, PID_threadSubdomainsX, numLinearThreads);
         pipelineContext.SetUniformInt(shaderToDispatch, PID_threadSubdomainsY, numLinearThreads);
         pipelineContext.SetUniformFloat(shaderToDispatch, PID_worleyFrequency, worleyFrequency);
-        pipelineContext.SetUniformFloat(shaderToDispatch, PID_perlinFrequency, perlinFrequency);
+        // pipelineContext.SetUniformFloat(shaderToDispatch, PID_perlinFrequency, perlinFrequency);
         pipelineContext.SetUniformInts(shaderToDispatch, PID_targetDimensions, new int[] { textureSize, textureSize });
 
         float octaveAmplitude = 1.0f;
@@ -144,7 +144,8 @@ public class RMDDispatcher : UltimatePipelineStep
 
     private float SampleNoise(float2 noiseTextureIdx)
     {
-        return noise.snoise(new float2(SampleGaussianNoise(noiseTextureIdx) * perlinFrequency));
+        // return noise.snoise(new float2(SampleGaussianNoise(noiseTextureIdx) * perlinFrequency));
+        return SampleGaussianNoise(noiseTextureIdx);
     }
 
     private float SampleWorleyNoise(float2 noiseTextureIdx)
@@ -341,8 +342,8 @@ public class RMDDispatcher : UltimatePipelineStep
         GUILayout.Label($"Worley Frequency: {worleyFrequency:F3}");
         worleyFrequency = GUILayout.HorizontalSlider(worleyFrequency, 0.01f, 10.0f);
 
-        GUILayout.Label($"Perlin Frequency: {perlinFrequency:F3}");
-        perlinFrequency = GUILayout.HorizontalSlider(perlinFrequency, 0.01f, 10.0f);
+        // GUILayout.Label($"Perlin Frequency: {perlinFrequency:F3}");
+        // perlinFrequency = GUILayout.HorizontalSlider(perlinFrequency, 0.01f, 10.0f);
     }
 
     public override string GUIStepTitle() => "RMD generator";

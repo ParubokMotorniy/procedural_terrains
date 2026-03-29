@@ -20,7 +20,7 @@ uniform float octaveAmplitude;
 uniform float noiseFrequency;
 uniform float2 noiseDisplacement;
 uniform float worleyFrequency;
-uniform float perlinFrequency;
+// uniform float perlinFrequency;
 
 // TODO: can I employ gradients of noise here?
 
@@ -31,7 +31,8 @@ float sampleGaussianNoise(float2 noiseTextureIdx)
 
 float sampleNoise(float2 noiseTextureIdx)
 {
-    return snoise(sampleGaussianNoise(noiseTextureIdx) * perlinFrequency); // domain warping
+    // return snoise(sampleGaussianNoise(noiseTextureIdx) * perlinFrequency); // domain warping
+    return sampleGaussBoxMuller(noiseTextureIdx);
 }
 
 float sampleWorleyNoise(float2 noiseTextureIdx)
