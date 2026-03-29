@@ -263,11 +263,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GenerationControllerr
   shaderToDispatch: {fileID: 7200000, guid: 960e83aac4f822fd1b16e9e8930df0bb, type: 3}
-  noiseFrequency: 0.004
-  persistence: 0.2
-  sharpness: 0.35
-  slopeErosion: 0.01
-  numOctaves: 5
+  noiseFrequency: 0.007
+  persistence: 0.5
+  sharpness: -0.2
+  slopeErosion: 0.005
+  numOctaves: 4
   perturbationStrength: 0.25
 --- !u!4 &280840672
 Transform:
@@ -661,7 +661,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SDFDispatcher
   shaderToDispatch: {fileID: 7200000, guid: 6533fa195b3b17795aa989c0fcf24026, type: 3}
-  baseSimplexFrequency: 2
+  baseSimplexFrequency: 2.5
 --- !u!4 &360891027
 Transform:
   m_ObjectHideFlags: 0
@@ -773,14 +773,15 @@ MonoBehaviour:
   terrainScale: 1
   enableProfiling: 0
   enableMetricEvaluation: 0
-  generatorSeed: 47563
-  numSamples: 5
-  dumpTextures: 1
+  generatorSeed: 48768425
+  numSamples: 15
+  dumpTextures: 0
   useTestTexture: 0
   testTexture: {fileID: 2800000, guid: 14fa032c7256704c8a0ead7b71566301, type: 3}
   pipelineSteps:
-  - {fileID: 1592727441}
-  - {fileID: 1778127573}
+  - {fileID: 280840668}
+  - {fileID: 1412956747}
+  - {fileID: 2081510694}
 --- !u!4 &385078007
 Transform:
   m_ObjectHideFlags: 0
@@ -1074,7 +1075,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _HeightMap:
-        m_Texture: {fileID: 1747309165}
+        m_Texture: {fileID: 2117886421}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _Heightmap:
@@ -1384,8 +1385,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ThermalErosionDispatcher
   erosionComputeShader: {fileID: 7200000, guid: fd1160cbc396f5665a006dc6a2d9b936, type: 3}
-  distributionCoefficient: 0.45
-  talusThreshold: 0.005
+  distributionCoefficient: 0.65
+  talusThreshold: 0.05
   erosionIterationLimit: 10
 --- !u!4 &1412956748
 Transform:
@@ -1507,43 +1508,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!84 &1747309165
-RenderTexture:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: 
-  m_ImageContentsHash:
-    serializedVersion: 2
-    Hash: 00000000000000000000000000000000
-  m_IsAlphaChannelOptional: 0
-  serializedVersion: 6
-  m_Width: 256
-  m_Height: 256
-  m_AntiAliasing: 1
-  m_MipCount: -1
-  m_DepthStencilFormat: 0
-  m_ColorFormat: 21
-  m_MipMap: 0
-  m_GenerateMips: 1
-  m_SRGB: 1
-  m_UseDynamicScale: 0
-  m_UseDynamicScaleExplicit: 0
-  m_BindMS: 0
-  m_EnableCompatibleFormat: 1
-  m_EnableRandomWrite: 1
-  m_TextureSettings:
-    serializedVersion: 2
-    m_FilterMode: 1
-    m_Aniso: 1
-    m_MipBias: 0
-    m_WrapU: 1
-    m_WrapV: 1
-    m_WrapW: 1
-  m_Dimension: 2
-  m_VolumeDepth: 1
-  m_ShadowSamplingMode: 2
 --- !u!1 &1778127572
 GameObject:
   m_ObjectHideFlags: 0
@@ -1642,19 +1606,56 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ParticleHydraulicErosionDispatcher
   erosionComputeShader: {fileID: 7200000, guid: 9225322c08a776a9f920190d22c7f260, type: 3}
-  numSimultaneousParticles: 8
-  inertia: 0.1
-  capacity: 7
-  minSlope: 0.02
-  deposition: 0.05
-  erosion: 0.603
-  gravity: 0.255
-  evaporation: 0.02
-  waterDeathThreshold: 0.05
+  numSimultaneousParticles: 7
+  inertia: 0.139
+  capacity: 22.4
+  minSlope: 0.01
+  deposition: 0.027
+  erosion: 0.314
+  gravity: 0.144
+  evaporation: 0.01
+  waterDeathThreshold: 0.1
   erosionNeighborhood: 1
   numSimulationSteps: 600
-  numSimulationWaves: 3
+  numSimulationWaves: 5
   rainNoiseFrequency: 1.24
+--- !u!84 &2117886421
+RenderTexture:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: 
+  m_ImageContentsHash:
+    serializedVersion: 2
+    Hash: 00000000000000000000000000000000
+  m_IsAlphaChannelOptional: 0
+  serializedVersion: 6
+  m_Width: 256
+  m_Height: 256
+  m_AntiAliasing: 1
+  m_MipCount: -1
+  m_DepthStencilFormat: 0
+  m_ColorFormat: 21
+  m_MipMap: 0
+  m_GenerateMips: 1
+  m_SRGB: 1
+  m_UseDynamicScale: 0
+  m_UseDynamicScaleExplicit: 0
+  m_BindMS: 0
+  m_EnableCompatibleFormat: 1
+  m_EnableRandomWrite: 1
+  m_TextureSettings:
+    serializedVersion: 2
+    m_FilterMode: 1
+    m_Aniso: 1
+    m_MipBias: 0
+    m_WrapU: 1
+    m_WrapV: 1
+    m_WrapW: 1
+  m_Dimension: 2
+  m_VolumeDepth: 1
+  m_ShadowSamplingMode: 2
 --- !u!21 &2146269790
 Material:
   serializedVersion: 8
