@@ -246,6 +246,10 @@ namespace CpuGenerationPipeline
                 pipelineSteps = CommonDefines.buildPipelineFromEnum(pipeline);
                 CollectStatistics();
             }
+            if(GUILayout.Button("Free resources"))
+            {
+                UltimatePipelineStep.FreeAllResourcesInScene();
+            }
         }
 
         public override string getPipelineName() => "CPU pipeline constructor";

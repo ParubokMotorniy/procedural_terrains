@@ -82,7 +82,7 @@ public static class CpuComputeUtilities
 
     public static uint seedFromXYPass(uint x, uint y, int passId)
     {
-        uint v = x * 0x9E3779B9u ^ y * 0x85EBCA6Bu ^ (uint)passId * 0xC2B2AE35u;
+        uint v = x * 0x68E31DA4u ^ y * 0xB5297A4Du ^ (uint)passId * 0x1B56C4E9u;
         return v;
     }
 

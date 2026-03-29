@@ -254,7 +254,7 @@ namespace GpuGenerationPipeline
             }
 
             synchronizedResults = new (long cpuSideMs, long cpuSideTicks, long gpuSideNs)[numSamples];
-            Directory.CreateDirectory(Path.Combine(Application.persistentDataPath, "./samples"));
+            Directory.CreateDirectory(Path.Combine(Application.persistentDataPath, "./samples_gpu"));
 
             postCollectionAction = () =>
             {
@@ -419,7 +419,10 @@ namespace GpuGenerationPipeline
                 pipelineSteps = CommonDefines.buildPipelineFromEnum(pipeline);
                 CollectSynchronizedStatistics();
             }
-
+            if(GUILayout.Button("Free resources"))
+            {
+                UltimatePipelineStep.FreeAllResourcesInScene();
+            }
         }
 
         public override string getPipelineName() => "GPU pipeline constructor";

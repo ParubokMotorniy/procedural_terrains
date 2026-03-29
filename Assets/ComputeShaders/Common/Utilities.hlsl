@@ -40,8 +40,8 @@ float sampleGaussBoxMuller(float2 u)
 //(c) Jarzynski and Olano
 uint pcgHash(uint v)
 {
-    v = v * 747796405u + 2891336453u;
-    uint word = ((v >> ((v >> 28u) + 4u)) ^ v) * 277803737u;
+    uint state = v * 747796405u + 2891336453u;
+    uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
     return (word >> 22u) ^ word;
 }
 
@@ -52,7 +52,8 @@ float u01FromUint(uint x)
 
 uint seedFromXYPass(uint x, uint y, int passId)
 {
-    uint v = x * 0x9E3779B9u ^ y * 0x85EBCA6Bu ^ passId * 0xC2B2AE35u;
+    //large prime numbers borrowed from (c) Squirrel Eiserloh
+    uint v = x * 0x68E31DA4u ^ y * 0xB5297A4Du ^ passId * 0x1B56C4E9u;
     return v;
 }
 
