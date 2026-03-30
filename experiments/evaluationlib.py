@@ -13,9 +13,48 @@ import matplotlib.pyplot as plt
 
 JPEG_MAX_DIM = 65500
 
+def compressed_size_png(arr):
+    img = Image.fromarray(arr)
+
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+
+    return len(buffer.getvalue())
+
+
+def compressed_size_jpg(arr, quality=95):
+    img = Image.fromarray(arr)
+
+    buffer = io.BytesIO()
+    img.save(buffer, format="JPEG", quality=quality)
+
+    return len(buffer.getvalue())
+
+
+def compressed_size_zlib(arr):
+    return len(zlib.compress(arr.tobytes()))
+
+
+def compressed_size_lzma(arr):
+    return len(lzma.compress(arr.tobytes()))
+
+
+# assumes the values are strictly positive
+def quantize_heightmap(heightmap: np.ndarray, max_value_of_population: float, desired_max_value: float = 255.0, type=np.uint8):
+    return np.round(desired_max_value * (heightmap / max_value_of_population)).astype(type)
+
+# assumes the values are strictly positive
+def normalize_heightmap(heightmap: np.ndarray, max_value_of_population: float):
+    return heightmap / max_value_of_population
+
+
+def shannon_entropy(arr):
+    values, counts = np.unique(arr, return_counts=True)
+    probabilities = counts / counts.sum()
+    return entropy(probabilities, base=2)
 
 # global-local metric that contributes to the final metric basing on how "eroded" the terrain is
-def evaluate_erosion_score(heightmap: np.ndarray):
+def evaluate_erosion_score(heightmap: np.ndarray, nbins: int = 128):
     assert heightmap.min() >= 0.0 and heightmap.max() <= 1.0
 
     min_mean_delta = 1.0e-6  # the actual delta depends on ULPs of the float representation in python, but I stick to a fixed value
@@ -59,12 +98,14 @@ def evaluate_erosion_score(heightmap: np.ndarray):
     )
 
     assert erosion_score <= 1.0 and erosion_score >= 0.0
+    
+    delta_entropy = shannon_entropy(quantize_heightmap(np.array(deltas), 1.0, nbins - 1, np.uint8))
 
-    return erosion_score
+    return erosion_score * delta_entropy
 
 
 # TODO: think how the magnitude can be included
-def evaluate_gradient_score(heightmap: np.ndarray, subdomainSize: int):
+def evaluate_gradient_score(heightmap: np.ndarray, subdomainSize: int, nbins: int = 16):
     assert heightmap.min() >= 0.0 and heightmap.max() <= 1.0
     min_mean_gradient_span = 1.0e-6
     max_gradient_std = math.sqrt(8)
@@ -140,8 +181,11 @@ def evaluate_gradient_score(heightmap: np.ndarray, subdomainSize: int):
     ) / max_gradient_score
 
     assert gradient_score >= 0.0 and gradient_score <= 1.0
-
-    return gradient_score
+    
+    gradients_as_angles = np.angle([np.complex64(x, y) for (x,y) in average_gradients], True) + 180
+    gradients_entropy = shannon_entropy(quantize_heightmap(gradients_as_angles, 360.0, nbins - 1, np.uint8))
+    
+    return gradient_score * gradients_entropy
 
 
 def find_balanced_threshold(heightmap: np.ndarray, max_iter: int = 20, bounds = (0.47, 0.53)):
@@ -174,7 +218,7 @@ def find_balanced_threshold(heightmap: np.ndarray, max_iter: int = 20, bounds = 
 
 
 def evaluate_fractal_score(heightmap: np.ndarray, threshold: float = None):
-    quantized_heightmap = normalize_heightmap(heightmap)
+    quantized_heightmap = normalize_heightmap(heightmap, np.max(heightmap))
 
     if threshold is None:
         threshold = find_balanced_threshold(quantized_heightmap)
@@ -191,7 +235,7 @@ def evaluate_fractal_score(heightmap: np.ndarray, threshold: float = None):
     fractal_dimension = -coeffs[0]
 
     # --- power spectrum ---
-    F = np.fft.fft2(quantized_heightmap - np.mean(quantized_heightmap))
+    F = np.fft.fft2(heightmap - np.mean(heightmap))
     psd2D = np.abs(np.fft.fftshift(F)) ** 2
 
     ny, nx = psd2D.shape
@@ -214,51 +258,6 @@ def evaluate_fractal_score(heightmap: np.ndarray, threshold: float = None):
     mse = residuals / len(freqs)
 
     return fractal_dimension, beta, mse
-
-
-def compressed_size_png(arr):
-    img = Image.fromarray(arr)
-
-    buffer = io.BytesIO()
-    img.save(buffer, format="PNG")
-
-    return len(buffer.getvalue())
-
-
-def compressed_size_jpg(arr, quality=95):
-    img = Image.fromarray(arr)
-
-    buffer = io.BytesIO()
-    img.save(buffer, format="JPEG", quality=quality)
-
-    return len(buffer.getvalue())
-
-
-def compressed_size_zlib(arr):
-    return len(zlib.compress(arr.tobytes()))
-
-
-def compressed_size_lzma(arr):
-    return len(lzma.compress(arr.tobytes()))
-
-
-# assumes the values are strictly positive
-def quantize_heightmap(heightmap: np.ndarray, max_value: float = 255.0, type=np.uint8):
-    max_h = np.max(heightmap)
-    return np.round(max_value * (heightmap / max_h)).astype(type)
-
-
-# assumes the values are strictly positive
-def normalize_heightmap(heightmap: np.ndarray):
-    max_h = np.max(heightmap)
-    return heightmap / max_h
-
-
-def shannon_entropy(arr):
-    values, counts = np.unique(arr, return_counts=True)
-    probabilities = counts / counts.sum()
-    return entropy(probabilities, base=2)
-
 
 def evaluate_global_aesthetic_measure(quantized_heightmap: np.ndarray):
     height, width = quantized_heightmap.shape
@@ -410,13 +409,11 @@ def partition_heightmap(
 
 
 def evaluate_composite_aesthetics_measure(
-    heightmap: np.ndarray, division_depth: int, compressors
+    quantized_heightmap: np.ndarray, population_max: int, division_depth: int, compressors
 ):
-    height, width = heightmap.shape
-    normalized_max = 255.0
-    copy_heightmap = quantize_heightmap(heightmap, normalized_max)
+    height, width = quantized_heightmap.shape
 
-    heightmap_division = partition_heightmap(copy_heightmap, division_depth, 0.2)
+    heightmap_division = partition_heightmap(quantized_heightmap, division_depth, 0.2)
 
     def compute_ncd(sub1, sub2, compressor):
         flat1 = sub1.ravel()
@@ -429,21 +426,21 @@ def evaluate_composite_aesthetics_measure(
 
         return (cj - min(c1, c2)) / max(c1, c2)
 
-    split_visualization_heightmap = copy_heightmap.copy()
+    split_visualization_heightmap = quantized_heightmap.copy()
 
     ncds = {c: [] for c in compressors}
     for i in range(len(heightmap_division)):
         y0, y1, x0, x1 = heightmap_division[i]
 
-        split_visualization_heightmap[y0:y1, x0] = normalized_max
-        split_visualization_heightmap[y0:y1, min(x1, width - 1)] = normalized_max
-        split_visualization_heightmap[y0, x0:x1] = normalized_max
-        split_visualization_heightmap[min(y1, height - 1), x0:x1] = normalized_max
+        split_visualization_heightmap[y0:y1, x0] = population_max
+        split_visualization_heightmap[y0:y1, min(x1, width - 1)] = population_max
+        split_visualization_heightmap[y0, x0:x1] = population_max
+        split_visualization_heightmap[min(y1, height - 1), x0:x1] = population_max
 
-        sub_1 = copy_heightmap[y0:y1, x0:x1]
+        sub_1 = quantized_heightmap[y0:y1, x0:x1]
         for j in range(i, len(heightmap_division)):
             y0, y1, x0, x1 = heightmap_division[j]
-            sub_2 = copy_heightmap[y0:y1, x0:x1]
+            sub_2 = quantized_heightmap[y0:y1, x0:x1]
             for compressor in compressors:
                 ncd = compute_ncd(sub_1, sub_2, compressor)
                 ncds[compressor].append(ncd)
@@ -492,10 +489,10 @@ def read_tiff_grayscale(path: str, normalize: bool = False) -> np.ndarray:
 
 
 def get_metric_vector(
-    heightmap: np.ndarray, chunk_size: int, division_depth: int, verbose: bool = False
+    heightmap: np.ndarray, chunk_size: int, division_depth: int, population_max: float, verbose: bool = False
 ):
-    quantized_heightmap = quantize_heightmap(heightmap, 255.0)
-    normalized_heightmap = normalize_heightmap(heightmap)
+    quantized_heightmap = quantize_heightmap(heightmap, population_max, 255.0)
+    normalized_heightmap = normalize_heightmap(heightmap, population_max)
 
     erosion_score = evaluate_erosion_score(normalized_heightmap)
     gradient_score = evaluate_gradient_score(normalized_heightmap, chunk_size)
@@ -508,7 +505,8 @@ def get_metric_vector(
 
     (order_png, order_lzma, order_zlib), split_visualization = (
         evaluate_composite_aesthetics_measure(
-            heightmap,
+            quantized_heightmap,
+            population_max,
             division_depth,
             [
                 compressed_size_png,
