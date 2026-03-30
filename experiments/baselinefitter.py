@@ -26,12 +26,48 @@ family_weights_glob = {"mlp": 0.6, "svm": 0.4}
 subsets_glob = [[0, 1], [2, 3], [4, 5]]
 subset_weights_glob = [0.15, 0.35, 0.5]
 
+
+def train_data_ensemble_models(
+    X, y, train_func, class_separation_idx, n_models=7, fraction=0.7, random_state=42
+):
+    rng = np.random.RandomState(random_state)
+    models = []
+
+    subset_size_1 = class_separation_idx
+    n_samples_1 = int(subset_size_1 * fraction)
+    
+    subset_size_2 = (len(y) - class_separation_idx)
+    n_samples_2 = int(subset_size_2 * fraction)
+    
+    # print(len(X), subset_size_1, n_samples_1)
+    # print(len(X), subset_size_2, n_samples_2)
+
+    for i in range(n_models):
+        idx1 = rng.choice(subset_size_1, n_samples_1, replace=False)
+        X_sub_1, y_sub_1 = X[idx1], y[idx1]
+        
+        idx2 = rng.choice(subset_size_2, n_samples_2, replace=False) + class_separation_idx
+        X_sub_2, y_sub_2 = X[idx2], y[idx2]
+
+        model = train_func(np.vstack([X_sub_1, X_sub_2]), np.vstack([y_sub_1.reshape(-1, 1), y_sub_2.reshape(-1, 1)]).ravel())
+        models.append(model)
+
+    return models
+
+
 def train_and_save_models_auto(
-    class0, class1, feature_weights=None, model_prefix="model", n_iter=100
+    class0,
+    class1,
+    feature_weights=None,
+    model_prefix="model",
+    n_iter=100,
+    use_data_ensemble=False,
+    ensemble_fraction=0.7,
+    n_ensemble_models=7,
 ):
     X = np.vstack([class0, class1])
     y = np.array([0] * len(class0) + [1] * len(class1))
-    
+
     print(f"Total vectors: {len(X)}")
 
     if feature_weights is not None:
@@ -48,59 +84,80 @@ def train_and_save_models_auto(
         "kernel": ["rbf"],
     }
 
-    svm_search = RandomizedSearchCV(
-        SVC(probability=True),
-        svm_param_dist,
-        n_iter=n_iter,
-        scoring="roc_auc",
-        cv=5,
-        verbose=2,
-        n_jobs=8,
-    )
-
-    svm_search.fit(X, y)
-    best_svm = svm_search.best_estimator_
-
-    print("Best SVM params:", svm_search.best_params_)
-
     mlp_param_dist = {
         "hidden_layer_sizes": [(16, 8), (16, 16), (32, 8), (32, 16), (64, 8), (64, 16)],
         "alpha": np.logspace(-5, -2, 10),
         "learning_rate_init": np.logspace(-4, -2, 10),
-        "beta_1": np.linspace(0.5, 1.0, 20),
-        "beta_2": np.linspace(0.5, 1.0, 20),
+        "beta_1": np.linspace(0.5, 0.999, 20),
+        "beta_2": np.linspace(0.5, 0.999, 20),
     }
 
-    mlp_search = RandomizedSearchCV(
-        MLPClassifier(max_iter=500, early_stopping=True),
-        mlp_param_dist,
-        n_iter=n_iter,
-        scoring="roc_auc",
-        cv=5,
-        verbose=2,
-        n_jobs=8,
-    )
+    def train_svm(X, y):
+        svm_search = RandomizedSearchCV(
+            SVC(probability=True),
+            svm_param_dist,
+            n_iter=n_iter,
+            scoring="roc_auc",
+            cv=4,
+            verbose=2,
+            n_jobs=8,
+        )
+        svm_search.fit(X, y)
+        return svm_search.best_estimator_
 
-    mlp_search.fit(X, y)
-    best_mlp = mlp_search.best_estimator_
+    def train_mlp(X, y):
+        mlp_search = RandomizedSearchCV(
+            MLPClassifier(max_iter=500, early_stopping=True),
+            mlp_param_dist,
+            n_iter=n_iter,
+            scoring="roc_auc",
+            cv=4,
+            verbose=2,
+            n_jobs=8,
+        )
+        mlp_search.fit(X, y)
+        return mlp_search.best_estimator_
 
-    print("Best MLP params:", mlp_search.best_params_)
+    if use_data_ensemble:
+        svm_models = train_data_ensemble_models(
+            X, y, train_svm, len(class0), n_models=n_ensemble_models, fraction=ensemble_fraction
+        )
+        mlp_models = train_data_ensemble_models(
+            X, y, train_mlp, len(class0), n_models=n_ensemble_models, fraction=ensemble_fraction
+        )
 
-    joblib.dump(best_svm, f"{model_prefix}_svm.joblib")
-    joblib.dump(best_mlp, f"{model_prefix}_mlp.joblib")
+        joblib.dump(svm_models, f"{model_prefix}_svm_ensemble.joblib")
+        joblib.dump(mlp_models, f"{model_prefix}_mlp_ensemble.joblib")
 
-    svm_probs = best_svm.predict_proba(X)[:, 1]
-    mlp_probs = best_mlp.predict_proba(X)[:, 1]
+        def predict_proba_ensemble(models, X):
+            probs = np.zeros(len(X))
+            for m in models:
+                probs += m.predict_proba(X)[:, 1]
+            print(len(models), len(X), probs.shape)
+            return probs / len(models)
+
+        svm_probs = predict_proba_ensemble(svm_models, X)
+        mlp_probs = predict_proba_ensemble(mlp_models, X)
+
+    else:
+        best_svm = train_svm(X, y)
+        best_mlp = train_mlp(X, y)
+
+        joblib.dump(best_svm, f"{model_prefix}_svm.joblib")
+        joblib.dump(best_mlp, f"{model_prefix}_mlp.joblib")
+
+        svm_probs = best_svm.predict_proba(X)[:, 1]
+        mlp_probs = best_mlp.predict_proba(X)[:, 1]
 
     fpr_svm, tpr_svm, _ = roc_curve(y, svm_probs)
     fpr_mlp, tpr_mlp, _ = roc_curve(y, mlp_probs)
 
     plt.figure()
-    plt.plot(fpr_svm, tpr_svm, label="Best SVM")
-    plt.plot(fpr_mlp, tpr_mlp, label="Best MLP")
+    plt.plot(fpr_svm, tpr_svm, label=f"Best SVM (AUC={auc(fpr_svm, tpr_svm):.3f})")
+    plt.plot(fpr_mlp, tpr_mlp, label=f"Best MLP (AUC={auc(fpr_mlp, tpr_mlp):.3f})")
     plt.legend()
     plt.title("Best Model ROC")
-    plt.savefig(f"{model_prefix}_best_roc.png")
+    plt.savefig(f"{model_prefix}_best_roc_{'ens' if use_data_ensemble else 'sin'}.png")
     plt.close()
 
 
@@ -112,6 +169,9 @@ def train_subset_ensemble_auto(
     family_weights=family_weights_glob,
     model_prefix="ensemble",
     n_iter=100,
+    use_data_ensemble=False,
+    ensemble_fraction=0.7,
+    n_ensemble_models=7,
 ):
     X = np.vstack([class0, class1])
     y = np.array([0] * len(class0) + [1] * len(class1))
@@ -136,63 +196,98 @@ def train_subset_ensemble_auto(
         "hidden_layer_sizes": [(16,), (32,), (32, 16), (64, 32)],
         "alpha": np.logspace(-5, -2, 10),
         "learning_rate_init": np.logspace(-4, -2, 10),
-        "beta_1": np.linspace(0.5, 1.0, 20),
-        "beta_2": np.linspace(0.5, 1.0, 20),
+        "beta_1": np.linspace(0.5, 0.999, 20),
+        "beta_2": np.linspace(0.5, 0.999, 20),
     }
+
+    def train_svm(X, y):
+        return (
+            RandomizedSearchCV(
+                SVC(probability=True),
+                svm_param_dist,
+                n_iter=n_iter,
+                scoring="roc_auc",
+                cv=4,
+                n_jobs=8,
+                verbose=2,
+            )
+            .fit(X, y)
+            .best_estimator_
+        )
+
+    def train_mlp(X, y):
+        return (
+            RandomizedSearchCV(
+                MLPClassifier(max_iter=500, early_stopping=True),
+                mlp_param_dist,
+                n_iter=n_iter,
+                scoring="roc_auc",
+                cv=4,
+                n_jobs=8,
+                verbose=2,
+            )
+            .fit(X, y)
+            .best_estimator_
+        )
 
     for i, subset in enumerate(subsets):
         print(f"\n=== Training subset {i} ({subset}) ===")
 
         X_sub = X[:, subset]
 
-        # -------- SVM search --------
-        svm_search = RandomizedSearchCV(
-            SVC(probability=True),
-            svm_param_dist,
-            n_iter=n_iter,
-            scoring="roc_auc",
-            cv=5,
-            n_jobs=8,
-            verbose=1,
-        )
+        if use_data_ensemble:
+            svm_models_sub = train_data_ensemble_models(
+                X_sub,
+                y,
+                train_svm,
+                len(class0),
+                n_models=n_ensemble_models,
+                fraction=ensemble_fraction,
+            )
+            mlp_models_sub = train_data_ensemble_models(
+                X_sub,
+                y,
+                train_mlp,
+                len(class0),
+                n_models=n_ensemble_models,
+                fraction=ensemble_fraction,
+            )
 
-        svm_search.fit(X_sub, y)
-        best_svm = svm_search.best_estimator_
+            joblib.dump(svm_models_sub, f"{model_prefix}_svm_{i}_ensemble.joblib")
+            joblib.dump(mlp_models_sub, f"{model_prefix}_mlp_{i}_ensemble.joblib")
 
-        print(f"Subset {i} best SVM:", svm_search.best_params_)
+            svm_models.append(svm_models_sub)
+            mlp_models.append(mlp_models_sub)
 
-        # -------- MLP search --------
-        mlp_search = RandomizedSearchCV(
-            MLPClassifier(max_iter=500, early_stopping=True),
-            mlp_param_dist,
-            n_iter=n_iter,
-            scoring="roc_auc",
-            cv=5,
-            n_jobs=8,
-            verbose=1,
-        )
+        else:
+            best_svm = train_svm(X_sub, y)
+            best_mlp = train_mlp(X_sub, y)
 
-        mlp_search.fit(X_sub, y)
-        best_mlp = mlp_search.best_estimator_
+            joblib.dump(best_svm, f"{model_prefix}_svm_{i}.joblib")
+            joblib.dump(best_mlp, f"{model_prefix}_mlp_{i}.joblib")
 
-        print(f"Subset {i} best MLP:", mlp_search.best_params_)
+            svm_models.append(best_svm)
+            mlp_models.append(best_mlp)
 
-        # Save
-        joblib.dump(best_svm, f"{model_prefix}_svm_{i}.joblib")
-        joblib.dump(best_mlp, f"{model_prefix}_mlp_{i}.joblib")
-
-        svm_models.append(best_svm)
-        mlp_models.append(best_mlp)
-        
     def combined_proba(X_input):
+        def predict_family(models, X_sub):
+            if isinstance(models, list):
+                # data ensemble
+                p = np.zeros(len(X_sub))
+                for m in models:
+                    p += m.predict_proba(X_sub)[:, 1]
+                return p / len(models)
+            else:
+                return models.predict_proba(X_sub)[:, 1]
+
         svm_probs = np.zeros(len(X_input))
         mlp_probs = np.zeros(len(X_input))
 
         for i, subset in enumerate(subsets):
             w = subset_weights[i]
 
-            svm_probs += w * svm_models[i].predict_proba(X_input[:, subset])[:, 1]
-            mlp_probs += w * mlp_models[i].predict_proba(X_input[:, subset])[:, 1]
+            svm_probs += w * predict_family(svm_models[i], X_input[:, subset])
+            mlp_probs += w * predict_family(mlp_models[i], X_input[:, subset])
 
         svm_probs /= sum(subset_weights)
         mlp_probs /= sum(subset_weights)
@@ -203,28 +298,36 @@ def train_subset_ensemble_auto(
 
         return final
 
-    probs = combined_proba(X)
-
-    fpr, tpr, _ = roc_curve(y, probs)
+    fpr, tpr, _ = roc_curve(y, combined_proba(X))
     roc_auc = auc(fpr, tpr)
 
     plt.figure()
-    plt.plot(fpr, tpr, label=f"Ensemble (AUC={roc_auc:.3f})")
+    plt.plot(fpr, tpr, label=f"CV Ensemble (AUC={roc_auc:.3f})")
     plt.legend()
-    plt.title("Optimized Ensemble ROC")
-    plt.savefig(f"{model_prefix}_roc.png")
+    plt.savefig(f"{model_prefix}_cv_roc_{'ens' if use_data_ensemble else 'sin'}.png")
     plt.close()
 
 
-def classify_with_saved_models(X, model_prefix="model"):
-    scaler = joblib.load(f"{model_prefix}_scaler.joblib")
-    svm = joblib.load(f"{model_prefix}_svm.joblib")
-    mlp = joblib.load(f"{model_prefix}_mlp.joblib")
+def classify_with_saved_models(X, model_prefix="model", use_data_ensemble=False):
+    if use_data_ensemble:
+        svm_models = joblib.load(f"{model_prefix}_svm_ensemble.joblib")
+        mlp_models = joblib.load(f"{model_prefix}_mlp_ensemble.joblib")
 
-    X = scaler.transform(X)
+        def predict(models):
+            p = np.zeros(len(X))
+            for m in models:
+                p += m.predict_proba(X)[:, 1]
+            return p / len(models)
 
-    svm_p = svm.predict_proba(X)[:, 1]
-    mlp_p = mlp.predict_proba(X)[:, 1]
+        svm_p = predict(svm_models)
+        mlp_p = predict(mlp_models)
+
+    else:
+        svm = joblib.load(f"{model_prefix}_svm.joblib")
+        mlp = joblib.load(f"{model_prefix}_mlp.joblib")
+
+        svm_p = svm.predict_proba(X)[:, 1]
+        mlp_p = mlp.predict_proba(X)[:, 1]
 
     df = pd.DataFrame({"svm_prob": svm_p, "mlp_prob": mlp_p})
 
@@ -238,16 +341,30 @@ def classify_with_ensemble(
     subset_weights=subset_weights_glob,
     family_weights=family_weights_glob,
     model_prefix="ensemble",
+    use_data_ensemble=False,
 ):
     scaler = joblib.load(f"{model_prefix}_scaler.joblib")
     X = scaler.transform(X)
 
-    svm_models = [
-        joblib.load(f"{model_prefix}_svm_{i}.joblib") for i in range(len(subsets))
-    ]
-    mlp_models = [
-        joblib.load(f"{model_prefix}_mlp_{i}.joblib") for i in range(len(subsets))
-    ]
+    svm_models = []
+    mlp_models = []
+
+    for i in range(len(subsets)):
+        if use_data_ensemble:
+            svm_models.append(joblib.load(f"{model_prefix}_svm_{i}_ensemble.joblib"))
+            mlp_models.append(joblib.load(f"{model_prefix}_mlp_{i}_ensemble.joblib"))
+        else:
+            svm_models.append(joblib.load(f"{model_prefix}_svm_{i}.joblib"))
+            mlp_models.append(joblib.load(f"{model_prefix}_mlp_{i}.joblib"))
+
+    def predict_family(models, X_sub):
+        if isinstance(models, list):
+            probs = np.zeros(len(X_sub))
+            for m in models:
+                probs += m.predict_proba(X_sub)[:, 1]
+            return probs / len(models)
+        else:
+            return models.predict_proba(X_sub)[:, 1]
 
     svm_probs = np.zeros(len(X))
     mlp_probs = np.zeros(len(X))
@@ -255,8 +372,10 @@ def classify_with_ensemble(
     for i, subset in enumerate(subsets):
         w = subset_weights[i]
 
-        svm_probs += w * svm_models[i].predict_proba(X[:, subset])[:, 1]
-        mlp_probs += w * mlp_models[i].predict_proba(X[:, subset])[:, 1]
+        X_sub = X[:, subset]
+
+        svm_probs += w * predict_family(svm_models[i], X_sub)
+        mlp_probs += w * predict_family(mlp_models[i], X_sub)
 
     svm_probs /= sum(subset_weights)
     mlp_probs /= sum(subset_weights)
@@ -318,12 +437,7 @@ def build_metric_vectors(
 def main():
     parser = argparse.ArgumentParser(description="Evaluate metrics for the heightmaps.")
 
-    parser.add_argument(
-        "--mode",
-        type=str,
-        help="<train|classify>",
-        required=True
-    )
+    parser.add_argument("--mode", type=str, help="<train|classify>", required=True)
 
     parser.add_argument(
         "--format",
@@ -369,6 +483,13 @@ def main():
         help="If use previously stored vectors for training.",
     )
 
+    parser.add_argument(
+        "--train-ensemble",
+        action="store_true",
+        default=False,
+        help="If train ensembles of models on different subsets of data.",
+    )
+
     args = parser.parse_args()
 
     fmt = args.format.lower().strip()
@@ -399,27 +520,40 @@ def main():
         else:
             print(f"Loading the stored vectors!")
             interesting_vectors_pd = pd.read_csv(
-                os.path.join(directory_interesting, "interesting_metric_vectors.csv")
+                os.path.join(
+                    directory_interesting,
+                    "interesting_metric_vectors_thrsh_05_entrp.csv",
+                )
             )
-            interesting_vectors = interesting_vectors_pd.to_numpy()[:,1:]
+            interesting_vectors = interesting_vectors_pd.to_numpy()[:, 1:]
 
             boring_vectors_pd = pd.read_csv(
-                os.path.join(directory_boring, "boring_metric_vectors.csv")
+                os.path.join(
+                    directory_boring, "boring_metric_vectors_thrsh_05_entrp.csv"
+                )
             )
-            boring_vectors = boring_vectors_pd.to_numpy()[:,1:]
+            boring_vectors = boring_vectors_pd.to_numpy()[:, 1:]
 
         train_and_save_models_auto(
-            boring_vectors, interesting_vectors, None, "test_model", 20
+            boring_vectors,
+            interesting_vectors,
+            None,
+            "test_model",
+            20,
+            use_data_ensemble=args.train_ensemble,
         )
         train_subset_ensemble_auto(
-            boring_vectors, interesting_vectors, model_prefix="test_ensemble"
+            boring_vectors,
+            interesting_vectors,
+            use_data_ensemble=args.train_ensemble,
+            model_prefix="test_ensemble",
         )
     elif args.mode == "classify":
         vectors_to_classify = build_metric_vectors(
             args.directory_classify, args.chunk_size, args.division_depth, fmt
         )
-        classify_with_saved_models(vectors_to_classify, "test_model")
-        classify_with_ensemble(vectors_to_classify, model_prefix="test_ensemble")
+        classify_with_saved_models(vectors_to_classify, model_prefix="test_model", use_data_ensemble=args.train_ensemble)
+        classify_with_ensemble(vectors_to_classify, model_prefix="test_ensemble", use_data_ensemble=args.train_ensemble)
     else:
         raise ValueError("Wrong script mode")
 
