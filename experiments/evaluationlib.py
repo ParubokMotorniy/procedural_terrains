@@ -144,16 +144,53 @@ def evaluate_gradient_score(heightmap: np.ndarray, subdomainSize: int):
     return gradient_score
 
 
-def evaluate_fractal_score(heightmap: np.ndarray, threshold: float = 0.25):
-    # fractal dimension. max=1.0 is intentional here, for the score can only be avaluated for binary maps
-    quantized_heightmap = quantize_heightmap(heightmap, 1.0, np.float32)
-    binary_heightmap = quantized_heightmap >= threshold
+def find_balanced_threshold(heightmap: np.ndarray, max_iter: int = 20, bounds = (0.47, 0.53)):
+    low, high = bounds
 
-    data = pspy.metrics.boxcount(binary_heightmap)
+    best_threshold = 0.5
+    best_error = float("inf")
+
+    total = heightmap.size
+
+    for _ in range(max_iter):
+        mid = 0.5 * (low + high)
+
+        binary = heightmap >= mid
+        white = np.count_nonzero(binary)
+        ratio = white / total
+
+        error = abs(ratio - 0.5)
+
+        if error < best_error:
+            best_error = error
+            best_threshold = mid
+
+        if ratio > 0.5:
+            low = mid  
+        else:
+            high = mid  
+
+    return best_threshold
+
+
+def evaluate_fractal_score(heightmap: np.ndarray, threshold: float = None):
+    quantized_heightmap = normalize_heightmap(heightmap)
+
+    if threshold is None:
+        threshold = find_balanced_threshold(quantized_heightmap)
+
+    binary_heightmap = quantized_heightmap >= threshold
+    
+    # Image.fromarray(quantized_heightmap >= threshold).save(
+    #     f"./{threshold}_{np.mean(heightmap)}_mask.png", format="PNG"
+    # )
+
+    # --- fractal dimension ---
+    data = pspy.metrics.boxcount(binary_heightmap, 15)
     coeffs = np.polyfit(np.log(data.size), np.log(data.count), 1)
     fractal_dimension = -coeffs[0]
 
-    # 1/f^beta <- beta
+    # --- power spectrum ---
     F = np.fft.fft2(quantized_heightmap - np.mean(quantized_heightmap))
     psd2D = np.abs(np.fft.fftshift(F)) ** 2
 
@@ -171,17 +208,11 @@ def evaluate_fractal_score(heightmap: np.ndarray, threshold: float = 0.25):
 
     freqs, psd = freqs[1:], radial_psd[1:]
 
-    # plt.plot(np.log(freqs), np.log(psd))
-    # plt.show()
+    slope, residuals = np.polyfit(np.log(freqs), np.log(psd), deg=1, full=True)[0]
 
-    slope, residuals = np.polyfit(
-        np.log(freqs), np.log(psd), deg=1, full=True
-    )[0]
     beta = -slope
-
     mse = residuals / len(freqs)
 
-    # return
     return fractal_dimension, beta, mse
 
 
@@ -262,6 +293,7 @@ def mutual_information_from_histograms(h1, h2):
     if n1 == 0 or n2 == 0:
         return 0.0
 
+    # probabilities
     p1 = h1 / n1
     p2 = h2 / n2
 
@@ -462,13 +494,13 @@ def read_tiff_grayscale(path: str, normalize: bool = False) -> np.ndarray:
 def get_metric_vector(
     heightmap: np.ndarray, chunk_size: int, division_depth: int, verbose: bool = False
 ):
-    quantized_heightmap =  quantize_heightmap(heightmap, 255.0)
+    quantized_heightmap = quantize_heightmap(heightmap, 255.0)
     normalized_heightmap = normalize_heightmap(heightmap)
 
     erosion_score = evaluate_erosion_score(normalized_heightmap)
     gradient_score = evaluate_gradient_score(normalized_heightmap, chunk_size)
 
-    fractal_dimension, beta, mse = evaluate_fractal_score(heightmap)
+    fractal_dimension, beta, mse = evaluate_fractal_score(heightmap, 0.5)
 
     zurek_png, zurek_lzma, zurek_zlib = evaluate_global_aesthetic_measure(
         quantized_heightmap
@@ -486,7 +518,11 @@ def get_metric_vector(
         )
     )
     
-    #TODO: think how MSE can be implemented
+    # Image.fromarray(split_visualization).save(
+    #     f"./{np.mean(heightmap):.3f}_split.png", format="PNG"
+    # )
+
+    # TODO: think how MSE can be implemented
     if verbose:
         print("-" * 32)
         print(f"Erosion score: {erosion_score}")
@@ -500,8 +536,15 @@ def get_metric_vector(
             f"CAM:\n  png : ({order_png}) \n  zlib : ({order_zlib}) \n  lzma : ({order_lzma})"
         )
         print("+" * 32)
-        
-    
-    return np.array([erosion_score, gradient_score, fractal_dimension, beta, zurek_lzma, order_lzma], dtype=np.float64)
 
-    
+    return np.array(
+        [
+            erosion_score,
+            gradient_score,
+            fractal_dimension,
+            beta,
+            zurek_lzma,
+            order_lzma,
+        ],
+        dtype=np.float64,
+    )

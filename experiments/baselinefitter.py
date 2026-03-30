@@ -22,9 +22,9 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.inspection import permutation_importance
 from sklearn.model_selection import RandomizedSearchCV
 
-family_weights_glob = {"mlp": 0.45, "svm": 0.55}
+family_weights_glob = {"mlp": 0.7, "svm": 0.3}
 subsets_glob = [[0, 1], [2, 3], [4, 5]]
-subset_weights_glob = [0.2, 0.5, 0.3]
+subset_weights_glob = [0.15, 0.35, 0.5]
 
 
 def evaluate_separability(
@@ -163,7 +163,7 @@ def train_and_save_models_auto(
     joblib.dump(scaler, f"{model_prefix}_scaler.joblib")
 
     svm_param_dist = {
-        "C": np.logspace(-2, 2, 20),
+        "C": np.logspace(-3, 3, 40),
         "gamma": ["scale", "auto"] + list(np.logspace(-3, 1, 10)),
         "kernel": ["rbf"],
     }
@@ -184,7 +184,7 @@ def train_and_save_models_auto(
     print("Best SVM params:", svm_search.best_params_)
 
     mlp_param_dist = {
-        "hidden_layer_sizes": [(16, 8), (16, 16), (32, 8), (32, 16), (64, 32)],
+        "hidden_layer_sizes": [(16, 8), (16, 16), (32, 8), (32, 16), (64, 8), (64, 16)],
         "alpha": np.logspace(-5, -1, 10),
         "learning_rate_init": np.logspace(-4, -2, 10),
     }
