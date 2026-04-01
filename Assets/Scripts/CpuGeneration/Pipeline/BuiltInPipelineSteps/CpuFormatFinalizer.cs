@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using Unity.VisualScripting;
 using UnityEngine;
@@ -16,6 +17,10 @@ namespace CpuGenerationPipeline
         public CpuInputExpectations GetStepExpectationsCpu()
         {
             return CpuInputExpectations.HeightMapNormalized;
+        }
+
+        public void RandomizeParameters(System.Random random)
+        {
         }
 
         public void UpdateHeightmapStateCpu(ref CpuHeightmapProperties previousState)

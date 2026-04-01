@@ -13,7 +13,7 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
 {
     [SerializeField]
     public ComputeShader erosionComputeShader;
-    [Range(5, 100)]
+    [Range(5, 150)]
     public int erosionIterationLimit = 25;
 
     [Range(0.0001f, 1.0f)]
@@ -28,7 +28,7 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
     [Range(0.0001f, 1.0f)]
     public float rainSolubilityConstant;
 
-    [Range(0.0001f, 10.0f)]
+    [Range(0.01f, 10.0f)]
     public float maxWaterDepth;
 
     [Range(0.0001f, 1.0f)]
@@ -138,7 +138,7 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
 
         int resourceInitializerKernelIdx = erosionComputeShader.FindKernel("ResourceInitializer");
         int pipePlumberKernelIdx = erosionComputeShader.FindKernel("PipePlumber");
-        
+
         int finalWaterEvaporatorKernelIdx = erosionComputeShader.FindKernel("FinalWaterEvaporator");
 
         foreach (int kernelIdx in new[] { rainDropKernelIdx, waterEvaporatorKernelIdx, resourceInitializerKernelIdx, finalWaterEvaporatorKernelIdx, waterDistributorKernelIdx, sedimentDistributorKernelIdx, pipePlumberKernelIdx })
@@ -168,7 +168,7 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, pipePlumberKernelIdx, dispatchGroups);
             if (d % 5 == 0)
                 pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, rainDropKernelIdx, dispatchGroups);
-                
+
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, waterDistributorKernelIdx, dispatchGroups);
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, sedimentDistributorKernelIdx, dispatchGroups);
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, waterEvaporatorKernelIdx, dispatchGroups);
@@ -313,7 +313,7 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
         }
     }
 
-    float computeLargerVelocity(int2 processedTexel, uint2 heightmapDimensions, TexelPipes[,] pipesBuffer)
+    float computeLargerVelocity(int2 processedTexel, uint2 heightmapDimensions, TexelPipes[,] pipesBuffer, ref int2 flowDirection)
     {
         int2 signedHeightmapDimension = (int2)heightmapDimensions;
 
@@ -327,7 +327,6 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
 
         float vY = (float)(0.5 * (pipesBuffer[neighborBottom.x, neighborBottom.y].inWaterPipes[0, 1] + pipesBuffer[processedTexel.x, processedTexel.y].inWaterPipes[0, 1] - pipesBuffer[neighborTop.x, neighborTop.y].inWaterPipes[2, 1] - pipesBuffer[processedTexel.x, processedTexel.y].inWaterPipes[2, 1]));
 
-        float sNormSq = vX * vX + vY * vY;
 
         int2 neighborTopLeft = CpuComputeUtilities.terrainWrap(processedTexel - new int2(1, 1), signedHeightmapDimension);
         int2 neighborBottomRight = CpuComputeUtilities.terrainWrap(processedTexel + new int2(1, 1), signedHeightmapDimension);
@@ -341,9 +340,10 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
         // from bottom left to top right
         float vR = (float)(0.5 * (pipesBuffer[neighborTopRight.x, neighborTopRight.y].inWaterPipes[2, 0] + pipesBuffer[processedTexel.x, processedTexel.y].inWaterPipes[2, 0] - pipesBuffer[neighborBottomLeft.x, neighborBottomLeft.y].inWaterPipes[0, 2] - pipesBuffer[processedTexel.x, processedTexel.y].inWaterPipes[0, 2]));
 
-        float dNormSq = vL * vL + vR * vR;
+        float2 velocityVector = new float2(1, 0) * vX + new float2(0, 1) * vY + new float2(1, 1) * vL + new float2(1, -1) * vR;
+        flowDirection = (int2)math.round(math.normalize(velocityVector));
 
-        return math.sqrt(math.max(sNormSq, dNormSq));
+        return math.sqrt(math.dot(velocityVector, velocityVector));
     }
 
     void updateGradients(CpuPipelineContext.CpuIntermediateHeightmap intermediateHeightmap, float2[,] cpuGradientsBuffer)
@@ -376,11 +376,12 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
                 float terrainHeightAtTexel = intermediateHeightmap.nativeHeightmapArray[centerLin];
 
                 float sedimentAdjustment = 0.0f;
+                int2 flowDirection = new();
 
                 {
                     float2 heightGradientAtTexel = cpuGradientsBuffer[processedTexel.x, processedTexel.y];
 
-                    float velocityNorm = computeLargerVelocity(processedTexel, intermediateHeightmap.heightmapDimensions, texelPipes);
+                    float velocityNorm = computeLargerVelocity(processedTexel, intermediateHeightmap.heightmapDimensions, texelPipes, ref flowDirection);
 
                     float gradientNorm = math.length(heightGradientAtTexel);
                     float sinAlpha = (float)(gradientNorm / math.sqrt(1.0 + gradientNorm * gradientNorm));
@@ -406,25 +407,17 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
                 float waterLostAtTexel = math.abs(texelPipes[processedTexel.x, processedTexel.y].inWaterPipes[1, 1]);
                 float intermediateSedimentLevel = sedimentLevelAtTexel + sedimentAdjustment;
 
-                for (int i = -1; i < 2; ++i)
+                float sedimentLostDueToFlow = intermediateSedimentLevel * (waterLostAtTexel / waterLevelAtTexel);
+
                 {
-                    for (int j = -1; j < 2; ++j)
-                    {
-                        int2 processedNeighbor = CpuComputeUtilities.terrainWrap(processedTexel + new int2(i, j), signedHeightmapDimension);
-
-                        uint2 targetInPipe = pipeMap[i + 1, j + 1];
-
-                        float waterReceived = texelPipes[processedNeighbor.x, processedNeighbor.y].inWaterPipes[targetInPipe.x, targetInPipe.y];
-                        float sedimentReceived = waterLevelAtTexel > CpuComputeUtilities.EPS ? intermediateSedimentLevel * (waterReceived / waterLevelAtTexel) : 0.0f;
-
-                        texelPipes[processedNeighbor.x, processedNeighbor.y].inSedimentPipes[targetInPipe.x, targetInPipe.y] = sedimentReceived;
-                    }
+                    int2 processedNeighbor = CpuComputeUtilities.terrainWrap(processedTexel + flowDirection, signedHeightmapDimension);
+                    uint2 targetInPipe = pipeMap[flowDirection.x + 1, flowDirection.y + 1];
+                    texelPipes[processedNeighbor.x, processedNeighbor.y].inSedimentPipes[targetInPipe.x, targetInPipe.y] = sedimentLostDueToFlow;
                 }
 
-                float invWater = waterLevelAtTexel > CpuComputeUtilities.EPS ? 1.0f / waterLevelAtTexel : 0.0f;
                 // this change will be taken into account during evaporation stage
-                texelPipes[processedTexel.x, processedTexel.y].inSedimentPipes[1, 1] = /*due depth*/ sedimentAdjustment - /*due water flow*/ (intermediateSedimentLevel * waterLostAtTexel * invWater);
-                intermediateHeightmap.nativeHeightmapArray[centerLin] = math.max(0.0f, terrainHeightAtTexel - sedimentAdjustment);
+                texelPipes[processedTexel.x, processedTexel.y].inSedimentPipes[1, 1] = /*due depth*/ sedimentAdjustment - /*due water flow*/ sedimentLostDueToFlow;
+                intermediateHeightmap.nativeHeightmapArray[centerLin] = (float)math.max(0.0, terrainHeightAtTexel - sedimentAdjustment);
             }
         }
     }
@@ -556,7 +549,7 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
         GUILayout.Label("Water");
 
         GUILayout.Label($"Max Water Depth: {maxWaterDepth:F4}");
-        maxWaterDepth = GUILayout.HorizontalSlider(maxWaterDepth, 0.0001f, 10.0f);
+        maxWaterDepth = GUILayout.HorizontalSlider(maxWaterDepth, 0.01f, 10.0f);
 
         GUILayout.EndScrollView();
     }
@@ -574,5 +567,17 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
         texelParametersBuffer?.Release();
         waterPipesBuffer?.Release();
         gradientsBuffer?.Release();
+    }
+
+    public override void RandomizeParameters(System.Random random)
+    {
+        solubilityConstant = math.max((float)random.NextDouble(), 0.001f);
+        evaporationConstant = math.max((float)random.NextDouble(), 0.001f);
+        capacityConstant = math.max((float)random.NextDouble(), 0.001f);
+        depositionConstant = math.max((float)random.NextDouble(), 0.001f);
+        rainSolubilityConstant = math.max((float)random.NextDouble(), 0.001f);
+        maxWaterDepth = (float)math.max(0.01, random.NextDouble() * 10.0);
+        // erosionIterationLimit = math.max(5, random.Next() % 150);
+        //rainNoiseFrequency -> ignored
     }
 }

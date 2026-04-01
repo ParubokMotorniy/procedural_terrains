@@ -8,6 +8,7 @@ using UnityEngine.Rendering;
 using System.Threading.Tasks;
 using Unity.Collections;
 using Microsoft.Unity.VisualStudio.Editor;
+using Random = System.Random;
 
 public class RMDDispatcher : UltimatePipelineStep
 {
@@ -17,8 +18,8 @@ public class RMDDispatcher : UltimatePipelineStep
     [Range(1, 16)]
     public uint numSubdivisions = 2;
 
-    [Range(0.01f, 10.0f)]
-    public float H = 0.85f;
+    [Range(0.01f, 1.0f)]
+    public float H = 0.85f; //D = 3 - H
 
     [SerializeField]
     public bool addExtraNoise;
@@ -350,5 +351,12 @@ public class RMDDispatcher : UltimatePipelineStep
 
     public override void FreeResources()
     {
+    }
+
+    public override void RandomizeParameters(System.Random random)
+    {
+        H = (float)random.NextDouble();
+        addExtraNoise = random.NextDouble() > 0.5;
+        //worleyFrequency -> ignored since directly affects the scale
     }
 }

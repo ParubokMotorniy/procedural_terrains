@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.Assertions;
 using Unity.Mathematics;
 using Unity.VisualScripting;
+using System;
 
 namespace GpuGenerationPipeline
 {
@@ -33,6 +34,10 @@ namespace GpuGenerationPipeline
         public InputExpectations GetStepExpectationsGpu()
         {
             return InputExpectations.None;
+        }
+
+        public void RandomizeParameters(System.Random random)
+        {
         }
 
         public void UpdateHeightmapStateGpu(ref HeightmapProperties previousState)

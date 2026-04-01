@@ -14,19 +14,19 @@ public class UNDispatcher : UltimatePipelineStep
     [Range(0.001f, 2.0f)]
     public float noiseFrequency = 0.001f;
 
-    [Range(0.5f, 1.0f)]
-    public float persistence = 0.2f;
+    [Range(0.001f, 1.0f)]
+    public float H = 0.2f; //D = 3 - H
 
     [Range(-1.0f, 1.0f)]
     public float sharpness = 0.0f;
 
+    [Range(1, 10)]
+    public int numOctaves = 5;
+
     [Range(0.001f, 10.0f)]
     public float slopeErosion = 0.001f;
 
-    [Range(1, 20)]
-    public int numOctaves = 5;
-
-    [Range(0.01f, 10.0f)]
+    [Range(0.001f, 10.0f)]
     public float perturbationStrength = 0.01f;
 
     private static readonly int PID_Result = Shader.PropertyToID("Result");
@@ -36,7 +36,7 @@ public class UNDispatcher : UltimatePipelineStep
     private static readonly int PID_slopeErosion = Shader.PropertyToID("slopeErosion");
     private static readonly int PID_perturbationStrength = Shader.PropertyToID("perturbationStrength");
     private static readonly int PID_numOctaves = Shader.PropertyToID("numOctaves");
-    private static readonly int PID_persistence = Shader.PropertyToID("persistence");
+    private static readonly int PID_persistence = Shader.PropertyToID("H");
     private static readonly int PID_randomFloats = Shader.PropertyToID("randomFloats");
     private static readonly int PID_textureDimensions = Shader.PropertyToID("textureDimensions");
 
@@ -62,7 +62,7 @@ public class UNDispatcher : UltimatePipelineStep
             pipelineContext.SetUniformFloat(shaderToDispatch, PID_slopeErosion, slopeErosion);
             pipelineContext.SetUniformFloat(shaderToDispatch, PID_perturbationStrength, perturbationStrength);
             pipelineContext.SetUniformInt(shaderToDispatch, PID_numOctaves, numOctaves);
-            pipelineContext.SetUniformFloat(shaderToDispatch, PID_persistence, persistence);
+            pipelineContext.SetUniformFloat(shaderToDispatch, PID_persistence, math.pow(2, H));
             pipelineContext.SetRandomFloats(shaderToDispatch, PID_randomFloats);
             pipelineContext.SetUniformInts(shaderToDispatch, PID_textureDimensions, new int[] { textureSize, textureSize });
         }
@@ -90,6 +90,7 @@ public class UNDispatcher : UltimatePipelineStep
         var intermediateHeightmap = pipelineContext.GetCpuIntemediateHeightmap();
 
         float2 extraDisplacement = (float2)intermediateHeightmap.heightmapDimensions * pipelineContext.GetRandomFloats();
+        float persistence = math.pow(2, H);
 
         for (int x = 0; x < intermediateHeightmap.heightmapDimensions.x; ++x)
         {
@@ -147,8 +148,8 @@ public class UNDispatcher : UltimatePipelineStep
         GUILayout.Label($"Frequency: {noiseFrequency:F4}");
         noiseFrequency = GUILayout.HorizontalSlider(noiseFrequency, 0.001f, 2.0f);
 
-        GUILayout.Label($"Persistence (G): {persistence:F3}");
-        persistence = GUILayout.HorizontalSlider(persistence, 0.5f, 1.0f);
+        GUILayout.Label($"H: {H:F3}");
+        H = GUILayout.HorizontalSlider(H, 0.001f, 1.0f);
 
         GUILayout.Label($"Octaves: {numOctaves}");
         numOctaves = Mathf.RoundToInt(
@@ -178,5 +179,15 @@ public class UNDispatcher : UltimatePipelineStep
 
     public override void FreeResources()
     {
+    }
+
+    public override void RandomizeParameters(System.Random random)
+    {
+        //noiseFrequency -> ignored since defines the scale
+        H = math.min((float)random.NextDouble(), 0.001f);
+        sharpness = ((float)random.NextDouble() - 0.5f) * 2.0f;
+        numOctaves = math.min(1, random.Next() % 10);
+        slopeErosion = math.max(0.001f, 10.0f * (float)random.NextDouble());
+        perturbationStrength = math.max(0.001f, 10.0f * (float)random.NextDouble());
     }
 }

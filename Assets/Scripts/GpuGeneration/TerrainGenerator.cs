@@ -38,6 +38,9 @@ namespace GpuGenerationPipeline
         [Range(5, 100)]
         public int numSamples = 5;
 
+        [SerializeField]
+        public bool randomizeParameters = false;
+
 #if UNITY_EDITOR
         [SerializeField]
         bool dumpTextures = false;
@@ -66,7 +69,7 @@ namespace GpuGenerationPipeline
         bool previousReadPending = false;
 
 
-        private PipelineContext buildPipeline(bool enablePipelineProfiling, int pipelineSeed)
+        private PipelineContext buildPipeline(bool enablePipelineProfiling, int pipelineSeed, bool ifRandomizeParameters)
         {
             int textureSize = (int)math.pow(2, terrainSize);
 
@@ -141,9 +144,21 @@ namespace GpuGenerationPipeline
             }
 #endif
             //executes the complete pipeline
-            foreach (PipelineStep step in augmentedPipeline)
+            if (ifRandomizeParameters)
             {
-                step.ExecuteStepGpu(currentContext);
+                System.Random parameterRandomizer = new System.Random(pipelineSeed);
+                foreach (PipelineStep step in augmentedPipeline)
+                {
+                    step.RandomizeParameters(parameterRandomizer);
+                    step.ExecuteStepGpu(currentContext);
+                }
+            }
+            else
+            {
+                foreach (PipelineStep step in augmentedPipeline)
+                {
+                    step.ExecuteStepGpu(currentContext);
+                }
             }
 
             return currentContext;
@@ -152,7 +167,7 @@ namespace GpuGenerationPipeline
         [ContextMenu("Regenerate terrain")]
         async void RegenerateTerrain()
         {
-            PipelineContext currentContext = buildPipeline(enableProfiling, generatorSeed);
+            PipelineContext currentContext = buildPipeline(enableProfiling, generatorSeed, randomizeParameters);
             await currentContext.ExecuteBuffer();
 
             if (enableMetricEvaluation)
@@ -196,7 +211,7 @@ namespace GpuGenerationPipeline
             //runs a number of samples, syncing each time to avoid obtaining corrupted heightmaps
             for (int s = 0; s < numSamples; ++s)
             {
-                var newContext = (ProfilingPipelineContext)buildPipeline(true, randomSeedGenerator.Next());
+                var newContext = (ProfilingPipelineContext)buildPipeline(true, randomSeedGenerator.Next(), randomizeParameters);
                 await newContext.ExecuteBuffer();
                 result[s] = (newContext.gpuFenceMilliseconds, newContext.gpuFrameTime);
                 RenderTextureDumper.SaveRFloatToExr(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples_gpu/async_gpu_terrain_" + s + ".exr"));
@@ -281,7 +296,7 @@ namespace GpuGenerationPipeline
 
                 int myIteration = synchronizedIterationsLeft;
 
-                var newContext = (ProfilingPipelineContext)buildPipeline(true, numSamples + generatorSeed + myIteration);
+                var newContext = (ProfilingPipelineContext)buildPipeline(true, numSamples + generatorSeed + myIteration, randomizeParameters);
                 previousReadPending = true;
                 await newContext.ExecuteBuffer();
 
@@ -391,6 +406,12 @@ namespace GpuGenerationPipeline
 
             GUILayout.EndHorizontal();
 
+            GUILayout.Space(5);
+            GUILayout.Label("Generation parameters randomization");
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Randomize parameters");
+            randomizeParameters = GUILayout.Toggle(randomizeParameters, "");
+            GUILayout.EndHorizontal();
         }
 
         public override string GUIStepTitle() => "GPU pipeline parameters";
@@ -419,7 +440,7 @@ namespace GpuGenerationPipeline
                 pipelineSteps = CommonDefines.buildPipelineFromEnum(pipeline);
                 CollectSynchronizedStatistics();
             }
-            if(GUILayout.Button("Free resources"))
+            if (GUILayout.Button("Free resources"))
             {
                 UltimatePipelineStep.FreeAllResourcesInScene();
             }

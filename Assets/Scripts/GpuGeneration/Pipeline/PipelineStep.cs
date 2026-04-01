@@ -17,7 +17,7 @@ namespace GpuGenerationPipeline
         Normalized = 1 << 0,
     }
 
-    public interface PipelineStep
+    public interface PipelineStep : CommonPipelineStep
     {
         public void ExecuteStepGpu(PipelineContext pipelineContext);
         public InputExpectations GetStepExpectationsGpu();

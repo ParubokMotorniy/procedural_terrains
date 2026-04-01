@@ -13,6 +13,8 @@ public class GUIManager : MonoBehaviour
 
     private static Rect stepsRect = new Rect(10, 10, 300, 600);
     private static Rect pipelineRect = new Rect(900, 10, 300, 600);
+    private Vector2 tunerScroll;
+    private Vector2 pipelineScroll;
 
     void Start()
     {
@@ -52,23 +54,26 @@ public class GUIManager : MonoBehaviour
         {
             GUILayout.BeginArea(stepsRect, GUI.skin.box);
             GUILayout.Label("Tuners");
+            tunerScroll = GUILayout.BeginScrollView(tunerScroll);
             for (int i = 0; i < stepsToRender.Count; i++)
             {
                 DrawSection(i, stepsToRender[i]);
             }
-
+            GUILayout.EndScrollView();
             GUILayout.EndArea();
         }
 
         {
             GUILayout.BeginArea(pipelineRect, GUI.skin.box);
-            GUILayout.Label("Generators");
+            GUILayout.Label("Pipelines");
+            pipelineScroll = GUILayout.BeginScrollView(pipelineScroll);
 
             for (int i = 0; i < generatorsToRender.Count; i++)
             {
                 DrawPipelineList(generatorsToRender[i]);
             }
 
+            GUILayout.EndScrollView();
             GUILayout.EndArea();
         }
     }

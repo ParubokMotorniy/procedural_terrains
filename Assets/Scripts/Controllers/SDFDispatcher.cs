@@ -5,8 +5,6 @@ using System;
 using CpuGenerationPipeline;
 using GpuGenerationPipeline;
 using System.Threading.Tasks;
-using UnityEngine.Rendering.Universal;
-using Unity.Collections;
 
 public class SDFDispatcher : UltimatePipelineStep
 {
@@ -483,5 +481,10 @@ public class SDFDispatcher : UltimatePipelineStep
 
         cpuFloodingBuffer1 = null;
         cpuFloodingBuffer2 = null;
+    }
+
+    public override void RandomizeParameters(System.Random random)
+    {
+        //baseSimplexFrequency -> ignored since defines scale 
     }
 }

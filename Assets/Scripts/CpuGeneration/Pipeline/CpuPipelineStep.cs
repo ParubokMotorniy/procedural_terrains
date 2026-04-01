@@ -18,7 +18,7 @@ namespace CpuGenerationPipeline
         Normalized = 1 << 0,
     }
 
-    public interface CpuPipelineStep
+    public interface CpuPipelineStep : CommonPipelineStep
     {
         public System.Threading.Tasks.Task ExecuteStepCpu(CpuPipelineContext pipelineContext);
         public CpuInputExpectations GetStepExpectationsCpu();

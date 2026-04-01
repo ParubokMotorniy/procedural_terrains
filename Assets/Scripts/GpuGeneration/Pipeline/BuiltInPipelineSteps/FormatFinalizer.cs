@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace GpuGenerationPipeline
@@ -13,6 +14,10 @@ namespace GpuGenerationPipeline
         public InputExpectations GetStepExpectationsGpu()
         {
             return InputExpectations.HeightMapNormalized;
+        }
+
+        public void RandomizeParameters(System.Random random)
+        {
         }
 
         public void UpdateHeightmapStateGpu(ref HeightmapProperties previousState)

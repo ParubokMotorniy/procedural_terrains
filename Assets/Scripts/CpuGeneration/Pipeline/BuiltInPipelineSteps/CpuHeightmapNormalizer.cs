@@ -50,6 +50,10 @@ namespace CpuGenerationPipeline
             return CpuInputExpectations.None;
         }
 
+        public void RandomizeParameters(System.Random random)
+        {
+        }
+
         public void UpdateHeightmapStateCpu(ref CpuHeightmapProperties previousState)
         {
             previousState |= CpuHeightmapProperties.Normalized;

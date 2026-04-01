@@ -17,11 +17,20 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
     [Range(7, 32)]
     public int numSimultaneousParticles = 10;
 
+    [Range(1, 3)]
+    public int erosionNeighborhood = 1;
+
+    [Range(1, 1000)]
+    public int numSimulationSteps = 1;
+
+    [Range(1, 10)]
+    public int numSimulationWaves = 1;
+
     [Range(0.01f, 1.0f)]
     public float inertia = 0.1f;
 
-    [Range(0.01f, 100.0f)]
-    public float capacity = 10.0f;
+    [Range(0.01f, 64.0f)]
+    public float capacity = 2.0f;
 
     [Range(0.0001f, 1.0f)]
     public float minSlope = 0.01f;
@@ -40,15 +49,6 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
 
     [Range(0.01f, 0.45f)]
     public float waterDeathThreshold = 0.05f;
-
-    [Range(1, 3)]
-    public int erosionNeighborhood = 1;
-
-    [Range(1, 1000)]
-    public int numSimulationSteps = 1;
-
-    [Range(1, 10)]
-    public int numSimulationWaves = 1;
 
     [Range(1.0f, 10.0f)]
     public float rainNoiseFrequency = 1.0f;
@@ -243,7 +243,8 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
     {
         float2 particlePos = particle.pos;
 
-        return (particlePos.x >= 0.0 && particlePos.y >= 0.0) && (particlePos.x < (float)heightmapDimensions.x && particlePos.y < (float)heightmapDimensions.y) && particle.w > waterDeathThreshold;
+        return (particlePos.x >= (float)(erosionNeighborhood + 1) && particlePos.y >= (float)(erosionNeighborhood + 1)) && (particlePos.x < (float)(heightmapDimensions.x - erosionNeighborhood - 1) && particlePos.y < (float)(heightmapDimensions.y - erosionNeighborhood - 1)) && particle.w > waterDeathThreshold;
+
     }
 
     float sampleHeightmapBilinear(CpuPipelineContext.CpuIntermediateHeightmap intermediateHeightmap, float2 coord)
@@ -282,7 +283,7 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
                 float dist = math.sqrt(fx * fx + fy * fy);
                 float weight = (actualNeighborRadius - dist) / math.max(erosionDistanceSumPrecompute, CpuComputeUtilities.EPS);
 
-                uint2 affectedNeighborCoordinate = (uint2)CpuComputeUtilities.terrainWrap(erosionCenter + new int2(x, y), signedHeightmapDimensions);
+                uint2 affectedNeighborCoordinate = (uint2)(erosionCenter + new int2(x, y));
                 float currentTexelHeight = intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, affectedNeighborCoordinate)];
 
                 float localSoftness = CpuComputeUtilities.computeSoftnessCoefficient(CpuComputeUtilities.computeGradientAtPoint(intermediateHeightmap.nativeHeightmapArray, intermediateHeightmap.heightmapDimensions, (int2)affectedNeighborCoordinate), currentTexelHeight, 0.1f);
@@ -300,13 +301,12 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
 
     void depositSediment(uint2 heightmapDimensions, int2 erosionCenter, float amountToDeposit, CpuTexelPipes[,] pipesBuffer)
     {
-        int2 signedHeightmapDimensions = (int2)heightmapDimensions;
         for (int x = -1; x <= 1; ++x)
         {
             for (int y = -1; y <= 1; ++y)
             {
                 float increment = depositionMapWeights[x + 1, y + 1] * amountToDeposit;
-                uint2 affectedNeighborCoordinates = (uint2)CpuComputeUtilities.terrainWrap(erosionCenter + new int2(x, y), signedHeightmapDimensions);
+                uint2 affectedNeighborCoordinates = (uint2)(erosionCenter + new int2(x, y));
                 uint2 targetInPipe = pipeMap[x + pipeMapCenterCoord, y + pipeMapCenterCoord];
                 pipesBuffer[affectedNeighborCoordinates.x, affectedNeighborCoordinates.y].inPipes[targetInPipe.x, targetInPipe.y] += increment;
             }
@@ -370,17 +370,14 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
             float oldSedimentValue = particlesBuffer[processedParticleIdx].s;
             float oldWaterValue = particlesBuffer[processedParticleIdx].w;
 
-            int2 floorInt = new int2(math.floor(oldParticlePosition));
-            uint2 floorOldParticlePosition = (uint2)CpuComputeUtilities.terrainWrap(floorInt, signedHeightmapDimensions);
+            uint2 floorOldParticlePosition = new uint2(math.floor(oldParticlePosition));
             float2 interpolationCoefficients = math.frac(oldParticlePosition);
 
             int sampleSelf = (int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, floorOldParticlePosition);
-            int sampleRight = (int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(
-                     (int2)(floorOldParticlePosition + new uint2(1, 0)), signedHeightmapDimensions));
-            int sampleTop = (int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(
-                         (int2)(floorOldParticlePosition + new uint2(1, 1)), signedHeightmapDimensions));
-            int sampleBottom = (int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (uint2)CpuComputeUtilities.terrainWrap(
-                         (int2)(floorOldParticlePosition + new uint2(0, 1)), signedHeightmapDimensions));
+            int sampleRight = (int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions,
+                     (floorOldParticlePosition + new uint2(1, 0)));
+            int sampleTop = (int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (floorOldParticlePosition + new uint2(1, 1)));
+            int sampleBottom = (int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, (floorOldParticlePosition + new uint2(0, 1)));
 
             float2 currentGradient = new float2(
                 (float)(intermediateHeightmap.nativeHeightmapArray[sampleRight] - intermediateHeightmap.nativeHeightmapArray[sampleSelf]) * (float)(1.0 - interpolationCoefficients.y)
@@ -565,7 +562,7 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
         GUILayout.Label("Sediment");
 
         GUILayout.Label($"Capacity: {capacity:F2}");
-        capacity = GUILayout.HorizontalSlider(capacity, 0.01f, 100.0f);
+        capacity = GUILayout.HorizontalSlider(capacity, 0.01f, 64.0f);
 
         GUILayout.Label($"Min Slope: {minSlope:F4}");
         minSlope = GUILayout.HorizontalSlider(minSlope, 0.0001f, 1.0f);
@@ -580,7 +577,7 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
         GUILayout.Label("Lifetime");
 
         GUILayout.Label($"Water Death Threshold: {waterDeathThreshold:F3}");
-        waterDeathThreshold = GUILayout.HorizontalSlider(waterDeathThreshold, 0.01f, 0.45f);
+        waterDeathThreshold = GUILayout.HorizontalSlider(waterDeathThreshold, 0.01f, 0.5f);
 
         GUILayout.Space(5);
         GUILayout.Label("Neighborhood");
@@ -608,5 +605,23 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
 
         gpuPipesBuffer?.Release();
         gpuParticlesBuffer?.Release();
+    }
+
+    public override void RandomizeParameters(System.Random random)
+    {
+        //numSimultaneousParticles -> ignored to minimize the number of conflicts
+        // erosionNeighborhood
+        // numSimulationSteps
+        // numSimulationWaves
+        // rainNoiseFrequency
+
+        inertia = (float)math.max(random.NextDouble(), 0.01);
+        capacity = (float)math.max(random.NextDouble() * 64.0, 0.01);
+        minSlope = (float)math.max(random.NextDouble(), 0.01);
+        deposition = (float)math.max(random.NextDouble(), 0.01);
+        erosion = (float)math.max(random.NextDouble(), 0.01);
+        gravity = (float)math.max(random.NextDouble(), 0.01);
+        evaporation = (float)math.max(random.NextDouble(), 0.01);
+        waterDeathThreshold = math.clamp((float)random.NextDouble(), 0.01f, 0.5f);
     }
 }

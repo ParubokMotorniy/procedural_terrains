@@ -15,8 +15,8 @@ public class FFTDispatcher : UltimatePipelineStep
     [Range(4, 8)]
     public int inverseGroupScaleFactor = 4;
 
-    [Range(0.01f, 5.0f)]
-    public float fractalDimension = 0.1f;
+    [Range(0.01f, 1.0f)]
+    public float H = 0.1f; //D = 3 - H
 
     [Range(0.01f, 1.0f)]
     public float fracCoefficientsConsidered = 0.01f;
@@ -38,7 +38,7 @@ public class FFTDispatcher : UltimatePipelineStep
     private static readonly int PID_texelsPerInverseGroup = Shader.PropertyToID("texelsPerInverseGroup");
     private static readonly int PID_inverseDispatchGroupOffset = Shader.PropertyToID("inverseDispatchGroupOffset");
 
-    private static readonly int PID_fractalDimension = Shader.PropertyToID("fractalDimension");
+    private static readonly int PID_fractalDimension = Shader.PropertyToID("H");
     private static readonly int PID_randomSeeds = Shader.PropertyToID("randomSeeds");
 
 
@@ -94,7 +94,7 @@ public class FFTDispatcher : UltimatePipelineStep
             pipelineContext.SetUniformInts(shaderToDispatch, PID_heightmapDimensions, new int[] { textureSize, textureSize });
             pipelineContext.SetUniformInts(shaderToDispatch, PID_coefficientmapDimensions, new int[] { coefficientsBufferSizeX, coefficientsBufferSizeY });
 
-            pipelineContext.SetUniformFloat(shaderToDispatch, PID_fractalDimension, fractalDimension);
+            pipelineContext.SetUniformFloat(shaderToDispatch, PID_fractalDimension, H);
             pipelineContext.SetRandomInts(shaderToDispatch, PID_randomSeeds);
         }
 
@@ -152,7 +152,7 @@ public class FFTDispatcher : UltimatePipelineStep
         int sizeX = coefficients.GetLength(0);
         int sizeY = coefficients.GetLength(1);
 
-        float exponent = -(fractalDimension + 1.0f) * 0.5f;
+        float exponent = -(H + 1.0f) * 0.5f;
 
         for (uint tX = 0; tX < sizeX; ++tX)
         {
@@ -258,8 +258,8 @@ public class FFTDispatcher : UltimatePipelineStep
         float igsf = GUILayout.HorizontalSlider(inverseGroupScaleFactor, 4f, 8f);
         inverseGroupScaleFactor = Mathf.RoundToInt(igsf);
 
-        GUILayout.Label($"Fractal Dimension: {fractalDimension:F3}");
-        fractalDimension = GUILayout.HorizontalSlider(fractalDimension, 0.01f, 5.0f);
+        GUILayout.Label($"Fractal Dimension: {H:F3}");
+        H = GUILayout.HorizontalSlider(H, 0.01f, 5.0f);
 
         GUILayout.Label($"Frac Coefficients Considered: {fracCoefficientsConsidered:F3}");
         fracCoefficientsConsidered = GUILayout.HorizontalSlider(fracCoefficientsConsidered, 0.01f, 1.0f);
@@ -271,5 +271,11 @@ public class FFTDispatcher : UltimatePipelineStep
     {
         coefficientsBuffer?.Release();
         cpuCoefficientsBuffer = null;
+    }
+
+    public override void RandomizeParameters(System.Random random)
+    {
+        fracCoefficientsConsidered = (float)random.NextDouble();
+        H = (float)random.NextDouble();
     }
 }

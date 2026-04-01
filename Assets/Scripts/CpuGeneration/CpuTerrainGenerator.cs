@@ -28,6 +28,9 @@ namespace CpuGenerationPipeline
         [Range(5, 100)]
         public int numSamples = 5;
 
+        [SerializeField]
+        public bool randomizeParameters = false;
+
 #if UNITY_EDITOR
         [SerializeField]
         bool dumpTextures = false;
@@ -64,6 +67,16 @@ namespace CpuGenerationPipeline
             {
                 foreach (CpuPipelineStep step in pipelineToRun)
                 {
+                    await step.ExecuteStepCpu(pipelineContext);
+                }
+            }
+
+            public async System.Threading.Tasks.Task RunPipelineRandomized(int seed)
+            {
+                System.Random parameterRandomizer = new System.Random(seed);
+                foreach (CpuPipelineStep step in pipelineToRun)
+                {
+                    step.RandomizeParameters(parameterRandomizer);
                     await step.ExecuteStepCpu(pipelineContext);
                 }
             }
@@ -139,7 +152,10 @@ namespace CpuGenerationPipeline
         {
             var currentPipeline = buildPipeline(generatorSeed);
 
-            await currentPipeline.RunPipeline();
+            if (randomizeParameters)
+                await currentPipeline.RunPipelineRandomized(generatorSeed);
+            else
+                await currentPipeline.RunPipeline();
 
 #if UNITY_EDITOR
             if (dumpTextures)
@@ -225,6 +241,14 @@ namespace CpuGenerationPipeline
                 generatorSeed = parsedSeed;
 
             GUILayout.EndHorizontal();
+
+            GUILayout.Space(5);
+            GUILayout.Label("Generation parameters randomization");
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Randomize parameters");
+            randomizeParameters = GUILayout.Toggle(randomizeParameters, "");
+            GUILayout.EndHorizontal();
+
         }
 
         public override string GUIStepTitle() => "CPU pipeline parameters";
@@ -246,7 +270,7 @@ namespace CpuGenerationPipeline
                 pipelineSteps = CommonDefines.buildPipelineFromEnum(pipeline);
                 CollectStatistics();
             }
-            if(GUILayout.Button("Free resources"))
+            if (GUILayout.Button("Free resources"))
             {
                 UltimatePipelineStep.FreeAllResourcesInScene();
             }
@@ -283,7 +307,10 @@ namespace CpuGenerationPipeline
             {
                 var currentPipeline = buildPipeline(randomSeedGenerator.Next());
                 cpuProfilingStopwatch.Restart();
-                await currentPipeline.RunPipeline();
+                if (randomizeParameters)
+                    await currentPipeline.RunPipelineRandomized(randomSeedGenerator.Next());
+                else
+                    await currentPipeline.RunPipeline();
                 runtimeResults[s] = (cpuProfilingStopwatch.ElapsedMilliseconds, cpuProfilingStopwatch.ElapsedTicks);
                 RenderTextureDumper.SaveRFloatToExr(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples_cpu/cpu_terrain_" + s + ".exr"));
             }

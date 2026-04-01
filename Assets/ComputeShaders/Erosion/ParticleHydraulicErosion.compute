@@ -97,7 +97,7 @@ float removeSediment(int2 erosionCenter, float targetAmountToRemove)
             float dist = sqrt(fx * fx + fy * fy);
             float weight = (actualNeighborRadius - dist) / max(erosionDistanceSumPrecompute, EPS);
 
-            uint2 affectedNeighborCoordinate = erosionCenter + int2(x, y);//terrainWrap(erosionCenter + int2(x, y), heightmapDimensions);
+            uint2 affectedNeighborCoordinate = erosionCenter + int2(x, y);
             float currentTexelHeight = resultHeightmap[affectedNeighborCoordinate];
 
             float localSoftness = computeSoftnessCoefficient(computeGradientAtPoint(resultHeightmap, heightmapDimensions, affectedNeighborCoordinate), currentTexelHeight, 0.1);
@@ -121,7 +121,7 @@ void depositSediment(int2 erosionCenter, float amountToDeposit)
         for (int y = -1; y <= 1; ++y)
         {
             float increment = depositionMapWeights[x + 1.0][y + 1.0] * amountToDeposit;
-            uint2 affectedNeighborCoordinates = erosionCenter + int2(x, y);//terrainWrap(erosionCenter + int2(x, y), heightmapDimensions);
+            uint2 affectedNeighborCoordinates = erosionCenter + int2(x, y);
             uint2 targetInPipe = pipeMap[x + pipeMapCenterCoord][y + pipeMapCenterCoord];
             pipesBuffer[index2dTo1d(heightmapDimensions, affectedNeighborCoordinates)].inPipes[targetInPipe.x][targetInPipe.y] += increment;
         }
@@ -252,7 +252,7 @@ float2 computeUniformRandomCoordinates(uint2 targetCoordinates, int nonce)
         float oldWaterValue = particlesBuffer[processedParticleIdx].w;
 
         // int2 floorInt = (int2)floor(oldParticlePosition);
-        uint2 floorOldParticlePosition = floor(oldParticlePosition);//terrainWrap(floorInt, heightmapDimensions);
+        uint2 floorOldParticlePosition = floor(oldParticlePosition);
         float2 interpolationCoefficients = frac(oldParticlePosition);
 
         float2 currentGradient = float2(

@@ -5,7 +5,6 @@ using Unity.Mathematics;
 using UnityEngine;
 using System;
 using System.Threading.Tasks;
-using Unity.Collections;
 
 public class ThermalErosionDispatcher : UltimatePipelineStep
 {
@@ -18,7 +17,7 @@ public class ThermalErosionDispatcher : UltimatePipelineStep
     [Range(0.001f, 1.0f)]
     public float talusThreshold = 0.15f;
 
-    [Range(1, 100)]
+    [Range(5, 150)]
     public int erosionIterationLimit = 25;
 
     private static readonly int PID_resultHeightmap = Shader.PropertyToID("resultHeightmap");
@@ -240,5 +239,12 @@ public class ThermalErosionDispatcher : UltimatePipelineStep
 
     public override void FreeResources()
     {
+    }
+
+    public override void RandomizeParameters(System.Random random)
+    {
+        distributionCoefficient = (float)math.max(0.01f, random.NextDouble());
+        talusThreshold = (float)math.max(0.01f, random.NextDouble());
+        // erosionIterationLimit = math.max(5, (int)(random.NextDouble() * 150.0));
     }
 }
