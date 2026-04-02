@@ -35,21 +35,26 @@ def train_data_ensemble_models(
 
     subset_size_1 = class_separation_idx
     n_samples_1 = int(subset_size_1 * fraction)
-    
-    subset_size_2 = (len(y) - class_separation_idx)
+
+    subset_size_2 = len(y) - class_separation_idx
     n_samples_2 = int(subset_size_2 * fraction)
-    
+
     # print(len(X), subset_size_1, n_samples_1)
     # print(len(X), subset_size_2, n_samples_2)
 
     for i in range(n_models):
         idx1 = rng.choice(subset_size_1, n_samples_1, replace=False)
         X_sub_1, y_sub_1 = X[idx1], y[idx1]
-        
-        idx2 = rng.choice(subset_size_2, n_samples_2, replace=False) + class_separation_idx
+
+        idx2 = (
+            rng.choice(subset_size_2, n_samples_2, replace=False) + class_separation_idx
+        )
         X_sub_2, y_sub_2 = X[idx2], y[idx2]
 
-        model = train_func(np.vstack([X_sub_1, X_sub_2]), np.vstack([y_sub_1.reshape(-1, 1), y_sub_2.reshape(-1, 1)]).ravel())
+        model = train_func(
+            np.vstack([X_sub_1, X_sub_2]),
+            np.vstack([y_sub_1.reshape(-1, 1), y_sub_2.reshape(-1, 1)]).ravel(),
+        )
         models.append(model)
 
     return models
@@ -98,7 +103,7 @@ def train_and_save_models_auto(
             svm_param_dist,
             n_iter=n_iter,
             scoring="roc_auc",
-            cv=4,
+            cv=5,
             verbose=2,
             n_jobs=8,
         )
@@ -111,7 +116,7 @@ def train_and_save_models_auto(
             mlp_param_dist,
             n_iter=n_iter,
             scoring="roc_auc",
-            cv=4,
+            cv=5,
             verbose=2,
             n_jobs=8,
         )
@@ -120,10 +125,20 @@ def train_and_save_models_auto(
 
     if use_data_ensemble:
         svm_models = train_data_ensemble_models(
-            X, y, train_svm, len(class0), n_models=n_ensemble_models, fraction=ensemble_fraction
+            X,
+            y,
+            train_svm,
+            len(class0),
+            n_models=n_ensemble_models,
+            fraction=ensemble_fraction,
         )
         mlp_models = train_data_ensemble_models(
-            X, y, train_mlp, len(class0), n_models=n_ensemble_models, fraction=ensemble_fraction
+            X,
+            y,
+            train_mlp,
+            len(class0),
+            n_models=n_ensemble_models,
+            fraction=ensemble_fraction,
         )
 
         joblib.dump(svm_models, f"{model_prefix}_svm_ensemble.joblib")
@@ -207,7 +222,7 @@ def train_subset_ensemble_auto(
                 svm_param_dist,
                 n_iter=n_iter,
                 scoring="roc_auc",
-                cv=4,
+                cv=5,
                 n_jobs=8,
                 verbose=2,
             )
@@ -222,7 +237,7 @@ def train_subset_ensemble_auto(
                 mlp_param_dist,
                 n_iter=n_iter,
                 scoring="roc_auc",
-                cv=4,
+                cv=5,
                 n_jobs=8,
                 verbose=2,
             )
@@ -302,7 +317,7 @@ def train_subset_ensemble_auto(
     roc_auc = auc(fpr, tpr)
 
     plt.figure()
-    plt.plot(fpr, tpr, label=f"CV Ensemble (AUC={roc_auc:.3f})")
+    plt.plot(fpr, tpr, label=f"MLP+SVM Ensemble (AUC={roc_auc:.3f})")
     plt.legend()
     plt.savefig(f"{model_prefix}_cv_roc_{'ens' if use_data_ensemble else 'sin'}.png")
     plt.close()
@@ -552,8 +567,16 @@ def main():
         vectors_to_classify = build_metric_vectors(
             args.directory_classify, args.chunk_size, args.division_depth, fmt
         )
-        classify_with_saved_models(vectors_to_classify, model_prefix="test_model", use_data_ensemble=args.train_ensemble)
-        classify_with_ensemble(vectors_to_classify, model_prefix="test_ensemble", use_data_ensemble=args.train_ensemble)
+        classify_with_saved_models(
+            vectors_to_classify,
+            model_prefix="test_model",
+            use_data_ensemble=args.train_ensemble,
+        )
+        classify_with_ensemble(
+            vectors_to_classify,
+            model_prefix="test_ensemble",
+            use_data_ensemble=args.train_ensemble,
+        )
     else:
         raise ValueError("Wrong script mode")
 
