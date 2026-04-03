@@ -1,4 +1,7 @@
 import numpy as np
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from sklearn.cluster import KMeans
@@ -25,10 +28,12 @@ def _best_cluster_accuracy(y_true, y_pred):
 def evaluate_separability(
     X,
     y,
+    classes_names=["boring", "interesting"],
     splits=[[0, 1], [2, 3], [4, 5]],
+    splits_names=["geometric", "fractal", "aesthetical"],
     kmeans_k_list=[2],
-    hdbscan_min_cluster_sizes=[10, 20, 50, 100, 150],
-    hdbscan_min_samples=[5, 10, 20, 30],
+    hdbscan_min_cluster_sizes=[20, 50, 100, 150],
+    hdbscan_min_samples=[3, 5, 10, 20, 30],
 ):
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
@@ -37,30 +42,10 @@ def evaluate_separability(
 
     roc_data = {}
 
-    for split in all_splits:
+    for split, split_name in zip(all_splits, splits_names + ["FULL"]):
         X_sub = X_scaled[:, split]
-        split_name = f"{split}" if len(split) < X.shape[1] else "FULL"
 
         print(f"\n--- Features: {split_name} ---")
-
-        if split_name != "FULL":
-            plt.figure(figsize=(7, 6))
-            for label in np.unique(y):
-                idx = y == label
-                plt.scatter(
-                    X_sub[idx, 0], X_sub[idx, 1], label=f"Class {label}", alpha=0.7
-                )
-
-            plt.title(f"Split {split_name}")
-            plt.xlabel("d1")
-            plt.ylabel("d2")
-            plt.legend()
-            plt.grid(True)
-            plt.tight_layout()
-            plt.savefig(f"split_{split_name}_scatter.png", dpi=300)
-            plt.show()
-            plt.cla()
-            plt.close()
 
         # ======================
         # KMEANS
@@ -161,7 +146,42 @@ def evaluate_separability(
 
         print(f"SVM           | ROC-AUC: {mean_auc:.4f} ± {std_auc:.4f}")
 
-        if split_name == "FULL":
+        if split_name != "FULL":
+            plt.figure(figsize=(7, 6))
+            for label in np.unique(y):
+                idx = y == label
+                plt.scatter(
+                    X_sub[idx, 0],
+                    X_sub[idx, 1],
+                    label=f"Class: {classes_names[label]}",
+                    alpha=0.7,
+                )
+
+            plt.title(f"Terrain data separability. Metric family: {split_name}")
+            plt.xlabel("d1")
+            plt.annotate(
+                f"Clusterization:\n"
+                f"KMeans  | Accuracy: {best_km_acc:.4f}\n"
+                f"HDBSCAN | Acc: {best_hdb_acc:.4f} | Outliers: {best_hdb_out:.3f}\n"
+                f"SVM     | ROC-AUC: {mean_auc:.4f} ± {std_auc:.4f}",
+                (0.05, 0.07),
+                xycoords="axes fraction",
+                bbox=dict(
+                    boxstyle="round",
+                    facecolor="white",
+                    alpha=0.6,
+                    edgecolor="gray",
+                ),
+            )
+            plt.ylabel("d2")
+            plt.legend()
+            plt.grid(True)
+            plt.tight_layout()
+            plt.savefig(f"split_{split_name}_scatter.png", dpi=300)
+            plt.show()
+            plt.cla()
+            plt.close()
+        else:
             roc_data = {
                 "mean_fpr": mean_fpr,
                 "mean_tpr": mean_tpr,
@@ -170,87 +190,130 @@ def evaluate_separability(
                 "std_auc": std_auc,
             }
 
+            # ======================
+            # PCA
+            # ======================
+            print("\n--- PCA (2D) ---")
+
+            pca = PCA(n_components=2)
+            X_pca = pca.fit_transform(X_scaled)
+
+            plt.figure(figsize=(7, 6))
+
+            for label in np.unique(y):
+                idx = y == label
+                plt.scatter(
+                    X_pca[idx, 0],
+                    X_pca[idx, 1],
+                    label=f"Class: {classes_names[label]}",
+                    alpha=0.7,
+                )
+
+            plt.title(
+                f"PCA Projection (explained var={np.sum(pca.explained_variance_ratio_):.2f})"
+            )
+            plt.xlabel("PC1")
+            plt.ylabel("PC2")
+            plt.annotate(
+                f"Clusterization of unreduced data:\n"
+                f"KMeans  | Accuracy: {best_km_acc:.4f}\n"
+                f"HDBSCAN | Acc: {best_hdb_acc:.4f} | Outliers: {best_hdb_out:.3f}\n"
+                f"SVM     | ROC-AUC: {mean_auc:.4f} ± {std_auc:.4f}",
+                (0.05, 0.07),
+                xycoords="axes fraction",
+                bbox=dict(
+                    boxstyle="round",
+                    facecolor="white",
+                    alpha=0.6,
+                    edgecolor="gray",
+                ),
+            )
+            plt.legend()
+            plt.grid(True)
+
+            plt.tight_layout()
+            plt.savefig("pca_projection.png", dpi=300)
+            plt.show()
+            plt.cla()
+            plt.close()
+
+            # ======================
+            # UMAP
+            # ======================
+            print("\n--- UMAP (2D) ---")
+
+            reducer = umap.UMAP(n_components=2, random_state=76340734)
+            X_umap = reducer.fit_transform(X_scaled)
+
+            plt.figure(figsize=(7, 6))
+
+            for label in np.unique(y):
+                idx = y == label
+                plt.scatter(
+                    X_umap[idx, 0],
+                    X_umap[idx, 1],
+                    label=f"Class: {classes_names[label]}",
+                    alpha=0.7,
+                )
+
+            plt.title("UMAP Projection")
+            plt.xlabel("UMAP-1")
+            plt.ylabel("UMAP-2")
+            plt.annotate(
+                f"Clusterization of unreduced data:\n"
+                f"KMeans  | Accuracy: {best_km_acc:.4f}\n"
+                f"HDBSCAN | Acc: {best_hdb_acc:.4f} | Outliers: {best_hdb_out:.3f}\n"
+                f"SVM     | ROC-AUC: {mean_auc:.4f} ± {std_auc:.4f}",
+                (0.05, 0.07),
+                xycoords="axes fraction",
+                bbox=dict(
+                    boxstyle="round",
+                    facecolor="white",
+                    alpha=0.6,
+                    edgecolor="gray",
+                ),
+            )
+            plt.legend()
+            plt.grid(True)
+
+            plt.tight_layout()
+            plt.savefig("umap_projection.png", dpi=300)
+            plt.show()
+            plt.cla()
+            plt.close()
+
     # ======================
     # ROC PLOT
     # ======================
-    if roc_data:
-        plt.figure(figsize=(7, 6))
-
-        plt.plot(
-            roc_data["mean_fpr"],
-            roc_data["mean_tpr"],
-            label=f"SVM (AUC = {roc_data['mean_auc']:.3f} ± {roc_data['std_auc']:.3f})",
-            linewidth=2,
-        )
-
-        plt.fill_between(
-            roc_data["mean_fpr"],
-            np.maximum(roc_data["mean_tpr"] - roc_data["std_tpr"], 0),
-            np.minimum(roc_data["mean_tpr"] + roc_data["std_tpr"], 1),
-            alpha=0.2,
-        )
-
-        plt.plot([0, 1], [0, 1], linestyle="--", linewidth=1)
-
-        plt.xlabel("False Positive Rate")
-        plt.ylabel("True Positive Rate")
-        plt.title("ROC Curve (Full Features)")
-        plt.legend(loc="lower right")
-        plt.grid(True)
-
-        plt.tight_layout()
-        plt.savefig("roc_curve.png", dpi=300)
-        plt.show()
-
-    # ======================
-    # PCA
-    # ======================
-    print("\n--- PCA (2D) ---")
-
-    pca = PCA(n_components=2)
-    X_pca = pca.fit_transform(X_scaled)
-
     plt.figure(figsize=(7, 6))
 
-    for label in np.unique(y):
-        idx = y == label
-        plt.scatter(X_pca[idx, 0], X_pca[idx, 1], label=f"Class {label}", alpha=0.7)
-
-    plt.title(
-        f"PCA Projection (explained var={np.sum(pca.explained_variance_ratio_):.2f})"
+    plt.plot(
+        roc_data["mean_fpr"],
+        roc_data["mean_tpr"],
+        label=f"SVM (AUC = {roc_data['mean_auc']:.3f} ± {roc_data['std_auc']:.3f})",
+        linewidth=2,
     )
-    plt.xlabel("PC1")
-    plt.ylabel("PC2")
-    plt.legend()
+
+    plt.fill_between(
+        roc_data["mean_fpr"],
+        np.maximum(roc_data["mean_tpr"] - roc_data["std_tpr"], 0),
+        np.minimum(roc_data["mean_tpr"] + roc_data["std_tpr"], 1),
+        alpha=0.2,
+    )
+
+    plt.plot([0, 1], [0, 1], linestyle="--", linewidth=1)
+
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.title("ROC Curve (All metrics)")
+    plt.legend(loc="lower right")
     plt.grid(True)
 
     plt.tight_layout()
-    plt.savefig("pca_projection.png", dpi=300)
+    plt.savefig("roc_curve.png", dpi=300)
     plt.show()
-
-    # ======================
-    # UMAP
-    # ======================
-    print("\n--- UMAP (2D) ---")
-
-    reducer = umap.UMAP(n_components=2, random_state=76340734)
-    X_umap = reducer.fit_transform(X_scaled)
-
-    plt.figure(figsize=(7, 6))
-
-    for label in np.unique(y):
-        idx = y == label
-        plt.scatter(X_umap[idx, 0], X_umap[idx, 1], label=f"Class {label}", alpha=0.7)
-
-    plt.title("UMAP Projection")
-    plt.xlabel("UMAP-1")
-    plt.ylabel("UMAP-2")
-    plt.legend()
-    plt.grid(True)
-
-    plt.tight_layout()
-    plt.savefig("umap_projection.png", dpi=300)
-    plt.show()
+    plt.cla()
+    plt.close()
 
 
 def main():

@@ -7,24 +7,72 @@ import tqdm
 import pandas as pd
 
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 import joblib
 from sklearn.metrics import roc_curve, auc
 
-from sklearn.svm import SVC, LinearSVC
-from sklearn.cluster import KMeans
+from sklearn.svm import SVC
 from sklearn.neural_network import MLPClassifier
 from sklearn.model_selection import StratifiedKFold
-from sklearn.metrics import accuracy_score
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
-from sklearn.inspection import permutation_importance
 from sklearn.model_selection import RandomizedSearchCV
 
 family_weights_glob = {"mlp": 0.6, "svm": 0.4}
 subsets_glob = [[0, 1], [2, 3], [4, 5]]
 subset_weights_glob = [0.15, 0.35, 0.5]
+
+svm_param_dist = {
+    "C": np.logspace(-3, 3, 40),
+    "gamma": ["scale", "auto"] + list(np.logspace(-3, 1, 10)),
+    "kernel": ["rbf"],
+}
+
+mlp_param_dist = {
+    "hidden_layer_sizes": [(16, 8), (16, 16), (32, 8), (32, 16), (64, 8), (64, 16)],
+    "alpha": np.logspace(-5, -2, 10),
+    "learning_rate_init": np.logspace(-4, -2, 10),
+    "beta_1": np.linspace(0.5, 0.999, 20),
+    "beta_2": np.linspace(0.5, 0.999, 20),
+}
+
+
+def cross_validated_roc(model, X, y, n_splits=5):
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=3673655)
+    scaler = StandardScaler()
+
+    mean_fpr = np.linspace(0, 1, 200)
+    tprs = []
+    aucs = []
+
+    for train_idx, test_idx in skf.split(X, y):
+        X_train = scaler.fit_transform(X[train_idx])
+        X_test = scaler.transform(X[test_idx])
+        y_train, y_test = y[train_idx], y[test_idx]
+
+        model_clone = model.__class__(**model.get_params())
+        model_clone.fit(X_train, y_train)
+
+        probs = model_clone.predict_proba(X_test)[:, 1]
+
+        fpr, tpr, _ = roc_curve(y_test, probs)
+        roc_auc = auc(fpr, tpr)
+
+        aucs.append(roc_auc)
+
+        interp_tpr = np.interp(mean_fpr, fpr, tpr)
+        interp_tpr[0] = 0.0
+        tprs.append(interp_tpr)
+
+    mean_tpr = np.mean(tprs, axis=0)
+    std_tpr = np.std(tprs, axis=0)
+    mean_auc = np.mean(aucs)
+    std_auc = np.std(aucs)
+
+    return mean_fpr, mean_tpr, std_tpr, mean_auc, std_auc
 
 
 def train_data_ensemble_models(
@@ -38,9 +86,6 @@ def train_data_ensemble_models(
 
     subset_size_2 = len(y) - class_separation_idx
     n_samples_2 = int(subset_size_2 * fraction)
-
-    # print(len(X), subset_size_1, n_samples_1)
-    # print(len(X), subset_size_2, n_samples_2)
 
     for i in range(n_models):
         idx1 = rng.choice(subset_size_1, n_samples_1, replace=False)
@@ -82,20 +127,6 @@ def train_and_save_models_auto(
     X = scaler.fit_transform(X)
 
     joblib.dump(scaler, f"{model_prefix}_scaler.joblib")
-
-    svm_param_dist = {
-        "C": np.logspace(-3, 3, 40),
-        "gamma": ["scale", "auto"] + list(np.logspace(-3, 1, 10)),
-        "kernel": ["rbf"],
-    }
-
-    mlp_param_dist = {
-        "hidden_layer_sizes": [(16, 8), (16, 16), (32, 8), (32, 16), (64, 8), (64, 16)],
-        "alpha": np.logspace(-5, -2, 10),
-        "learning_rate_init": np.logspace(-4, -2, 10),
-        "beta_1": np.linspace(0.5, 0.999, 20),
-        "beta_2": np.linspace(0.5, 0.999, 20),
-    }
 
     def train_svm(X, y):
         svm_search = RandomizedSearchCV(
@@ -144,16 +175,6 @@ def train_and_save_models_auto(
         joblib.dump(svm_models, f"{model_prefix}_svm_ensemble.joblib")
         joblib.dump(mlp_models, f"{model_prefix}_mlp_ensemble.joblib")
 
-        def predict_proba_ensemble(models, X):
-            probs = np.zeros(len(X))
-            for m in models:
-                probs += m.predict_proba(X)[:, 1]
-            print(len(models), len(X), probs.shape)
-            return probs / len(models)
-
-        svm_probs = predict_proba_ensemble(svm_models, X)
-        mlp_probs = predict_proba_ensemble(mlp_models, X)
-
     else:
         best_svm = train_svm(X, y)
         best_mlp = train_mlp(X, y)
@@ -161,19 +182,98 @@ def train_and_save_models_auto(
         joblib.dump(best_svm, f"{model_prefix}_svm.joblib")
         joblib.dump(best_mlp, f"{model_prefix}_mlp.joblib")
 
-        svm_probs = best_svm.predict_proba(X)[:, 1]
-        mlp_probs = best_mlp.predict_proba(X)[:, 1]
+    if not use_data_ensemble:
+        fpr_svm, tpr_svm, std_svm, auc_svm, std_auc_svm = cross_validated_roc(
+            best_svm, X, y
+        )
+        fpr_mlp, tpr_mlp, std_mlp, auc_mlp, std_auc_mlp = cross_validated_roc(
+            best_mlp, X, y
+        )
 
-    fpr_svm, tpr_svm, _ = roc_curve(y, svm_probs)
-    fpr_mlp, tpr_mlp, _ = roc_curve(y, mlp_probs)
+        plt.figure()
 
-    plt.figure()
-    plt.plot(fpr_svm, tpr_svm, label=f"Best SVM (AUC={auc(fpr_svm, tpr_svm):.3f})")
-    plt.plot(fpr_mlp, tpr_mlp, label=f"Best MLP (AUC={auc(fpr_mlp, tpr_mlp):.3f})")
-    plt.legend()
-    plt.title("Best Model ROC")
-    plt.savefig(f"{model_prefix}_best_roc_{'ens' if use_data_ensemble else 'sin'}.png")
-    plt.close()
+        plt.plot(fpr_svm, tpr_svm, label=f"SVM (AUC={auc_svm:.3f}±{std_auc_svm:.3f})")
+        plt.fill_between(
+            fpr_svm,
+            np.maximum(tpr_svm - std_svm, 0),
+            np.minimum(tpr_svm + std_svm, 1),
+            alpha=0.2,
+        )
+
+        plt.plot(fpr_mlp, tpr_mlp, label=f"MLP (AUC={auc_mlp:.3f}±{std_auc_mlp:.3f})")
+        plt.fill_between(
+            fpr_mlp,
+            np.maximum(tpr_mlp - std_mlp, 0),
+            np.minimum(tpr_mlp + std_mlp, 1),
+            alpha=0.2,
+        )
+
+        plt.plot([0, 1], [0, 1], "--", color="gray")
+
+        plt.legend()
+        plt.grid(True)
+        plt.title("Cross-Validated ROC for individual classifiers")
+        plt.savefig(f"{model_prefix}_cv_roc.png")
+        plt.cla()
+        plt.close()
+    else:
+        skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=763487356)
+
+        mean_fpr = np.linspace(0, 1, 200)
+        tprs = {"svm": [], "mlp": []}
+        aucs = {"svm": [], "mlp": []}
+
+        for train_idx, test_idx in skf.split(X, y):
+            X_train, X_test = X[train_idx], X[test_idx]
+            y_train, y_test = y[train_idx], y[test_idx]
+
+            def predict_proba_ensemble(models, X):
+                probs = np.zeros(len(X))
+                for m in models:
+                    probs += m.predict_proba(X)[:, 1]
+                print(len(models), len(X), probs.shape)
+                return probs / len(models)
+
+            for model_key, models in [("svm", svm_models), ("mlp", mlp_models)]:
+
+                probs = predict_proba_ensemble(models, X_test)
+                # mlp_probs = predict_proba_ensemble(mlp_models, X_test)
+
+                fpr, tpr, _ = roc_curve(y_test, probs)
+                roc_auc = auc(fpr, tpr)
+
+                aucs[model_key].append(roc_auc)
+
+                interp_tpr = np.interp(mean_fpr, fpr, tpr)
+                interp_tpr[0] = 0.0
+                tprs[model_key].append(interp_tpr)
+
+        plt.figure()
+        for model_key in ["svm", "mlp"]:
+            mean_tpr = np.mean(tprs[model_key], axis=0)
+            std_tpr = np.std(tprs[model_key], axis=0)
+
+            plt.plot(
+                mean_fpr,
+                mean_tpr,
+                label=f"Ensemble of `{model_key.capitalize()}`s (AUC={np.mean(aucs[model_key]):.3f})",
+            )
+            plt.fill_between(
+                mean_fpr,
+                np.maximum(mean_tpr - std_tpr, 0),
+                np.minimum(mean_tpr + std_tpr, 1),
+                alpha=0.2,
+            )
+
+        plt.plot([0, 1], [0, 1], "--", color="gray")
+        plt.title(
+            f"Fold-wise ROC for ensembled classifiers\n({ensemble_fraction*100}% data seen;{n_ensemble_models} models in ensemble)"
+        )
+        plt.legend()
+        plt.grid(True)
+        plt.savefig(f"{model_prefix}_cv_roc_ens.png")
+        plt.cla()
+        plt.close()
 
 
 def train_subset_ensemble_auto(
@@ -200,20 +300,6 @@ def train_subset_ensemble_auto(
 
     svm_models = []
     mlp_models = []
-
-    svm_param_dist = {
-        "C": np.logspace(-2, 2, 20),
-        "gamma": ["scale", "auto"] + list(np.logspace(-3, 1, 10)),
-        "kernel": ["rbf"],
-    }
-
-    mlp_param_dist = {
-        "hidden_layer_sizes": [(16,), (32,), (32, 16), (64, 32)],
-        "alpha": np.logspace(-5, -2, 10),
-        "learning_rate_init": np.logspace(-4, -2, 10),
-        "beta_1": np.linspace(0.5, 0.999, 20),
-        "beta_2": np.linspace(0.5, 0.999, 20),
-    }
 
     def train_svm(X, y):
         return (
@@ -244,6 +330,11 @@ def train_subset_ensemble_auto(
             .fit(X, y)
             .best_estimator_
         )
+
+    def re_fit_model(X, y, model_to_refit):
+        model_clone = model_to_refit.__class__(**model_to_refit.get_params())
+        model_clone.fit(X, y)
+        return model_clone
 
     for i, subset in enumerate(subsets):
         print(f"\n=== Training subset {i} ({subset}) ===")
@@ -284,42 +375,106 @@ def train_subset_ensemble_auto(
             svm_models.append(best_svm)
             mlp_models.append(best_mlp)
 
-    def combined_proba(X_input):
-        def predict_family(models, X_sub):
-            if isinstance(models, list):
-                # data ensemble
-                p = np.zeros(len(X_sub))
-                for m in models:
-                    p += m.predict_proba(X_sub)[:, 1]
-                return p / len(models)
-            else:
-                return models.predict_proba(X_sub)[:, 1]
+    def predict_proba_ensemble(models, X):
+        probs = np.zeros(len(X))
+        for m in models:
+            probs += m.predict_proba(X)[:, 1]
+        print(len(models), len(X), probs.shape)
+        return probs / len(models)
 
-        svm_probs = np.zeros(len(X_input))
-        mlp_probs = np.zeros(len(X_input))
+    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=46384)
+    mean_fpr = np.linspace(0, 1, 200)
 
-        for i, subset in enumerate(subsets):
-            w = subset_weights[i]
+    tprs = []
+    aucs = []
 
-            svm_probs += w * predict_family(svm_models[i], X_input[:, subset])
-            mlp_probs += w * predict_family(mlp_models[i], X_input[:, subset])
+    for train_idx, test_idx in skf.split(X, y):
+        X_train, X_test = X[train_idx], X[test_idx]
+        y_train, y_test = y[train_idx], y[test_idx]
 
-        svm_probs /= sum(subset_weights)
-        mlp_probs /= sum(subset_weights)
+        svm_models_fold = []
+        mlp_models_fold = []
 
-        final = (
-            family_weights["mlp"] * mlp_probs + family_weights["svm"] * svm_probs
-        ) / (family_weights["mlp"] + family_weights["svm"])
+        if not use_data_ensemble:
+            for i, subset in enumerate(subsets):
+                X_sub_train = X_train[:, subset]
 
-        return final
+                svm_models_fold.append(
+                    re_fit_model(X_sub_train, y_train, svm_models[i])
+                )
+                mlp_models_fold.append(
+                    re_fit_model(X_sub_train, y_train, mlp_models[i])
+                )
+        else:
+            svm_models_fold = svm_models
+            mlp_models_fold = mlp_models
 
-    fpr, tpr, _ = roc_curve(y, combined_proba(X))
-    roc_auc = auc(fpr, tpr)
+        def combined_proba_fold(X_input):
+            svm_probs = np.zeros(len(X_input))
+            mlp_probs = np.zeros(len(X_input))
+
+            for i, subset in enumerate(subsets):
+                w = subset_weights[i]
+
+                if not use_data_ensemble:
+                    svm_probs += (
+                        w * svm_models_fold[i].predict_proba(X_input[:, subset])[:, 1]
+                    )
+                    mlp_probs += (
+                        w * mlp_models_fold[i].predict_proba(X_input[:, subset])[:, 1]
+                    )
+                else:
+                    svm_probs += w * predict_proba_ensemble(
+                        svm_models_fold[i], X_input[:, subset]
+                    )
+                    mlp_probs += w * predict_proba_ensemble(
+                        mlp_models_fold[i], X_input[:, subset]
+                    )
+
+            svm_probs /= sum(subset_weights)
+            mlp_probs /= sum(subset_weights)
+
+            return (
+                family_weights["mlp"] * mlp_probs + family_weights["svm"] * svm_probs
+            ) / (family_weights["mlp"] + family_weights["svm"])
+
+        probs = combined_proba_fold(X_test)
+
+        fpr, tpr, _ = roc_curve(y_test, probs)
+        roc_auc = auc(fpr, tpr)
+
+        aucs.append(roc_auc)
+
+        interp_tpr = np.interp(mean_fpr, fpr, tpr)
+        interp_tpr[0] = 0
+        tprs.append(interp_tpr)
+
+    mean_tpr = np.mean(tprs, axis=0)
+    std_tpr = np.std(tprs, axis=0)
 
     plt.figure()
-    plt.plot(fpr, tpr, label=f"MLP+SVM Ensemble (AUC={roc_auc:.3f})")
+    plt.plot(
+        mean_fpr, mean_tpr, label=f"Metric family ensemble (AUC={np.mean(aucs):.3f})"
+    )
+    plt.fill_between(
+        mean_fpr,
+        np.maximum(mean_tpr - std_tpr, 0),
+        np.minimum(mean_tpr + std_tpr, 1),
+        alpha=0.2,
+    )
+    plt.plot([0, 1], [0, 1], "--", color="gray")
+    if use_data_ensemble:
+        plt.title(
+            f"Fold-wise ROC for ensembled per-metric-family classifiers\n({ensemble_fraction*100}% data seen;{n_ensemble_models} models in ensemble)"
+        )
+    else:
+        plt.title(f"Cross-Validated ROC for ensembled per-metric-family classifiers")
     plt.legend()
-    plt.savefig(f"{model_prefix}_cv_roc_{'ens' if use_data_ensemble else 'sin'}.png")
+    plt.grid(True)
+    plt.savefig(
+        f"{model_prefix}_cv_roc_metric_split_{'ens' if use_data_ensemble else ''}.png"
+    )
+    plt.cla()
     plt.close()
 
 
