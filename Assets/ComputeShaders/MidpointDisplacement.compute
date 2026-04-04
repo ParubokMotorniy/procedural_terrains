@@ -55,7 +55,6 @@ float sampleWorleyNoise(float2 noiseTextureIdx)
     {
         return f1_f2.x;
     }
-
     return (max(f1_f2.x - RANGE_THRSH_FLOOR, 0.0) * RIDGE_FALLOF_SPEED) / EFFECTIVE_RANGE;
 }
 

@@ -119,6 +119,43 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!84 &190476689
+RenderTexture:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: 
+  m_ImageContentsHash:
+    serializedVersion: 2
+    Hash: 00000000000000000000000000000000
+  m_IsAlphaChannelOptional: 0
+  serializedVersion: 6
+  m_Width: 256
+  m_Height: 256
+  m_AntiAliasing: 1
+  m_MipCount: -1
+  m_DepthStencilFormat: 0
+  m_ColorFormat: 21
+  m_MipMap: 0
+  m_GenerateMips: 1
+  m_SRGB: 1
+  m_UseDynamicScale: 0
+  m_UseDynamicScaleExplicit: 0
+  m_BindMS: 0
+  m_EnableCompatibleFormat: 1
+  m_EnableRandomWrite: 1
+  m_TextureSettings:
+    serializedVersion: 2
+    m_FilterMode: 1
+    m_Aniso: 1
+    m_MipBias: 0
+    m_WrapU: 1
+    m_WrapV: 1
+    m_WrapW: 1
+  m_Dimension: 2
+  m_VolumeDepth: 1
+  m_ShadowSamplingMode: 2
 --- !u!1 &252387136
 GameObject:
   m_ObjectHideFlags: 0
@@ -177,8 +214,7 @@ MonoBehaviour:
   useTestTexture: 0
   testTexture: {fileID: 0}
   pipelineSteps:
-  - {fileID: 1592727441}
-  - {fileID: 2081510694}
+  - {fileID: 852555921}
 --- !u!23 &252387139
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -267,11 +303,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GenerationControllerr
   shaderToDispatch: {fileID: 7200000, guid: 960e83aac4f822fd1b16e9e8930df0bb, type: 3}
   noiseFrequency: 0.007
-  H: 0.2
+  H: 0.215
   sharpness: -0.2
-  numOctaves: 4
+  numOctaves: 3
   slopeErosion: 0.005
-  perturbationStrength: 0.25
+  perturbationStrength: 0.15
 --- !u!4 &280840672
 Transform:
   m_ObjectHideFlags: 0
@@ -772,20 +808,18 @@ MonoBehaviour:
   scroll: {x: 0, y: 0}
   pipelineFoldout: 0
   terrainSize: 8
-  preferredGroupSizePower: 5
+  preferredGroupSizePower: 4
   terrainScale: 1
   enableProfiling: 0
   enableMetricEvaluation: 0
-  generatorSeed: 46735
+  generatorSeed: 568747
   numSamples: 15
   randomizeParameters: 0
   dumpTextures: 0
   useTestTexture: 0
   testTexture: {fileID: 2800000, guid: 14fa032c7256704c8a0ead7b71566301, type: 3}
   pipelineSteps:
-  - {fileID: 280840668}
-  - {fileID: 1412956747}
-  - {fileID: 2081510694}
+  - {fileID: 852555921}
 --- !u!4 &385078007
 Transform:
   m_ObjectHideFlags: 0
@@ -1042,7 +1076,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _HeightMap:
-        m_Texture: {fileID: 1285971630}
+        m_Texture: {fileID: 190476689}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _Heightmap:
@@ -1218,8 +1252,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MidpointDisplacementController
   shaderToDispatch: {fileID: 7200000, guid: 2da1ab904200f97c69eeb6b358aa73d3, type: 3}
-  numSubdivisions: 4
-  H: 1
+  numSubdivisions: 7
+  H: 0.917
   addExtraNoise: 1
   worleyFrequency: 3.03
 --- !u!1 &1078476957
@@ -1321,80 +1355,6 @@ Transform:
   - {fileID: 1592727440}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!84 &1285971630
-RenderTexture:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: 
-  m_ImageContentsHash:
-    serializedVersion: 2
-    Hash: 00000000000000000000000000000000
-  m_IsAlphaChannelOptional: 0
-  serializedVersion: 6
-  m_Width: 256
-  m_Height: 256
-  m_AntiAliasing: 1
-  m_MipCount: -1
-  m_DepthStencilFormat: 0
-  m_ColorFormat: 21
-  m_MipMap: 0
-  m_GenerateMips: 1
-  m_SRGB: 1
-  m_UseDynamicScale: 0
-  m_UseDynamicScaleExplicit: 0
-  m_BindMS: 0
-  m_EnableCompatibleFormat: 1
-  m_EnableRandomWrite: 1
-  m_TextureSettings:
-    serializedVersion: 2
-    m_FilterMode: 1
-    m_Aniso: 1
-    m_MipBias: 0
-    m_WrapU: 1
-    m_WrapV: 1
-    m_WrapW: 1
-  m_Dimension: 2
-  m_VolumeDepth: 1
-  m_ShadowSamplingMode: 2
---- !u!84 &1346407612
-RenderTexture:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: 
-  m_ImageContentsHash:
-    serializedVersion: 2
-    Hash: 00000000000000000000000000000000
-  m_IsAlphaChannelOptional: 0
-  serializedVersion: 6
-  m_Width: 256
-  m_Height: 256
-  m_AntiAliasing: 1
-  m_MipCount: -1
-  m_DepthStencilFormat: 0
-  m_ColorFormat: 21
-  m_MipMap: 0
-  m_GenerateMips: 1
-  m_SRGB: 1
-  m_UseDynamicScale: 0
-  m_UseDynamicScaleExplicit: 0
-  m_BindMS: 0
-  m_EnableCompatibleFormat: 1
-  m_EnableRandomWrite: 1
-  m_TextureSettings:
-    serializedVersion: 2
-    m_FilterMode: 1
-    m_Aniso: 1
-    m_MipBias: 0
-    m_WrapU: 1
-    m_WrapV: 1
-    m_WrapW: 1
-  m_Dimension: 2
-  m_VolumeDepth: 1
-  m_ShadowSamplingMode: 2
 --- !u!1 &1412956746
 GameObject:
   m_ObjectHideFlags: 0
@@ -1488,9 +1448,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FFTDispatcher
   shaderToDispatch: {fileID: 7200000, guid: 7eab4ea28e40baeefb1eed8a3ff23269, type: 3}
-  inverseGroupScaleFactor: 6
+  inverseGroupScaleFactor: 4
   H: 1
-  fracCoefficientsConsidered: 0.04
+  fracCoefficientsConsidered: 0.07
 --- !u!1 &1690684112
 GameObject:
   m_ObjectHideFlags: 0
@@ -1659,6 +1619,43 @@ MonoBehaviour:
   evaporation: 0.01
   waterDeathThreshold: 0.1
   rainNoiseFrequency: 1.24
+--- !u!84 &2118028301
+RenderTexture:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: 
+  m_ImageContentsHash:
+    serializedVersion: 2
+    Hash: 00000000000000000000000000000000
+  m_IsAlphaChannelOptional: 0
+  serializedVersion: 6
+  m_Width: 256
+  m_Height: 256
+  m_AntiAliasing: 1
+  m_MipCount: -1
+  m_DepthStencilFormat: 0
+  m_ColorFormat: 21
+  m_MipMap: 0
+  m_GenerateMips: 1
+  m_SRGB: 1
+  m_UseDynamicScale: 0
+  m_UseDynamicScaleExplicit: 0
+  m_BindMS: 0
+  m_EnableCompatibleFormat: 1
+  m_EnableRandomWrite: 1
+  m_TextureSettings:
+    serializedVersion: 2
+    m_FilterMode: 1
+    m_Aniso: 1
+    m_MipBias: 0
+    m_WrapU: 1
+    m_WrapV: 1
+    m_WrapW: 1
+  m_Dimension: 2
+  m_VolumeDepth: 1
+  m_ShadowSamplingMode: 2
 --- !u!21 &2146269790
 Material:
   serializedVersion: 8
@@ -1708,7 +1705,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _HeightMap:
-        m_Texture: {fileID: 1346407612}
+        m_Texture: {fileID: 2118028301}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _Heightmap:

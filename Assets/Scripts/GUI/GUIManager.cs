@@ -11,8 +11,8 @@ public class GUIManager : MonoBehaviour
     [SerializeField]
     List<TunableGenerator> generatorsToRender;
 
-    private static Rect stepsRect = new Rect(10, 10, 300, 600);
-    private static Rect pipelineRect = new Rect(900, 10, 300, 600);
+    private const float PANEL_WIDTH = 350f;
+    private const float MARGIN = 10f;
     private Vector2 tunerScroll;
     private Vector2 pipelineScroll;
 
@@ -51,6 +51,22 @@ public class GUIManager : MonoBehaviour
 
     void OnGUI()
     {
+        float height = Screen.height - 2 * MARGIN;
+
+        Rect stepsRect = new Rect(
+            MARGIN,
+            MARGIN,
+            PANEL_WIDTH,
+            height
+        );
+
+        Rect pipelineRect = new Rect(
+            Screen.width - PANEL_WIDTH - MARGIN,
+            MARGIN,
+            PANEL_WIDTH,
+            height
+        );
+
         {
             GUILayout.BeginArea(stepsRect, GUI.skin.box);
             GUILayout.Label("Tuners");

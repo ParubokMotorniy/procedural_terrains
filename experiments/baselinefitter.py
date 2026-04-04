@@ -21,9 +21,9 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import RandomizedSearchCV
 
-family_weights_glob = {"mlp": 0.6, "svm": 0.4}
+family_weights_glob = {"mlp": 0.55, "svm": 0.45}
 subsets_glob = [[0, 1], [2, 3], [4, 5]]
-subset_weights_glob = [0.15, 0.35, 0.5]
+subset_weights_glob = [0.15, 0.5, 0.35]
 
 svm_param_dist = {
     "C": np.logspace(-3, 3, 40),
@@ -256,7 +256,7 @@ def train_and_save_models_auto(
             plt.plot(
                 mean_fpr,
                 mean_tpr,
-                label=f"Ensemble of `{model_key.capitalize()}`s (AUC={np.mean(aucs[model_key]):.3f})",
+                label=f"Ensemble of `{model_key.upper()}`s (AUC={np.mean(aucs[model_key]):.3f})",
             )
             plt.fill_between(
                 mean_fpr,

@@ -11,7 +11,7 @@ uniform int2 texelsPerThread; // what fraction of the coefficients plane a threa
 uniform int invTexelsPerThread; // what fraction of the coefficients plane a thread processes
 uniform int texelsPerInverseGroup;
 
-uniform float fractalDimension;
+uniform float H;
 
 uniform int2 randomSeeds;
 
@@ -54,7 +54,7 @@ float2 getEffectiveCoefficient(uint2 mathematicalCoordinates)
 [numthreads(16, 16, 1)] void CoefficientGenerator(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     uint2 threadTopLeftCorner = globalId.xy * texelsPerThread;
-
+    float exponent = -(H + 1.0) * 0.5;
     {
         for (int tX = 0; tX < texelsPerThread.x; ++tX)
         {
@@ -76,7 +76,7 @@ float2 getEffectiveCoefficient(uint2 mathematicalCoordinates)
 
                     d2 = max(d2, EPS);
 
-                    randomMagnitude = pow(d2, -(fractalDimension + 1.0) / 2.0) * randomGaussian;
+                    randomMagnitude = pow(d2, exponent) * randomGaussian;
                 }
 
                 float2 baseCoefficient = randomMagnitude * float2(cos(randomPhase), sin(randomPhase));

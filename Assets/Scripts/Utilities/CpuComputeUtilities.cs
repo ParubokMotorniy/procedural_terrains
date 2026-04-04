@@ -61,8 +61,8 @@ public static class CpuComputeUtilities
     // samples from normal distribution. u must be uniformly distributed, though.
     public static float sampleGaussBoxMuller(float2 u)
     {
-        float a = sqrt(-2.0f * log(1.0f - u.x));
-        float b = TWO_PI * u.y;
+        float a = math.sqrt(-2.0f * math.log(1.0f - math.clamp(u.x, 0.0f, 0.999f)));
+        float b = TWO_PI * math.clamp(u.y, 0.0f, 1.0f);
 
         return cos(b) * a;
     }

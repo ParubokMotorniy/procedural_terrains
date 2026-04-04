@@ -30,8 +30,8 @@ uint index2dTo1d(uint2 gridDimensions, uint2 index2D)
 //samples from normal distribution. u must be uniformly distributed, though.
 float sampleGaussBoxMuller(float2 u)
 {
-    const float a = sqrt(-2.0f * log(1.0f - u.x));
-    const float b = TWO_PI * u.y;
+    const float a = sqrt(-2.0f * log(1.0f - clamp(u.x, 0.0, 0.999)));
+    const float b = TWO_PI * clamp(u.y, 0.0, 1.0);
 
     // return float2(cos(b), sin(b)) * a;
     return cos(b) * a;
