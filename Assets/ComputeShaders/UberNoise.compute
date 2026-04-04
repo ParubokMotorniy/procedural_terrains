@@ -9,7 +9,7 @@ uniform float perturbationStrength;
 uniform float persistence;
 uniform int numOctaves;
 uniform uint2 textureDimensions; // to avoid GetDimensions()
-uniform float randomFloats;
+uniform int2 randomInts;
 
 // TODO: when possible, I should use analytical derivatives of the resulting terrain
 RWTexture2D<float> Result;
@@ -29,7 +29,7 @@ RWTexture2D<float> Result;
     void UberNoiseTerrainGenerator(uint3 id : SV_DispatchThreadID)
 {
     uint2 topLeftThreadCorner = id.xy * texelsPerThread;
-    float2 extraDisplacement = (float2)textureDimensions * randomFloats;
+    float2 extraDisplacement = (float2)randomInts;
 
     for (int i = 0; i < texelsPerThread; ++i)
     {

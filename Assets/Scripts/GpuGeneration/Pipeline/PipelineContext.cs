@@ -74,10 +74,10 @@ namespace GpuGenerationPipeline
             randomFloatsArray[1] = (float)randomGenerator.NextDouble();
             terrainPipelineCMD.SetComputeFloatParams(shader, uniformId, randomFloatsArray);
         }
-        public void SetRandomInts(ComputeShader shader, int uniformId)
+        public void SetRandomInts(ComputeShader shader, int uniformId, int maxInt = Int32.MaxValue)
         {
-            randomIntsArray[0] = randomGenerator.Next();
-            randomIntsArray[1] = randomGenerator.Next();
+            randomIntsArray[0] = randomGenerator.Next(maxInt);
+            randomIntsArray[1] = randomGenerator.Next(maxInt);
             terrainPipelineCMD.SetComputeIntParams(shader, uniformId, randomIntsArray);
         }
         public void BindTexture(ComputeShader shader, int kernelIdx, int uniformId, Texture texToBind)

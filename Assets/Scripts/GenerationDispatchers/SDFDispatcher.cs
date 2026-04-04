@@ -1,20 +1,10 @@
 using Unity.Mathematics;
 using UnityEngine;
-using UnityEngine.Assertions;
 using System;
 using CpuGenerationPipeline;
 using GpuGenerationPipeline;
 using System.Threading.Tasks;
-
-using Unity.Mathematics;
-using UnityEngine;
-using UnityEngine.Assertions;
-using System;
-using CpuGenerationPipeline;
-using GpuGenerationPipeline;
 using UnityEngine.Rendering;
-using System.Threading.Tasks;
-using Unity.Collections;
 public class SDFDispatcher : UltimatePipelineStep
 {
     [SerializeField]
@@ -59,7 +49,7 @@ public class SDFDispatcher : UltimatePipelineStep
 
     private static readonly int PID_currentSourceBuffer = Shader.PropertyToID("currentSourceBuffer");
     private static readonly int PID_floodStepSize = Shader.PropertyToID("floodStepSize");
-    private static readonly int PID_randomFloats = Shader.PropertyToID("randomFloats");
+    private static readonly int PID_randomInts = Shader.PropertyToID("randomInts");
 
     public override void ExecuteStepGpu(PipelineContext pipelineContext)
     {
@@ -140,7 +130,7 @@ public class SDFDispatcher : UltimatePipelineStep
         pipelineContext.SetUniformFloat(shaderToDispatch, PID_simplexFrequency, baseSimplexFrequency);
         pipelineContext.SetUniformFloat(shaderToDispatch, PID_flowPerturbationStrength, flowPerturbationStrength);
         pipelineContext.SetUniformFloat(shaderToDispatch, PID_basePerturbationStrength, basePerturbationStrength);
-        pipelineContext.SetRandomFloats(shaderToDispatch, PID_randomFloats);
+        pipelineContext.SetRandomInts(shaderToDispatch, PID_randomInts, pipelineContext.GetHeightmapSize());
 
         int currentReadBuffer = 1;
         int currentFloodStep = textureSize;
@@ -281,7 +271,7 @@ public class SDFDispatcher : UltimatePipelineStep
 
     void CoastlineGenerator(CpuPipelineContext.CpuIntermediateHeightmap intermediateHeightmap, CpuPipelineContext pipelineContext)
     {
-        var randomUVOffset = pipelineContext.GetRandomFloats();
+        var randomUVOffset = pipelineContext.GetRandomInts((int)intermediateHeightmap.heightmapDimensions.x);
         for (uint x = 0; x < intermediateHeightmap.heightmapDimensions.x; ++x)
         {
             for (uint y = 0; y < intermediateHeightmap.heightmapDimensions.y; ++y)

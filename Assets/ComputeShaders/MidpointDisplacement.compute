@@ -17,9 +17,9 @@ uniform uint threadSubdomainsX;
 uniform uint threadSubdomainsY;
 
 uniform float octaveAmplitude;
-uniform float noiseFrequency;
 uniform int2 noiseDisplacement;
 uniform float worleyFrequency;
+// uniform float noiseFrequency;
 // uniform float perlinFrequency;
 
 // TODO: can I employ gradients of noise here?
@@ -61,7 +61,7 @@ float sampleWorleyNoise(float2 noiseTextureIdx)
 // these end up normalized and uniformly distributed
 float2 computeNoiseCoordinates(uint2 targetTextureCoordinates)
 {
-    uint seed = seedFromXYPass(targetTextureCoordinates.x, targetTextureCoordinates.y, texelWidthDivided);
+    uint seed = seedFromXYPass(targetTextureCoordinates.x, targetTextureCoordinates.y, noiseDisplacement.x);
     float u1 = u01FromUint(pcgHash(seed));
     float u2 = u01FromUint(pcgHash(seed ^ 0x68BC21EBu));
     return float2(u1, u2);
@@ -74,20 +74,20 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates)
 [numthreads(2, 2, 1)]
 #elif GROUP_4
 [numthreads(4, 4, 1)]
-#if GROUP_8
+#elif GROUP_8
 [numthreads(8, 8, 1)]
 #elif GROUP_16
 [numthreads(16, 16, 1)]
 #elif GROUP_32
 [numthreads(32, 32, 1)]
-#if GROUP_64
+#elif GROUP_64
 [numthreads(64, 64, 1)]
 #endif
     void IntializeTexture(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     uint2 topLeftCellIdx = globalId.xy * threadDomainTexelWidth;
 
-    float2 worleyCoordinates = (topLeftCellIdx / (float2)targetDimensions) * worleyFrequency + noiseDisplacement;
+    float2 worleyCoordinates = (topLeftCellIdx / (float2)targetDimensions) * worleyFrequency + (float2)noiseDisplacement;
     Result[topLeftCellIdx.xy] = sampleWorleyNoise(worleyCoordinates) * octaveAmplitude;
 }
 
@@ -113,13 +113,13 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates)
 [numthreads(2, 2, 1)]
 #elif GROUP_4
 [numthreads(4, 4, 1)]
-#if GROUP_8
+#elif GROUP_8
 [numthreads(8, 8, 1)]
 #elif GROUP_16
 [numthreads(16, 16, 1)]
 #elif GROUP_32
 [numthreads(32, 32, 1)]
-#if GROUP_64
+#elif GROUP_64
 [numthreads(64, 64, 1)]
 #endif
     void Transition12(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
@@ -152,13 +152,13 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates)
 [numthreads(2, 2, 1)]
 #elif GROUP_4
 [numthreads(4, 4, 1)]
-#if GROUP_8
+#elif GROUP_8
 [numthreads(8, 8, 1)]
 #elif GROUP_16
 [numthreads(16, 16, 1)]
 #elif GROUP_32
 [numthreads(32, 32, 1)]
-#if GROUP_64
+#elif GROUP_64
 [numthreads(64, 64, 1)]
 #endif
     void Transition21(uint3 localID : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)

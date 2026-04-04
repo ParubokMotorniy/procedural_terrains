@@ -50,7 +50,7 @@ float u01FromUint(uint x)
     return (x + 1.0) * (1.0 / 4294967296.0);
 }
 
-uint seedFromXYPass(uint x, uint y, int passId)
+uint seedFromXYPass(uint x, uint y, uint passId)
 {
     //large prime numbers borrowed from (c) Squirrel Eiserloh
     uint v = x * 0x68E31DA4u ^ y * 0xB5297A4Du ^ passId * 0x1B56C4E9u;

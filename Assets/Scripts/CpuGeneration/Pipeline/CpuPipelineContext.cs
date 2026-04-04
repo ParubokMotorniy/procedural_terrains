@@ -64,9 +64,9 @@ namespace CpuGenerationPipeline
         {
             return new float2((float)randomGenerator.NextDouble(), (float)randomGenerator.NextDouble());
         }
-        public int2 GetRandomInts()
+        public int2 GetRandomInts(int maxInt = Int32.MaxValue)
         {
-            return new int2(randomGenerator.Next(), randomGenerator.Next());
+            return new int2(randomGenerator.Next(maxInt), randomGenerator.Next(maxInt));
         }
     }
 }

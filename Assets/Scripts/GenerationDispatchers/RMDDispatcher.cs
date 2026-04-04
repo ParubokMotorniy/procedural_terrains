@@ -95,7 +95,7 @@ public class RMDDispatcher : UltimatePipelineStep
         float octaveAmplitude = 1.0f;
         float scalingFactor = (float)math.pow(0.5, 0.5 * H);
         pipelineContext.SetUniformFloat(shaderToDispatch, PID_octaveAmplitude, octaveAmplitude);
-        pipelineContext.SetRandomInts(shaderToDispatch, PID_noiseDisplacement);
+        pipelineContext.SetRandomInts(shaderToDispatch, PID_noiseDisplacement, textureSize);
 
         pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, initializationKernelIdx, new Vector3(numGroups, numGroups, 1));
 
@@ -110,23 +110,23 @@ public class RMDDispatcher : UltimatePipelineStep
 
             octaveAmplitude *= scalingFactor;
             pipelineContext.SetUniformFloat(shaderToDispatch, PID_octaveAmplitude, octaveAmplitude);
-            pipelineContext.SetRandomFloats(shaderToDispatch, PID_noiseDisplacement);
+            pipelineContext.SetRandomInts(shaderToDispatch, PID_noiseDisplacement, textureSize);
             pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, transition12KernelIdx, new Vector3(numGroups, numGroups, 1));
 
             if (addExtraNoise)
             {
-                pipelineContext.SetRandomFloats(shaderToDispatch, PID_noiseDisplacement);
+                pipelineContext.SetRandomInts(shaderToDispatch, PID_noiseDisplacement, textureSize);
                 pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, extraNoiseKernelIdx, new Vector3(numGroups, numGroups, 1));
             }
 
             octaveAmplitude *= scalingFactor;
             pipelineContext.SetUniformFloat(shaderToDispatch, PID_octaveAmplitude, octaveAmplitude);
-            pipelineContext.SetRandomFloats(shaderToDispatch, PID_noiseDisplacement);
+            pipelineContext.SetRandomInts(shaderToDispatch, PID_noiseDisplacement, textureSize);
             pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, transition21KernelIdx, new Vector3(numGroups, numGroups, 1));
 
             if (addExtraNoise)
             {
-                pipelineContext.SetRandomFloats(shaderToDispatch, PID_noiseDisplacement);
+                pipelineContext.SetRandomInts(shaderToDispatch, PID_noiseDisplacement, textureSize);
                 pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, extraNoiseKernelIdx, new Vector3(numGroups, numGroups, 1));
             }
         }
@@ -294,7 +294,7 @@ public class RMDDispatcher : UltimatePipelineStep
 
         float octaveAmplitude = 1.0f;
         float scalingFactor = (float)math.pow(0.5, 0.5 * H);
-        InitializeHeightmap(textureSize, texelsPerThreadDomain, intermediateHeightmap, 1.0f, pipelineContext.GetRandomInts());
+        InitializeHeightmap(textureSize, texelsPerThreadDomain, intermediateHeightmap, 1.0f, pipelineContext.GetRandomInts(textureSize));
 
         for (int sub = 0; sub < numSubdivisions; ++sub)
         {

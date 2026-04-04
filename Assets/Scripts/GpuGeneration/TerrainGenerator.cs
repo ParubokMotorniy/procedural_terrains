@@ -64,6 +64,7 @@ namespace GpuGenerationPipeline
         int synchronizedIterationsLeft = 0;
         (long cpuSideMs, long cpuSideTicks, long gpuSideNs)[] synchronizedResults;
         Action postCollectionAction;
+        System.Random syncRandomSeedGenerator;
 
         //this flag synchronizes submissions of command buffers, in order to avoid starting overwriting the heightmap while it's being read back.
         bool previousReadPending = false;
@@ -188,8 +189,8 @@ namespace GpuGenerationPipeline
 #if UNITY_EDITOR
             if (dumpTextures)
             {
-                RenderTextureDumper.SaveRFloatToJpg(intermediateHeightmap, "heightmap_intermediate.exr");
-                RenderTextureDumper.SaveRFloatToJpg(finalHeightmap, "heightmap_final.exr");
+                RenderTextureDumper.SaveRFloatToJpg(intermediateHeightmap, "heightmap_intermediate.jpg");
+                RenderTextureDumper.SaveRFloatToJpg(finalHeightmap, "heightmap_final.jpg");
             }
 #endif
 
@@ -226,7 +227,7 @@ namespace GpuGenerationPipeline
                     continue;
                 await newContext.ExecuteBuffer();
                 result[s] = (newContext.gpuFenceMilliseconds, newContext.gpuFrameTime);
-                RenderTextureDumper.SaveRFloatToJpg(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples_gpu/async_gpu_terrain_" + s + ".exr"));
+                RenderTextureDumper.SaveRFloatToJpg(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples_gpu/async_gpu_terrain_" + s + ".jpg"));
             }
 
             //TODO: I might want to make first barrier optional and instead measure time from the moment of dispatch
@@ -282,6 +283,7 @@ namespace GpuGenerationPipeline
 
             synchronizedResults = new (long cpuSideMs, long cpuSideTicks, long gpuSideNs)[numSamples];
             Directory.CreateDirectory(Path.Combine(Application.persistentDataPath, "./samples_gpu"));
+            syncRandomSeedGenerator = new System.Random(generatorSeed);
 
             postCollectionAction = () =>
             {
@@ -308,7 +310,7 @@ namespace GpuGenerationPipeline
 
                 int myIteration = synchronizedIterationsLeft;
 
-                var newContext = (ProfilingPipelineContext)buildPipeline(true, numSamples + generatorSeed + myIteration, randomizeParameters);
+                var newContext = (ProfilingPipelineContext)buildPipeline(true, syncRandomSeedGenerator.Next(), randomizeParameters);
                 if (newContext is null)
                     return;
 
@@ -317,7 +319,7 @@ namespace GpuGenerationPipeline
 
                 synchronizedResults[myIteration] = (newContext.gpuFenceMilliseconds, newContext.gpuFenceTicks, newContext.gpuFrameTime);
 
-                RenderTextureDumper.SaveRFloatToJpg(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples_gpu/sync_gpu_terrain_" + myIteration + ".exr"), false);
+                RenderTextureDumper.SaveRFloatToJpg(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples_gpu/sync_gpu_terrain_" + myIteration + ".jpg"), false);
                 previousReadPending = false;
 
                 if (myIteration == 0)

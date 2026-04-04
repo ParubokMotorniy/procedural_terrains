@@ -11,8 +11,8 @@ public class UNDispatcher : UltimatePipelineStep
     [SerializeField]
     private ComputeShader shaderToDispatch;
 
-    [Range(0.001f, 2.0f)]
-    public float noiseFrequency = 0.001f;
+    [Range(0.0001f, 1.0f)]
+    public float noiseFrequency = 0.0001f;
 
     [Range(0.001f, 1.0f)]
     public float H = 0.2f; //D = 3 - H
@@ -20,13 +20,13 @@ public class UNDispatcher : UltimatePipelineStep
     [Range(-1.0f, 1.0f)]
     public float sharpness = 0.0f;
 
-    [Range(1, 10)]
-    public int numOctaves = 5;
+    [Range(1, 5)]
+    public int numOctaves = 2;
 
-    [Range(0.001f, 10.0f)]
+    [Range(0.0001f, 10.0f)]
     public float slopeErosion = 0.001f;
 
-    [Range(0.001f, 10.0f)]
+    [Range(0.0001f, 10.0f)]
     public float perturbationStrength = 0.01f;
 
     private static readonly int PID_Result = Shader.PropertyToID("Result");
@@ -37,7 +37,7 @@ public class UNDispatcher : UltimatePipelineStep
     private static readonly int PID_perturbationStrength = Shader.PropertyToID("perturbationStrength");
     private static readonly int PID_numOctaves = Shader.PropertyToID("numOctaves");
     private static readonly int PID_persistence = Shader.PropertyToID("persistence");
-    private static readonly int PID_randomFloats = Shader.PropertyToID("randomFloats");
+    private static readonly int PID_randomInts = Shader.PropertyToID("randomInts");
     private static readonly int PID_textureDimensions = Shader.PropertyToID("textureDimensions");
 
     public override void ExecuteStepGpu(PipelineContext pipelineContext)
@@ -64,7 +64,7 @@ public class UNDispatcher : UltimatePipelineStep
             pipelineContext.SetUniformFloat(shaderToDispatch, PID_perturbationStrength, perturbationStrength);
             pipelineContext.SetUniformInt(shaderToDispatch, PID_numOctaves, numOctaves);
             pipelineContext.SetUniformFloat(shaderToDispatch, PID_persistence, math.pow(2.0f, H));
-            pipelineContext.SetRandomFloats(shaderToDispatch, PID_randomFloats);
+            pipelineContext.SetRandomInts(shaderToDispatch, PID_randomInts, pipelineContext.GetHeightmapSize());
             pipelineContext.SetUniformInts(shaderToDispatch, PID_textureDimensions, new int[] { textureSize, textureSize });
         }
 
@@ -90,7 +90,7 @@ public class UNDispatcher : UltimatePipelineStep
         // });
         var intermediateHeightmap = pipelineContext.GetCpuIntemediateHeightmap();
 
-        float2 extraDisplacement = (float2)intermediateHeightmap.heightmapDimensions * pipelineContext.GetRandomFloats();
+        float2 extraDisplacement = pipelineContext.GetRandomInts(pipelineContext.GetHeightmapSize());
         float persistence = math.pow(2.0f, H);
 
         for (int x = 0; x < intermediateHeightmap.heightmapDimensions.x; ++x)
@@ -146,34 +146,64 @@ public class UNDispatcher : UltimatePipelineStep
     {
         GUILayout.Label("Noise");
 
-        GUILayout.Label($"Frequency: {noiseFrequency:F4}");
-        noiseFrequency = GUILayout.HorizontalSlider(noiseFrequency, 0.001f, 2.0f);
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Frequency", GUILayout.Width(120));
 
-        GUILayout.Label($"H: {H:F3}");
+            string freqStr = noiseFrequency.ToString("0.####");
+            string newFreqStr = GUILayout.TextField(freqStr, GUILayout.Width(80));
+
+            if (float.TryParse(newFreqStr, out float parsedFreq) && parsedFreq < 1.0f)
+                noiseFrequency = math.max(0.0001f, parsedFreq);
+
+            GUILayout.EndHorizontal();
+        }
+
+        GUILayout.Label($"H: {H:F4}");
         H = GUILayout.HorizontalSlider(H, 0.001f, 1.0f);
 
         GUILayout.Label($"Octaves: {numOctaves}");
         numOctaves = Mathf.RoundToInt(
-            GUILayout.HorizontalSlider(numOctaves, 1f, 20f)
+            GUILayout.HorizontalSlider(numOctaves, 1f, 10f)
         );
 
         GUILayout.Space(5);
         GUILayout.Label("Shape");
 
-        GUILayout.Label($"Sharpness: {sharpness:F3}");
+        GUILayout.Label($"Sharpness: {sharpness:F4}");
         sharpness = GUILayout.HorizontalSlider(sharpness, -1.0f, 1.0f);
 
         GUILayout.Space(5);
         GUILayout.Label("Erosion");
 
-        GUILayout.Label($"Slope Erosion: {slopeErosion:F4}");
-        slopeErosion = GUILayout.HorizontalSlider(slopeErosion, 0.001f, 10.0f);
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Slope erosion", GUILayout.Width(120));
+
+            string erosionStr = slopeErosion.ToString("0.####");
+            string newErosionStr = GUILayout.TextField(erosionStr, GUILayout.Width(80));
+
+            if (float.TryParse(newErosionStr, out float parsedErosion) && parsedErosion < 10.0f)
+                slopeErosion = math.max(parsedErosion, 0.0001f);
+
+            GUILayout.EndHorizontal();
+        }
 
         GUILayout.Space(5);
-        GUILayout.Label("Perturbation");
+        GUILayout.Label("Domain perturbation");
 
-        GUILayout.Label($"Strength: {perturbationStrength:F3}");
-        perturbationStrength = GUILayout.HorizontalSlider(perturbationStrength, 0.01f, 10.0f);
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Strength", GUILayout.Width(120));
+
+            string perturbStr = perturbationStrength.ToString("0.####");
+            string newPerturbStr = GUILayout.TextField(perturbStr, GUILayout.Width(80));
+
+            if (float.TryParse(newPerturbStr, out float parsedPerturb) && parsedPerturb < 10.0f)
+                perturbationStrength = math.max(parsedPerturb, 0.0001f);
+
+            GUILayout.EndHorizontal();
+        }
     }
 
     public override string GUIStepTitle() => "UN generator";
@@ -187,8 +217,8 @@ public class UNDispatcher : UltimatePipelineStep
         //noiseFrequency -> ignored since defines the scale
         H = math.min((float)random.NextDouble(), 0.001f);
         sharpness = ((float)random.NextDouble() - 0.5f) * 2.0f;
-        numOctaves = math.min(1, random.Next() % 10);
-        slopeErosion = math.max(0.001f, 10.0f * (float)random.NextDouble());
-        perturbationStrength = math.max(0.001f, 10.0f * (float)random.NextDouble());
+        numOctaves = math.min(1, random.Next() % 5);
+        slopeErosion = math.max(0.0001f, 10.0f * (float)random.NextDouble());
+        perturbationStrength = math.max(0.0001f, 10.0f * (float)random.NextDouble());
     }
 }

@@ -164,7 +164,7 @@ namespace CpuGenerationPipeline
 #if UNITY_EDITOR
             if (dumpTextures)
             {
-                RenderTextureDumper.SaveRFloatToJpg(finalHeightmap, "heightmap_final.exr");
+                RenderTextureDumper.SaveRFloatToJpg(finalHeightmap, "heightmap_final.jpg");
             }
 #endif
 
@@ -316,7 +316,7 @@ namespace CpuGenerationPipeline
                 else
                     await currentPipeline.RunPipeline();
                 runtimeResults[s] = (cpuProfilingStopwatch.ElapsedMilliseconds, cpuProfilingStopwatch.ElapsedTicks);
-                RenderTextureDumper.SaveRFloatToJpg(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples_cpu/cpu_terrain_" + s + ".exr"));
+                RenderTextureDumper.SaveRFloatToJpg(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples_cpu/cpu_terrain_" + s + ".jpg"));
             }
             {
                 string path = Path.Combine(Application.persistentDataPath, "cpu_performance_evaluation.txt");
