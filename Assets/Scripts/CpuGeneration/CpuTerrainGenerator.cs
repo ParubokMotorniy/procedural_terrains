@@ -1,15 +1,11 @@
 using UnityEngine;
-using UnityEngine.Assertions;
 using System.Collections.Generic;
 using System;
 using Unity.Mathematics;
-using UnityEngine.Rendering;
 using System.IO;
 using System.Text;
 using System.Diagnostics;
 using Debug = UnityEngine.Debug;
-using UnityEditor.Experimental.GraphView;
-using System.Threading.Tasks;
 
 namespace CpuGenerationPipeline
 {
@@ -168,7 +164,7 @@ namespace CpuGenerationPipeline
 #if UNITY_EDITOR
             if (dumpTextures)
             {
-                RenderTextureDumper.SaveRFloatToExr(finalHeightmap, "heightmap_final.exr");
+                RenderTextureDumper.SaveRFloatToJpg(finalHeightmap, "heightmap_final.exr");
             }
 #endif
 
@@ -320,7 +316,7 @@ namespace CpuGenerationPipeline
                 else
                     await currentPipeline.RunPipeline();
                 runtimeResults[s] = (cpuProfilingStopwatch.ElapsedMilliseconds, cpuProfilingStopwatch.ElapsedTicks);
-                RenderTextureDumper.SaveRFloatToExr(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples_cpu/cpu_terrain_" + s + ".exr"));
+                RenderTextureDumper.SaveRFloatToJpg(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples_cpu/cpu_terrain_" + s + ".exr"));
             }
             {
                 string path = Path.Combine(Application.persistentDataPath, "cpu_performance_evaluation.txt");

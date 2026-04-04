@@ -188,8 +188,8 @@ namespace GpuGenerationPipeline
 #if UNITY_EDITOR
             if (dumpTextures)
             {
-                RenderTextureDumper.SaveRFloatToExr(intermediateHeightmap, "heightmap_intermediate.exr");
-                RenderTextureDumper.SaveRFloatToExr(finalHeightmap, "heightmap_final.exr");
+                RenderTextureDumper.SaveRFloatToJpg(intermediateHeightmap, "heightmap_intermediate.exr");
+                RenderTextureDumper.SaveRFloatToJpg(finalHeightmap, "heightmap_final.exr");
             }
 #endif
 
@@ -226,7 +226,7 @@ namespace GpuGenerationPipeline
                     continue;
                 await newContext.ExecuteBuffer();
                 result[s] = (newContext.gpuFenceMilliseconds, newContext.gpuFrameTime);
-                RenderTextureDumper.SaveRFloatToExr(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples_gpu/async_gpu_terrain_" + s + ".exr"));
+                RenderTextureDumper.SaveRFloatToJpg(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples_gpu/async_gpu_terrain_" + s + ".exr"));
             }
 
             //TODO: I might want to make first barrier optional and instead measure time from the moment of dispatch
@@ -317,7 +317,7 @@ namespace GpuGenerationPipeline
 
                 synchronizedResults[myIteration] = (newContext.gpuFenceMilliseconds, newContext.gpuFenceTicks, newContext.gpuFrameTime);
 
-                RenderTextureDumper.SaveRFloatToExr(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples_gpu/sync_gpu_terrain_" + myIteration + ".exr"), false);
+                RenderTextureDumper.SaveRFloatToJpg(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples_gpu/sync_gpu_terrain_" + myIteration + ".exr"), false);
                 previousReadPending = false;
 
                 if (myIteration == 0)

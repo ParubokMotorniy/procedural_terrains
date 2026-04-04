@@ -3,7 +3,7 @@
 #include "../../3rdparty/hlsl_noise/common/stegu-math.hlsl"
 #include "./Common/Utilities.hlsl"
 
-#pragma multi_compile_local GROUP_8 GROUP_16 GROUP_32
+#pragma multi_compile_local GROUP_1 GROUP_2 GROUP_4 GROUP_8 GROUP_16 GROUP_32 GROUP_64
 
 RWTexture2D<float> Result;
 
@@ -18,7 +18,7 @@ uniform uint threadSubdomainsY;
 
 uniform float octaveAmplitude;
 uniform float noiseFrequency;
-uniform float2 noiseDisplacement;
+uniform int2 noiseDisplacement;
 uniform float worleyFrequency;
 // uniform float perlinFrequency;
 
@@ -68,18 +68,26 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates)
 }
 
 #pragma kernel IntializeTexture
+#if GROUP_1
+[numthreads(1, 1, 1)]
+#elif GROUP_2
+[numthreads(2, 2, 1)]
+#elif GROUP_4
+[numthreads(4, 4, 1)]
 #if GROUP_8
 [numthreads(8, 8, 1)]
 #elif GROUP_16
 [numthreads(16, 16, 1)]
 #elif GROUP_32
 [numthreads(32, 32, 1)]
+#if GROUP_64
+[numthreads(64, 64, 1)]
 #endif
     void IntializeTexture(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     uint2 topLeftCellIdx = globalId.xy * threadDomainTexelWidth;
 
-    float2 worleyCoordinates = (topLeftCellIdx / (float2)targetDimensions) * worleyFrequency + noiseDisplacement * worleyFrequency;
+    float2 worleyCoordinates = (topLeftCellIdx / (float2)targetDimensions) * worleyFrequency + noiseDisplacement;
     Result[topLeftCellIdx.xy] = sampleWorleyNoise(worleyCoordinates) * octaveAmplitude;
 }
 
@@ -99,12 +107,20 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates)
 }
 
 #pragma kernel Transition12
+#if GROUP_1
+[numthreads(1, 1, 1)]
+#elif GROUP_2
+[numthreads(2, 2, 1)]
+#elif GROUP_4
+[numthreads(4, 4, 1)]
 #if GROUP_8
 [numthreads(8, 8, 1)]
 #elif GROUP_16
 [numthreads(16, 16, 1)]
 #elif GROUP_32
 [numthreads(32, 32, 1)]
+#if GROUP_64
+[numthreads(64, 64, 1)]
 #endif
     void Transition12(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
@@ -130,12 +146,20 @@ float2 computeNoiseCoordinates(uint2 targetTextureCoordinates)
 }
 
 #pragma kernel Transition21
+#if GROUP_1
+[numthreads(1, 1, 1)]
+#elif GROUP_2
+[numthreads(2, 2, 1)]
+#elif GROUP_4
+[numthreads(4, 4, 1)]
 #if GROUP_8
-    [numthreads(8, 8, 1)]
+[numthreads(8, 8, 1)]
 #elif GROUP_16
-    [numthreads(16, 16, 1)]
+[numthreads(16, 16, 1)]
 #elif GROUP_32
-    [numthreads(32, 32, 1)]
+[numthreads(32, 32, 1)]
+#if GROUP_64
+[numthreads(64, 64, 1)]
 #endif
     void Transition21(uint3 localID : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {

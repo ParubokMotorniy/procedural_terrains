@@ -335,7 +335,7 @@ public class RMDDispatcher : UltimatePipelineStep
     public override void RenderParametersTuningGUI()
     {
         GUILayout.Label($"Num Subdivisions: {numSubdivisions}");
-        float ns = GUILayout.HorizontalSlider(numSubdivisions, 1f, 16f);
+        float ns = GUILayout.HorizontalSlider(numSubdivisions, 2f, 16f);
         numSubdivisions = (uint)Mathf.RoundToInt(ns);
 
         GUILayout.Label($"H: {H:F3}");

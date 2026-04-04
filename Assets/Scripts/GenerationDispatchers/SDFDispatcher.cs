@@ -6,6 +6,15 @@ using CpuGenerationPipeline;
 using GpuGenerationPipeline;
 using System.Threading.Tasks;
 
+using Unity.Mathematics;
+using UnityEngine;
+using UnityEngine.Assertions;
+using System;
+using CpuGenerationPipeline;
+using GpuGenerationPipeline;
+using UnityEngine.Rendering;
+using System.Threading.Tasks;
+using Unity.Collections;
 public class SDFDispatcher : UltimatePipelineStep
 {
     [SerializeField]
@@ -13,6 +22,15 @@ public class SDFDispatcher : UltimatePipelineStep
 
     [Range(0.025f, 4.0f)]
     public float baseSimplexFrequency = 1.0f;
+
+    [Range(0.01f, 1.0f)]
+    public float flowPerturbationStrength = 0.01f;
+
+    [Range(0.01f, 1.0f)]
+    public float basePerturbationStrength = 0.01f;
+
+    [SerializeField]
+    public bool applyTerrainMask = false;
 
     private static readonly uint2 MAX_COORD = new uint2(UInt32.MaxValue, UInt32.MaxValue);
 
@@ -36,6 +54,8 @@ public class SDFDispatcher : UltimatePipelineStep
     private static readonly int PID_shoreBaseHeight = Shader.PropertyToID("shoreBaseHeight");
     private static readonly int PID_shoreDistanceThreshold = Shader.PropertyToID("shoreDistanceThreshold");
     private static readonly int PID_simplexFrequency = Shader.PropertyToID("simplexFrequency");
+    private static readonly int PID_flowPerturbationStrength = Shader.PropertyToID("flowPerturbationStrength");
+    private static readonly int PID_basePerturbationStrength = Shader.PropertyToID("basePerturbationStrength");
 
     private static readonly int PID_currentSourceBuffer = Shader.PropertyToID("currentSourceBuffer");
     private static readonly int PID_floodStepSize = Shader.PropertyToID("floodStepSize");
@@ -82,6 +102,7 @@ public class SDFDispatcher : UltimatePipelineStep
         int coastlineGeneratorKernel = shaderToDispatch.FindKernel("CoastlineGenerator");
         int sDFPostprocessorKernel = shaderToDispatch.FindKernel("SDFPostprocessor");
 
+        // Kernels
         int[] kernels =
         {
             maskToSeedBufferKernelIdx,
@@ -99,6 +120,15 @@ public class SDFDispatcher : UltimatePipelineStep
             pipelineContext.BindTexture(shaderToDispatch, kernelIdx, PID_outputTexture, pipelineContext.intermediateHeightmap);
         }
 
+        {
+            var useMaskShaderKeyword = new LocalKeyword(shaderToDispatch, "USE_MASK");
+            pipelineContext.SetKeyword(shaderToDispatch, ref useMaskShaderKeyword, applyTerrainMask);
+
+            var noMaskShaderKeyword = new LocalKeyword(shaderToDispatch, "NOT_USE_MASK");
+            pipelineContext.SetKeyword(shaderToDispatch, ref noMaskShaderKeyword, !applyTerrainMask);
+
+        }
+
         // Uniforms
         pipelineContext.SetUniformInt(shaderToDispatch, PID_texelsPerThread, textureSize / numLinearThreads);
         pipelineContext.SetUniformInt(shaderToDispatch, PID_bufferSideLength, textureSize);
@@ -108,6 +138,8 @@ public class SDFDispatcher : UltimatePipelineStep
         pipelineContext.SetUniformFloat(shaderToDispatch, PID_shoreDistanceThreshold, textureSize * 0.1f);   // fix at 10%
         pipelineContext.SetUniformFloat(shaderToDispatch, PID_shoreBaseHeight, maxDistanceToSeed * 0.005f); // fix at 0.5%
         pipelineContext.SetUniformFloat(shaderToDispatch, PID_simplexFrequency, baseSimplexFrequency);
+        pipelineContext.SetUniformFloat(shaderToDispatch, PID_flowPerturbationStrength, flowPerturbationStrength);
+        pipelineContext.SetUniformFloat(shaderToDispatch, PID_basePerturbationStrength, basePerturbationStrength);
         pipelineContext.SetRandomFloats(shaderToDispatch, PID_randomFloats);
 
         int currentReadBuffer = 1;
@@ -214,13 +246,12 @@ public class SDFDispatcher : UltimatePipelineStep
     float computeFlowNoise(float2 uv, float startFreq)
     {
         float amp = 0.9f;
-        float perturbStrength = 0.15f;
         float2 gsum = new float2(0.2f, 0.2f);
 
         float disp = 0.0f;
         for (int i = 0; i < 5; i++)
         {
-            float3 psrdSample = amp * noise.srdnoise(uv * startFreq + gsum * perturbStrength, 0.5f * startFreq);
+            float3 psrdSample = amp * noise.srdnoise(uv * startFreq + gsum * flowPerturbationStrength, 0.5f * startFreq);
             disp += psrdSample.x;
             gsum += psrdSample.yz * amp;
 
@@ -239,13 +270,12 @@ public class SDFDispatcher : UltimatePipelineStep
         float addFlow = 1.0f - (0.85f + computeFlowNoise(uv, baseSimplexFrequency / 1.3f));
         float subFlow = 1.0f - (0.75f + computeFlowNoise(uv, baseSimplexFrequency / 1.7f));
 
-        float maskValue = maskCoefficient(texelCoord - floatDimensions * 0.5f, heightmapDimensions, (uint2)(floatDimensions * 0.2f));
-        // float maskValue = 1.0f;
+        float maskValue = applyTerrainMask ? maskCoefficient(texelCoord - floatDimensions * 0.5f, heightmapDimensions, (uint2)(floatDimensions * 0.2f)) : 1.0f;
         float2 q = new float2(fbm(uv + new float2(0.0f, 0.7f), baseSimplexFrequency),
                           fbm(uv + new float2(0.7f, 0.0f), baseSimplexFrequency));
-        float n = maskValue * fbm(uv + 0.09f * q, baseSimplexFrequency) + addFlow - subFlow;
+        float n = maskValue * fbm(uv + basePerturbationStrength * q, baseSimplexFrequency) + addFlow - subFlow;
 
-        float smoke = 0.5f * maskValue + n * 0.35f;
+        float smoke = 0.5f * maskValue + n * 0.25f;
         return math.clamp(smoke, 0.0f, 1.0f);
     }
 
@@ -471,8 +501,14 @@ public class SDFDispatcher : UltimatePipelineStep
 
     public override void RenderParametersTuningGUI()
     {
-        GUILayout.Label($"Worley Frequency: {baseSimplexFrequency:F3}");
-        baseSimplexFrequency = GUILayout.HorizontalSlider(baseSimplexFrequency, 0.01f, 10.0f);
+        GUILayout.Label($"Base simplex frequency: {baseSimplexFrequency:F3}");
+        baseSimplexFrequency = GUILayout.HorizontalSlider(baseSimplexFrequency, 0.01f, 4.0f);
+
+        GUILayout.Label($"Simplex noise perturbation strength: {basePerturbationStrength:F3}");
+        basePerturbationStrength = GUILayout.HorizontalSlider(basePerturbationStrength, 0.01f, 1.0f);
+
+        GUILayout.Label($"Flow noise perturbation strength: {flowPerturbationStrength:F3}");
+        flowPerturbationStrength = GUILayout.HorizontalSlider(flowPerturbationStrength, 0.01f, 1.0f);
     }
 
     public override string GUIStepTitle() => "SDF generator";
@@ -490,5 +526,7 @@ public class SDFDispatcher : UltimatePipelineStep
     public override void RandomizeParameters(System.Random random)
     {
         //baseSimplexFrequency -> ignored since defines scale 
+        basePerturbationStrength = (float)math.max(0.01, random.NextDouble());
+        flowPerturbationStrength = (float)math.max(0.01, random.NextDouble());
     }
 }

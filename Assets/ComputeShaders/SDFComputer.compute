@@ -18,21 +18,24 @@ uniform float simplexFrequency;
 uniform int maskBorderWidth;
 uniform float shoreDistanceThreshold;
 uniform float randomFloats;
+uniform float flowPerturbationStrength;
+uniform float basePerturbationStrength;
 
 static const uint MAX_UINT = 0xFFFFFFFFu;
 static const uint2 MAX_COORD = uint2(MAX_UINT, MAX_UINT);
 
-#pragma multi_compile GLOBAL_GROUP_8 GLOBAL_GROUP_16 GLOBAL_GROUP_32 GLOBAL_GROUP_64 
+#pragma multi_compile GLOBAL_GROUP_8 GLOBAL_GROUP_16 GLOBAL_GROUP_32 GLOBAL_GROUP_64
+#pragma multi_compile USE_MASK NOT_USE_MASK
 
 uint2 readFromBuffer(uint2 targetCoord)
 {
     if (currentSourceBuffer == 0)
     {
-        return floodingBuffer1[index2dTo1d(uint2(bufferSideLength,bufferSideLength),targetCoord)];
+        return floodingBuffer1[index2dTo1d(uint2(bufferSideLength, bufferSideLength), targetCoord)];
     }
     else
     {
-        return floodingBuffer2[index2dTo1d(uint2(bufferSideLength,bufferSideLength),targetCoord)];
+        return floodingBuffer2[index2dTo1d(uint2(bufferSideLength, bufferSideLength), targetCoord)];
     }
 }
 
@@ -40,11 +43,11 @@ void writeToBuffer(uint2 targetCoord, uint2 newValue)
 {
     if (currentSourceBuffer == 0)
     {
-        floodingBuffer2[index2dTo1d(uint2(bufferSideLength,bufferSideLength),targetCoord)] = newValue;
+        floodingBuffer2[index2dTo1d(uint2(bufferSideLength, bufferSideLength), targetCoord)] = newValue;
     }
     else
     {
-        floodingBuffer1[index2dTo1d(uint2(bufferSideLength,bufferSideLength),targetCoord)] = newValue;
+        floodingBuffer1[index2dTo1d(uint2(bufferSideLength, bufferSideLength), targetCoord)] = newValue;
     }
 }
 
@@ -106,13 +109,12 @@ float maskCoefficient(float2 texelPosition)
 float computeFlowNoise(float2 uv, float startFreq)
 {
     float amp = 0.9;
-    float perturbStrength = 0.15;
     float2 gsum = float2(0.2, 0.2);
 
     float disp = 0.0;
     for (int i = 0; i < 5; i++)
     {
-        float3 psrdSample = amp * srdnoise(uv * startFreq + gsum * perturbStrength, 0.5 * startFreq);
+        float3 psrdSample = amp * srdnoise(uv * startFreq + gsum * flowPerturbationStrength, 0.5 * startFreq);
         disp += psrdSample.x;
         gsum += psrdSample.yz * amp;
 
@@ -130,12 +132,16 @@ float coastlineComputer(float2 texelCoord)
     float addFlow = 1.0 - (0.85 + computeFlowNoise(uv, simplexFrequency / 1.3));
     float subFlow = 1.0 - (0.75 + computeFlowNoise(uv, simplexFrequency / 1.7));
 
+#if USE_MASK
     float maskValue = maskCoefficient(texelCoord - float2(bufferSideLength / 2.0, bufferSideLength / 2.0));
+#elif NOT_USE_MASK
+    float maskValue = 1.0;
+#endif
     float2 q = float2(fbm(uv + float2(0.0, 0.7), simplexFrequency),
                       fbm(uv + float2(0.7, 0.0), simplexFrequency));
-    float n = maskValue * fbm(uv + 0.09 * q, simplexFrequency) + addFlow - subFlow;
+    float n = maskValue * fbm(uv + basePerturbationStrength * q, simplexFrequency) + addFlow - subFlow;
 
-    float smoke = 0.5 * maskValue + n * 0.35;
+    float smoke = 0.5 * maskValue + n * 0.25;
     return clamp(smoke, 0.0, 1.0);
 }
 
@@ -156,7 +162,7 @@ float coastlineComputer(float2 texelCoord)
         for (int y = 0; y < texelsPerThread; ++y)
         {
             uint2 texelCoord = topLeftCorner + uint2(x, y);
-            inputTexture[index2dTo1d(uint2(bufferSideLength,bufferSideLength),texelCoord)] = coastlineComputer(texelCoord);
+            inputTexture[index2dTo1d(uint2(bufferSideLength, bufferSideLength), texelCoord)] = coastlineComputer(texelCoord);
             // outputTexture[texelCoord]  = coastlineComputer(texelCoord);
         }
     }
@@ -180,7 +186,7 @@ float coastlineComputer(float2 texelCoord)
         for (int y = 0; y < texelsPerThread; ++y)
         {
             uint2 kernelCenter = topLeftCorner + uint2(x, y);
-            uint kernelCenterLin = index2dTo1d(uint2(bufferSideLength,bufferSideLength),kernelCenter);
+            uint kernelCenterLin = index2dTo1d(uint2(bufferSideLength, bufferSideLength), kernelCenter);
 
             if (texelIsWhiteForMask(inputTexture[kernelCenterLin]))
             {
@@ -191,7 +197,7 @@ float coastlineComputer(float2 texelCoord)
                     for (int j = -1; j < 2 && !blackFound; ++j)
                     {
                         uint2 targetNeighbor = uint2(clamp((int)kernelCenter.x + i, 0, bufferSideLength - 1), clamp((int)kernelCenter.y + j, 0, bufferSideLength - 1));
-                        float neighborColor = inputTexture[index2dTo1d(uint2(bufferSideLength,bufferSideLength),targetNeighbor)];
+                        float neighborColor = inputTexture[index2dTo1d(uint2(bufferSideLength, bufferSideLength), targetNeighbor)];
                         if (!texelIsWhiteForMask(neighborColor))
                         {
                             floodingBuffer1[kernelCenterLin] = kernelCenter;
@@ -296,7 +302,7 @@ float coastlineComputer(float2 texelCoord)
             uint2 seedCoordinates = readFromBuffer(cellCoords);
             float actualDistance = length((int2)seedCoordinates - (int2)cellCoords);
 
-            if (texelIsWhiteForMask(inputTexture[index2dTo1d(uint2(bufferSideLength,bufferSideLength),cellCoords)]))
+            if (texelIsWhiteForMask(inputTexture[index2dTo1d(uint2(bufferSideLength, bufferSideLength), cellCoords)]))
             {
                 outputTexture[cellCoords] = (actualDistance + shoreBaseHeight);
             }
@@ -326,7 +332,7 @@ float coastlineComputer(float2 texelCoord)
         {
             uint2 cellCoords = topLeftCorner + uint2(x, y);
 
-            float inputTexelColor = inputTexture[index2dTo1d(uint2(bufferSideLength,bufferSideLength),cellCoords)];
+            float inputTexelColor = inputTexture[index2dTo1d(uint2(bufferSideLength, bufferSideLength), cellCoords)];
             float distanceAtTexel = outputTexture[cellCoords];
 
             //"lake" formation
