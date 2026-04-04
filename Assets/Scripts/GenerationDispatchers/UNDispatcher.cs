@@ -46,7 +46,8 @@ public class UNDispatcher : UltimatePipelineStep
         var (optimalGroupSize, numGroups) = GenerationUtilities.GetOptimalNumberOfGroups(textureSize, new int[] { pipelineContext.preferredGlobalGroupSize }, Int32.MaxValue, 1);
         int numLinearThreads = optimalGroupSize * numGroups;
 
-        Assert.IsTrue(textureSize % numLinearThreads == 0, "Texels must be distributed among threads evenly!");
+        if (RuntimeAssert.IsTrue(textureSize % numLinearThreads == 0, "Texels must be distributed among threads evenly! Try adjusting heightmap or threadgroup size."))
+            return;
 
         int kernelIdx = shaderToDispatch.FindKernel("UberNoiseTerrainGenerator");
 

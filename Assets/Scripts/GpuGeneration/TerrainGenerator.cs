@@ -89,7 +89,8 @@ namespace GpuGenerationPipeline
 
                     intermediateHeightmap.Create();
 
-                    Assert.IsTrue(intermediateHeightmap.IsCreated());
+                    if (RuntimeAssert.IsTrue(intermediateHeightmap.IsCreated(), "Failed to initialize the required resources! Try restarting the app or explicitly freeing the resources!"))
+                        return null;
                 }
             }
 
@@ -107,13 +108,20 @@ namespace GpuGenerationPipeline
                         wrapMode = TextureWrapMode.Clamp
                     };
                     finalHeightmap.Create();
-                    Assert.IsTrue(finalHeightmap.IsCreated());
+                    if (RuntimeAssert.IsTrue(finalHeightmap.IsCreated(), "Failed to initialize the required resources! Try restarting the app or explicitly freeing the resources!"))
+                        return null;
                 }
             }
 
             int preferredGroupSize = (int)math.pow(2, preferredGroupSizePower);
             PipelineContext currentContext = enablePipelineProfiling ? new ProfilingPipelineContext(intermediateHeightmap, finalHeightmap, pipelineSeed, preferredGroupSize) : new PipelineContext(intermediateHeightmap, finalHeightmap, pipelineSeed, preferredGroupSize);
 
+            for (int s = 3; s < 7; ++s)
+            {
+                int groupSizeToDisable = (int)math.pow(2, s);
+                var groupSizeKeywordToDisable = GlobalKeyword.Create("GLOBAL_GROUP_" + groupSizeToDisable);
+                currentContext.SetGlobalKeyword(ref groupSizeKeywordToDisable, false);
+            }
             var groupSizeKeyword = GlobalKeyword.Create("GLOBAL_GROUP_" + preferredGroupSize);
             currentContext.SetGlobalKeyword(ref groupSizeKeyword, true);
 
@@ -168,6 +176,8 @@ namespace GpuGenerationPipeline
         async void RegenerateTerrain()
         {
             PipelineContext currentContext = buildPipeline(enableProfiling, generatorSeed, randomizeParameters);
+            if (currentContext is null)
+                return;
             await currentContext.ExecuteBuffer();
 
             if (enableMetricEvaluation)
@@ -212,6 +222,8 @@ namespace GpuGenerationPipeline
             for (int s = 0; s < numSamples; ++s)
             {
                 var newContext = (ProfilingPipelineContext)buildPipeline(true, randomSeedGenerator.Next(), randomizeParameters);
+                if (newContext is null)
+                    continue;
                 await newContext.ExecuteBuffer();
                 result[s] = (newContext.gpuFenceMilliseconds, newContext.gpuFrameTime);
                 RenderTextureDumper.SaveRFloatToExr(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples_gpu/async_gpu_terrain_" + s + ".exr"));
@@ -297,6 +309,9 @@ namespace GpuGenerationPipeline
                 int myIteration = synchronizedIterationsLeft;
 
                 var newContext = (ProfilingPipelineContext)buildPipeline(true, numSamples + generatorSeed + myIteration, randomizeParameters);
+                if (newContext is null)
+                    return;
+
                 previousReadPending = true;
                 await newContext.ExecuteBuffer();
 

@@ -54,23 +54,12 @@ public class FFTDispatcher : UltimatePipelineStep
         if (coefficientsBuffer is null || !coefficientsBuffer.IsValid() || coefficientsBuffer.count != neededBufferSize)
         {
             coefficientsBuffer = new ComputeBuffer(neededBufferSize, sizeof(float));
-            Assert.IsTrue(coefficientsBuffer.IsValid());
+            if (RuntimeAssert.IsTrue(coefficientsBuffer.IsValid(), "Failed to initialize the required resources! Try restarting the app or explicitly freeing the resources!"))
+                return;
         }
 
         int coefficientGeneratorKernelIdx = shaderToDispatch.FindKernel("CoefficientGenerator");
         int inverseFFTKernelIdx = shaderToDispatch.FindKernel("InverseFFT");
-
-        int[] kernels =
-        {
-            coefficientGeneratorKernelIdx,
-            inverseFFTKernelIdx,
-        };
-
-        foreach (int kernelIdx in kernels)
-        {
-            pipelineContext.BindTexture(shaderToDispatch, kernelIdx, PID_resultHeightmap, pipelineContext.intermediateHeightmap);
-            pipelineContext.BindComputeBuffer(shaderToDispatch, kernelIdx, PID_coefficientsBuffer, coefficientsBuffer);
-        }
 
         // uniforms
         var (optimalGroupSize, numGenerationGroups) = GenerationUtilities.GetOptimalNumberOfGroups(math.min(coefficientsBufferSizeX, coefficientsBufferSizeY), new int[] { generationGroupSize }, Int32.MaxValue, 1);
@@ -83,8 +72,23 @@ public class FFTDispatcher : UltimatePipelineStep
         int invTexelsPerThread = actualCoefficientsComputed / inverseGroupSize;
         int numTexelsPerInverseGroup = textureSize / numInverseGroups;
 
-        Assert.IsTrue(coefficientsBufferSizeX % numLinearThreads == 0 && coefficientsBufferSizeX % numLinearThreads == 0 && texelsPerThreadX != 0 && texelsPerThreadY != 0, "Generation texels must be distributed among threads evenly!");
-        Assert.IsTrue(actualCoefficientsComputed % inverseGroupSize == 0 && textureSize % numInverseGroups == 0 && invTexelsPerThread != 0, "Inverse texels must be distributed among threads evenly!");
+        if (RuntimeAssert.IsTrue(coefficientsBufferSizeX % numLinearThreads == 0 && coefficientsBufferSizeX % numLinearThreads == 0 && texelsPerThreadX != 0 && texelsPerThreadY != 0, "Generation texels must be distributed among threads evenly! Try adjusting heightmap or threadgroup size."))
+            return;
+        if (RuntimeAssert.IsTrue(actualCoefficientsComputed % inverseGroupSize == 0 && textureSize % numInverseGroups == 0 && invTexelsPerThread != 0, "Inverse FFT texels must be distributed among threads evenly! Try adjusting heightmap or threadgroup size."))
+            return;
+
+        //kernels 
+        int[] kernels =
+        {
+            coefficientGeneratorKernelIdx,
+            inverseFFTKernelIdx,
+        };
+
+        foreach (int kernelIdx in kernels)
+        {
+            pipelineContext.BindTexture(shaderToDispatch, kernelIdx, PID_resultHeightmap, pipelineContext.intermediateHeightmap);
+            pipelineContext.BindComputeBuffer(shaderToDispatch, kernelIdx, PID_coefficientsBuffer, coefficientsBuffer);
+        }
 
         {
             pipelineContext.SetUniformInts(shaderToDispatch, PID_texelsPerThread, new int[] { texelsPerThreadX, texelsPerThreadY });

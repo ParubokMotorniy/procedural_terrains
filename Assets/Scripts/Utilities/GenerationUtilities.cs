@@ -10,7 +10,8 @@ public static class GenerationUtilities
 {
     public static int ComputeCoprime(int valueToMatch, int startPairValue)
     {
-        Assert.IsTrue(startPairValue % 2 == 1);
+        if (RuntimeAssert.IsTrue(startPairValue % 2 == 1, "Failed to start the search for coprimes. You should pride yourself on getting such a rare error."))
+            return -1;
 
         int permuteA = startPairValue;
         while (true)
@@ -38,7 +39,7 @@ public static class GenerationUtilities
         for (int i = availableGroupSizes.Length - 1; i >= 0; --i)
         {
             int testedGroupSizeAlongDimension = availableGroupSizes[i];
-            Assert.IsTrue(testedGroupSizeAlongDimension < 1024, "The group size exceeds hardware limitations (on my machine)");
+            RuntimeAssert.IsTrue(testedGroupSizeAlongDimension < 1024, "The group size exceeds hardware limitations (on my machine).");
 
             int preferredLocalGroups = 100 * (int)math.ceil(320 / testedGroupSizeAlongDimension); //roughly 8 * 40 = 320 threads (5 waves) per CU
 

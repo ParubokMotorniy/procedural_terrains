@@ -27,7 +27,7 @@ public class RMDDispatcher : UltimatePipelineStep
     // [Range(0.01f, 10.0f)]
     // public float perlinFrequency;
 
-    private readonly int[] groupSizes = new int[] { 64, 56, 48, 40, 32, 24, 16, 8, 4, 2, 1 };
+    private readonly int[] groupSizes = new int[] { 64, 32, 16, 8, 4, 2, 1 };
 
     private static readonly float RANGE_THRSH_CEIL = 0.6f;
     private static readonly float RANGE_THRSH_FLOOR = 0.35f;
@@ -53,7 +53,8 @@ public class RMDDispatcher : UltimatePipelineStep
         int textureSize = pipelineContext.GetHeightmapSize();
         int texelsPerThreadDomain = (int)math.pow(2, numSubdivisions);
         int numLinearThreads = textureSize / texelsPerThreadDomain;
-        Assert.IsTrue(textureSize % texelsPerThreadDomain == 0, "Can't fit integer number of domains into the texture!");
+        if (RuntimeAssert.IsTrue(textureSize % texelsPerThreadDomain == 0, "Can't fit integer number of division subdomains into the texture! Try adjusting the heightmap size or the number of subdivisions."))
+            return;
 
         int numGroups = 0;
         int groupSize = 0;
@@ -64,9 +65,12 @@ public class RMDDispatcher : UltimatePipelineStep
                 numGroups = numLinearThreads / candidateGroupSize;
                 groupSize = candidateGroupSize;
             }
+            var appropriateShaderKeywordToDisable = new LocalKeyword(shaderToDispatch, "GROUP_" + candidateGroupSize);
+            pipelineContext.SetKeyword(shaderToDispatch, ref appropriateShaderKeywordToDisable, false);
         }
 
-        Assert.IsTrue(numGroups != 0 && groupSize != 0, "Underoccupied groups requested! Can't distribute " + numLinearThreads + " threads.");
+        if (RuntimeAssert.IsTrue(numGroups != 0 && groupSize != 0, "Underoccupied groups requested! Can't distribute " + numLinearThreads + " threads among the threadgroups. Try adjusting the heightmap size or the number of subdivisions."))
+            return;
 
         var appropriateShaderKeyword = new LocalKeyword(shaderToDispatch, "GROUP_" + groupSize);
         pipelineContext.SetKeyword(shaderToDispatch, ref appropriateShaderKeyword, true);
@@ -91,7 +95,7 @@ public class RMDDispatcher : UltimatePipelineStep
         float octaveAmplitude = 1.0f;
         float scalingFactor = (float)math.pow(0.5, 0.5 * H);
         pipelineContext.SetUniformFloat(shaderToDispatch, PID_octaveAmplitude, octaveAmplitude);
-        pipelineContext.SetRandomFloats(shaderToDispatch, PID_noiseDisplacement);
+        pipelineContext.SetRandomInts(shaderToDispatch, PID_noiseDisplacement);
 
         pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, initializationKernelIdx, new Vector3(numGroups, numGroups, 1));
 
@@ -171,7 +175,7 @@ public class RMDDispatcher : UltimatePipelineStep
             for (int y = 0; y < numThreadDomains; ++y)
             {
                 uint2 topLeftCellIdx = (uint2)(new int2(x, y) * texelsPerThreadDomain);
-                float2 worleyCoordinates = (topLeftCellIdx / (float2)intermediateHeightmap.heightmapDimensions) * worleyFrequency + noiseDisplacement * worleyFrequency;
+                float2 worleyCoordinates = (topLeftCellIdx / (float2)intermediateHeightmap.heightmapDimensions) * worleyFrequency + noiseDisplacement;
                 intermediateHeightmap.nativeHeightmapArray[(int)CpuComputeUtilities.index2dTo1d(intermediateHeightmap.heightmapDimensions, topLeftCellIdx)] = SampleWorleyNoise(worleyCoordinates) * octaveAmplitude;
             }
         }
@@ -285,11 +289,12 @@ public class RMDDispatcher : UltimatePipelineStep
         int texelsPerThreadDomain = (int)math.pow(2, numSubdivisions);
         var intermediateHeightmap = pipelineContext.GetCpuIntemediateHeightmap();
 
-        Assert.IsTrue(textureSize % texelsPerThreadDomain == 0, "Can't fit integer number of domains into the texture!");
+        if (RuntimeAssert.IsTrue(textureSize % texelsPerThreadDomain == 0, "Can't fit integer number of domains into the texture!"))
+            return Task.CompletedTask;
 
         float octaveAmplitude = 1.0f;
         float scalingFactor = (float)math.pow(0.5, 0.5 * H);
-        InitializeHeightmap(textureSize, texelsPerThreadDomain, intermediateHeightmap, 1.0f, pipelineContext.GetRandomFloats());
+        InitializeHeightmap(textureSize, texelsPerThreadDomain, intermediateHeightmap, 1.0f, pipelineContext.GetRandomInts());
 
         for (int sub = 0; sub < numSubdivisions; ++sub)
         {

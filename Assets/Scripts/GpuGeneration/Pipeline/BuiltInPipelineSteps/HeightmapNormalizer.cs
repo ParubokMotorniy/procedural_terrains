@@ -19,7 +19,8 @@ namespace GpuGenerationPipeline
             }
 
             int textureSize = pipelineContext.GetHeightmapSize();
-            Assert.IsTrue(textureSize >= 8); //normalization groups are at least 8 threads wide 
+            if (RuntimeAssert.IsTrue(textureSize >= 8, "")) //normalization groups are at least 8 threads wide 
+                return;
             int largestGroupSize = (int)math.pow(2, math.ceil(math.log2(math.clamp(textureSize, 8, 32))));
             int normalizationKernel = normalizationShader.FindKernel("Normalizer" + largestGroupSize);
             pipelineContext.BindTexture(normalizationShader, normalizationKernel, Shader.PropertyToID("Result"), pipelineContext.intermediateHeightmap);

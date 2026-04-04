@@ -103,15 +103,18 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
         int texelsPerThread = textureSize / numLinearThreads;
         var dispatchGroups = new Vector3(numGroups, numGroups, 1);
 
-        Assert.IsTrue(textureSize % numLinearThreads == 0, "Texels must be distributed among threads evenly!");
-        Assert.IsTrue(texelsPerThread >= 4, "A thread must have at least 4 texels to porcess");
+        if (RuntimeAssert.IsTrue(textureSize % numLinearThreads == 0, "Texels must be distributed among threads evenly! Try adjusting heightmap or threadgroup size."))
+            return;
+        if (RuntimeAssert.IsTrue(texelsPerThread >= 4, "A thread must have at least 4 texels to process! Try adjusting heightmap or threadgroup size."))
+            return;
 
         {
             int neededBufferSize = textureSize * textureSize;
             if (texelParametersBuffer is null || !texelParametersBuffer.IsValid() || texelParametersBuffer.count != neededBufferSize)
             {
                 texelParametersBuffer = new ComputeBuffer(neededBufferSize, Marshal.SizeOf<TexelParameters>());
-                Assert.IsTrue(texelParametersBuffer.IsValid());
+                if (RuntimeAssert.IsTrue(texelParametersBuffer.IsValid(), "Failed to initialize the required resources! Try restarting the app or explicitly freeing the resources!"))
+                    return;
             }
         }
         {
@@ -119,7 +122,8 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
             if (waterPipesBuffer is null || !waterPipesBuffer.IsValid() || waterPipesBuffer.count != neededBufferSize)
             {
                 waterPipesBuffer = new ComputeBuffer(neededBufferSize, sizeof(float) * 18);
-                Assert.IsTrue(waterPipesBuffer.IsValid());
+                if (RuntimeAssert.IsTrue(waterPipesBuffer.IsValid(), "Failed to initialize the required resources! Try restarting the app or explicitly freeing the resources!"))
+                    return;
             }
         }
         {
@@ -127,7 +131,8 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
             if (gradientsBuffer is null || !gradientsBuffer.IsValid() || gradientsBuffer.count != neededBufferSize)
             {
                 gradientsBuffer = new ComputeBuffer(neededBufferSize, sizeof(float) * 2);
-                Assert.IsTrue(gradientsBuffer.IsValid());
+                if (RuntimeAssert.IsTrue(gradientsBuffer.IsValid(), "Failed to initialize the required resources! Try restarting the app or explicitly freeing the resources!"))
+                    return;
             }
         }
 
@@ -558,7 +563,6 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
 
     public override void FreeResources()
     {
-
         actualTexelParameters = null;
         texelPipes = null;
         cpuGradientsBuffer = null;

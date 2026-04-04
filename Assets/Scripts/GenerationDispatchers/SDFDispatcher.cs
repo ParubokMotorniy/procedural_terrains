@@ -47,14 +47,16 @@ public class SDFDispatcher : UltimatePipelineStep
         var (optimalGroupSize, numLinearGroups) = GenerationUtilities.GetOptimalNumberOfGroups(textureSize, new int[] { pipelineContext.preferredGlobalGroupSize }, Int32.MaxValue, 1);
         int numLinearThreads = optimalGroupSize * numLinearGroups;
 
-        Assert.IsTrue(textureSize % numLinearThreads == 0, "Texels must be distributed among threads evenly!");
+        if (RuntimeAssert.IsTrue(textureSize % numLinearThreads == 0, "Texels must be distributed among threads evenly! Try adjusting heightmap or threadgroup size."))
+            return;
 
         {
             int neededBufferSize = textureSize * textureSize;
             if (inputContinentHeightmap is null || !inputContinentHeightmap.IsValid() || inputContinentHeightmap.count != neededBufferSize)
             {
                 inputContinentHeightmap = new ComputeBuffer(neededBufferSize, sizeof(float));
-                Assert.IsTrue(inputContinentHeightmap.IsValid());
+                if (RuntimeAssert.IsTrue(inputContinentHeightmap.IsValid(), "Failed to initialize the required resources! Try restarting the app or explicitly freeing the resources!"))
+                    return;
             }
         }
 
@@ -63,12 +65,14 @@ public class SDFDispatcher : UltimatePipelineStep
             if (floodingBuffer1 is null || !floodingBuffer1.IsValid() || floodingBuffer1.count != neededBufferSize)
             {
                 floodingBuffer1 = new ComputeBuffer(neededBufferSize, sizeof(float));
-                Assert.IsTrue(floodingBuffer1.IsValid());
+                if (RuntimeAssert.IsTrue(floodingBuffer1.IsValid(), "Failed to initialize the required resources! Try restarting the app or explicitly freeing the resources!"))
+                    return;
             }
             if (floodingBuffer2 is null || !floodingBuffer2.IsValid() || floodingBuffer2.count != neededBufferSize)
             {
                 floodingBuffer2 = new ComputeBuffer(neededBufferSize, sizeof(float));
-                Assert.IsTrue(floodingBuffer2.IsValid());
+                if (RuntimeAssert.IsTrue(floodingBuffer2.IsValid(), "Failed to initialize the required resources! Try restarting the app or explicitly freeing the resources!"))
+                    return;
             }
         }
 

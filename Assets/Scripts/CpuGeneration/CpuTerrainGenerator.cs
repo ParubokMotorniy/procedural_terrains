@@ -8,6 +8,8 @@ using System.IO;
 using System.Text;
 using System.Diagnostics;
 using Debug = UnityEngine.Debug;
+using UnityEditor.Experimental.GraphView;
+using System.Threading.Tasks;
 
 namespace CpuGenerationPipeline
 {
@@ -65,6 +67,8 @@ namespace CpuGenerationPipeline
 
             public async System.Threading.Tasks.Task RunPipeline()
             {
+                if (pipelineToRun is null || pipelineContext is null)
+                    return;
                 foreach (CpuPipelineStep step in pipelineToRun)
                 {
                     await step.ExecuteStepCpu(pipelineContext);
@@ -73,6 +77,9 @@ namespace CpuGenerationPipeline
 
             public async System.Threading.Tasks.Task RunPipelineRandomized(int seed)
             {
+                if (pipelineToRun is null || pipelineContext is null)
+                    return;
+
                 System.Random parameterRandomizer = new System.Random(seed);
                 foreach (CpuPipelineStep step in pipelineToRun)
                 {
@@ -115,7 +122,8 @@ namespace CpuGenerationPipeline
                 };
 
                 finalHeightmap.Create();
-                Assert.IsTrue(finalHeightmap.IsCreated());
+                if (RuntimeAssert.IsTrue(finalHeightmap.IsCreated(), "Failed to create the heightmap! Try restarting the app."))
+                    return new ExecutablePipeline(null, null);
             }
 
             CpuPipelineContext currentContext = new CpuPipelineContext(intermediateHeightmap, finalHeightmap, pipelineSeed);

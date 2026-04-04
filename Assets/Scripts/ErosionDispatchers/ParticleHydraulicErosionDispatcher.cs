@@ -148,12 +148,14 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
         int numActualParticles = (int)math.pow(2, numSimultaneousParticles);
         var (optimalIntegrateGroupSize, numIntegrationGroups) = GenerationUtilities.GetOptimalNumberOfGroups(numActualParticles, new int[] { preferredGroupSize }, Int32.MaxValue, 1);
         int particlesPerThread = numActualParticles / (preferredGroupSize * numIntegrationGroups);
-        Assert.IsTrue(numActualParticles % (preferredGroupSize * numIntegrationGroups) == 0, "Particles must be distributed among threads evenly!");
+        if (RuntimeAssert.IsTrue(numActualParticles % (preferredGroupSize * numIntegrationGroups) == 0, "Particles must be distributed among threads evenly! Try adjusting the number of particles or the threadgroup size."))
+            return;
 
         int textureSize = pipelineContext.GetHeightmapSize();
         var (optimalResolveGroupSize, numResolveGroups) = GenerationUtilities.GetOptimalNumberOfGroups(textureSize, new int[] { preferredGroupSize }, Int32.MaxValue, 1);
         int numTexelsPerThread = textureSize / (numResolveGroups * preferredGroupSize);
-        Assert.IsTrue(textureSize % (numResolveGroups * preferredGroupSize) == 0, "Texels must be distributed among threads evenly!");
+        if (RuntimeAssert.IsTrue(textureSize % (numResolveGroups * preferredGroupSize) == 0, "Texels must be distributed among threads evenly! Try adjusting heightmap or threadgroup size."))
+            return;
 
         var integrateDispatchGroups = new Vector3(numIntegrationGroups, 1, 1);
         var resolveDispatchGroups = new Vector3(numResolveGroups, numResolveGroups, 1);
@@ -169,7 +171,8 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
             if (gpuParticlesBuffer is null || !gpuParticlesBuffer.IsValid() || gpuParticlesBuffer.count != numActualParticles)
             {
                 gpuParticlesBuffer = new ComputeBuffer(numActualParticles, Marshal.SizeOf<ErosionParticle>());
-                Assert.IsTrue(gpuParticlesBuffer.IsValid());
+                if (RuntimeAssert.IsTrue(gpuParticlesBuffer.IsValid(), "Failed to initialize the required resources! Try restarting the app or explicitly freeing the resources!"))
+                    return;
             }
         }
 
@@ -179,9 +182,14 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
             if (gpuPipesBuffer is null || !gpuPipesBuffer.IsValid() || gpuPipesBuffer.count != neededBufferSize)
             {
                 gpuPipesBuffer = new ComputeBuffer(neededBufferSize, Marshal.SizeOf<GpuTexelPipes>());
-                Assert.IsTrue(gpuPipesBuffer.IsValid());
+                if (RuntimeAssert.IsTrue(gpuPipesBuffer.IsValid(), "Failed to initialize the required resources! Try restarting the app or explicitly freeing the resources!"))
+                    return;
             }
         }
+
+        int garbageCollectorRunPeriod = (int)math.floor(math.log2(2 * waterDeathThreshold) / math.log2(1.0f - evaporation));
+        if (RuntimeAssert.IsTrue(math.abs(evaporation) >= 1.0e-5 && math.abs(waterDeathThreshold - 0.5) >= 1.0e-5, "Broken particle reinitialization period. Try adjusting the water level threshold."))
+            return;
 
         foreach (int kernelIdx in new[] { pipesInitializerKernelIdx, particlesInitializerKernelIdx, integratorKernelIdx, garbageCollectorKernelIdx, changeResolverKernelIdx })
         {
@@ -207,9 +215,6 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
         pipelineContext.SetUniformFloat(erosionComputeShader, PID_rainNoiseFrequency, rainNoiseFrequency);
 
         {
-            int garbageCollectorRunPeriod = (int)math.floor(math.log2(2 * waterDeathThreshold) / math.log2(1.0f - evaporation));
-            Assert.IsTrue(math.abs(evaporation) >= 1.0e-5 && math.abs(waterDeathThreshold - 0.5) >= 1.0e-5, "Broken GC period");
-            Debug.LogWarning("GC period: " + garbageCollectorRunPeriod);
             for (int w = 0; w < numSimulationWaves; ++w)
             {
                 pipelineContext.SetRandomInts(erosionComputeShader, PID_randomInts);
@@ -456,7 +461,13 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
         int textureSize = pipelineContext.GetHeightmapSize();
         int numActualParticles = (int)math.pow(2, numSimultaneousParticles);
         var intermediateHeightmap = pipelineContext.GetCpuIntemediateHeightmap();
-        Assert.IsTrue(erosionNeighborhood <= pipeMapCenterCoord);
+
+        if (RuntimeAssert.IsTrue(erosionNeighborhood <= pipeMapCenterCoord, ""))
+            return Task.CompletedTask;
+
+        int garbageCollectorRunPeriod = (int)math.floor(math.log2(2 * waterDeathThreshold) / math.log2(1.0f - evaporation));
+        if (RuntimeAssert.IsTrue(math.abs(evaporation) >= 1.0e-5 && math.abs(waterDeathThreshold - 0.5) >= 1.0e-5, "Broken particle reinitialization period. Try adjusting the water level threshold."))
+            return Task.CompletedTask;
 
         {
             if (particlesBuffer is null || particlesBuffer.Length != numActualParticles)
@@ -481,9 +492,6 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
         }
 
         {
-            int garbageCollectorRunPeriod = (int)math.floor(math.log2(2 * waterDeathThreshold) / math.log2(1.0f - evaporation));
-            Assert.IsTrue(math.abs(evaporation) >= 1.0e-5 && math.abs(waterDeathThreshold - 0.5) >= 1.0e-5, "Broken GC period");
-            Debug.LogWarning("GC period: " + garbageCollectorRunPeriod);
             float erosionDistanceSumPrecompute = precomputeDistanceSum();
             var pipePlumber = new Action(() =>
             {

@@ -42,8 +42,10 @@ public class ThermalErosionDispatcher : UltimatePipelineStep
         int numLinearThreads = optimalGroupSize * numGroups;
         int texelsPerThread = textureSize / numLinearThreads;
 
-        Assert.IsTrue(textureSize % numLinearThreads == 0, "Texels must be distributed among threads evenly!");
-        Assert.IsTrue(texelsPerThread >= 4, "A thread must have at least 4 texels to porcess");
+        if (RuntimeAssert.IsTrue(textureSize % numLinearThreads == 0, "Texels must be distributed among threads evenly! Try adjusting heightmap or threadgroup size."))
+            return;
+        if (RuntimeAssert.IsTrue(texelsPerThread >= 4, "A thread must have at least 4 texels to process. Try adjusting heightmap or threadgroup size."))
+            return;
 
         // modular affine permutation
         int texelsPerThreadSquared = (int)math.pow(texelsPerThread - 2, 2);

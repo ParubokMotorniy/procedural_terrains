@@ -13,17 +13,21 @@ public class GUIManager : MonoBehaviour
 
     private const float PANEL_WIDTH = 350f;
     private const float MARGIN = 10f;
+    private const float LOG_WINDOW_HEIGHT = 150f;
     private Vector2 tunerScroll;
     private Vector2 pipelineScroll;
+    private Vector2 logScroll;
 
     void Start()
     {
         foldouts = new List<bool>(stepsToRender.Count);
         for (int i = 0; i < stepsToRender.Count; i++)
             foldouts.Add(false);
+
+        LogCollector.Init();
     }
 
-    void DrawSection(int index, TunableObject section)
+    void DrawTunerSection(int index, TunableObject section)
     {
         if (GUILayout.Button(
             (foldouts[index] ? "▼ " : "▶ ") + section.GUIStepTitle(),
@@ -49,6 +53,29 @@ public class GUIManager : MonoBehaviour
         }
     }
 
+    void DrawLogWindow(Rect rect)
+    {
+        GUILayout.BeginArea(rect, GUI.skin.box);
+
+        GUILayout.Label("Logs");
+
+        logScroll = GUILayout.BeginScrollView(logScroll);
+
+        foreach (var log in LogCollector.Logs)
+        {
+            GUILayout.Label(log);
+        }
+
+        GUILayout.EndScrollView();
+
+        if (GUILayout.Button("Clear Logs"))
+        {
+            LogCollector.Clear();
+        }
+
+        GUILayout.EndArea();
+    }
+
     void OnGUI()
     {
         float height = Screen.height - 2 * MARGIN;
@@ -67,13 +94,20 @@ public class GUIManager : MonoBehaviour
             height
         );
 
+        Rect logWindowRect = new Rect(
+            MARGIN + PANEL_WIDTH,
+            Screen.height - LOG_WINDOW_HEIGHT - MARGIN,
+            Screen.width - 2 * (PANEL_WIDTH + MARGIN),
+            LOG_WINDOW_HEIGHT
+        );
+
         {
             GUILayout.BeginArea(stepsRect, GUI.skin.box);
             GUILayout.Label("Tuners");
             tunerScroll = GUILayout.BeginScrollView(tunerScroll);
             for (int i = 0; i < stepsToRender.Count; i++)
             {
-                DrawSection(i, stepsToRender[i]);
+                DrawTunerSection(i, stepsToRender[i]);
             }
             GUILayout.EndScrollView();
             GUILayout.EndArea();
@@ -92,6 +126,8 @@ public class GUIManager : MonoBehaviour
             GUILayout.EndScrollView();
             GUILayout.EndArea();
         }
+
+        DrawLogWindow(logWindowRect);
     }
 
     public static void DrawPipelineList(
