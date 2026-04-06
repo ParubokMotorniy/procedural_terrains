@@ -4,11 +4,12 @@ from PIL import Image
 import argparse
 import os
 
+
 def process_heightmap(
     heightmap: np.ndarray, filename: str, chunk_size: int, division_depth: int
 ):
-    quantized_heightmap = elib.quantize_heightmap(heightmap, 255.0)
-    normalized_heightmap = elib.normalize_heightmap(heightmap)
+    quantized_heightmap = elib.quantize_heightmap(heightmap, heightmap.max(), 255.0)
+    normalized_heightmap = elib.normalize_heightmap(heightmap, heightmap.max())
 
     print("-" * 32)
     print(f"Processing heightmap {filename}")
@@ -36,7 +37,11 @@ def process_heightmap(
         elib.evaluate_composite_aesthetics_measure(
             heightmap,
             division_depth,
-            [elib.compressed_size_png, elib.compressed_size_lzma, elib.compressed_size_zlib],
+            [
+                elib.compressed_size_png,
+                elib.compressed_size_lzma,
+                elib.compressed_size_zlib,
+            ],
         )
     )
     Image.fromarray(split_visualization).save(

@@ -30,13 +30,13 @@ def get_client():
 def generate_routine(
     num_images,
     output_dir,
-    user_prompt="Generate a heightmap of terrain for drop-in use as a place of action in a videogame. The only artistic requirement: make it boring and unappealing from the perspective of a potential player while maintaining the feaures and structure typical of terrain",
+    user_prompt="Generate a heightmap of terrain for drop-in use as a place of action in a videogame. The only artistic requirement: make it boring and unappealing from the perspective of a potential player while preserving the feaures, objects and structure that are typical of terrain",
 ):
     client = get_client()
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    full_prompt = f"{user_prompt}. Technical limitations are: output MUST be a strictly 1024x1024 orthographic top-down grayscale heightmap. No colors, no shadows, no cloud obstruction, no actual water. As if it was a real digital elevation model of spatial resolution 30x30 meters (totalling 30720 meters per dimension)."
+    full_prompt = f"{user_prompt}. Technical limitations are: output MUST be a strictly 1024x1024 orthographic top-down grayscale heightmap. No colors, no shadows, no cloud obstruction, no actual water bodies. As if it was a real digital elevation model of total spatial resolution 100 kilometers per heightmap side."
 
     print(f"Starting generation of {num_images} images...")
 

@@ -8,6 +8,7 @@ import pandas as pd
 
 import numpy as np
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
@@ -561,7 +562,12 @@ def classify_with_ensemble(
 
 
 def build_metric_vectors(
-    directory: str, chunk_size: int, division_depth: int, fmt: str
+    directory: str,
+    chunk_size: int,
+    division_depth: int,
+    fmt: str,
+    data_fraction: float = 1.0,
+    if_quad_data: bool = False,
 ):
     if not os.path.isdir(directory):
         raise ValueError(f"{directory} is not a valid directory")
@@ -584,22 +590,62 @@ def build_metric_vectors(
         for f in os.listdir(directory)
         if any(f.lower().strip().endswith(ext) for ext in possible_extensions)
     )
+    files = files[: int(data_fraction * len(files))]
 
     print(f"Total heightmaps to evaluate: {len(files)}")
 
     metric_vectors = []
 
-    for filename in tqdm.tqdm(files):
-        path = os.path.join(directory, filename)
-        heightmap = file_reader(path)
-        print(f"Processing heightmap: {filename}")
-        metric_vector = elib.get_metric_vector(
-            heightmap, chunk_size, division_depth, population_max, False
-        )
+    if if_quad_data:
+        for filename in tqdm.tqdm(files):
+            path = os.path.join(directory, filename)
+            heightmap = file_reader(path)
+            half_side_len = int(len(heightmap) / 2)
 
-        metric_vectors.append(metric_vector)
+            print(f"\nProcessing heightmap: {filename}")
 
-        del heightmap
+            for sx in range(2):
+                for sy in range(2):
+                    subterrain = heightmap[
+                        sx * half_side_len : (sx + 1) * half_side_len,
+                        sy * half_side_len : (sy + 1) * half_side_len,
+                    ]
+
+                    height_max = subterrain.max()
+                    if (
+                        np.isnan(height_max)
+                        or np.isnan(subterrain.min())
+                        or np.isclose(height_max, 0.0)
+                    ):
+                        print("Skipping tile! Invalid values")
+                        continue
+
+                    if np.mean(subterrain > (255.0 * 0.05)) <= 0.6:
+                        print("Skipping tile! Too much water")
+                        continue
+
+                    print(f"Terrain split: {sx * 2 + sy}")
+                    metric_vector = elib.get_metric_vector(
+                        subterrain, chunk_size, division_depth, subterrain.max(), True
+                    )
+
+                    metric_vectors.append(metric_vector)
+
+            del heightmap
+        else:
+            for filename in tqdm.tqdm(files):
+                path = os.path.join(directory, filename)
+                heightmap = file_reader(path)
+
+                print(f"\nProcessing heightmap: {filename}")
+
+                metric_vector = elib.get_metric_vector(
+                    heightmap, chunk_size, division_depth, population_max, True
+                )
+
+                metric_vectors.append(metric_vector)
+
+                del heightmap
 
     return np.array(metric_vectors)
 
@@ -647,10 +693,23 @@ def main():
     )
 
     parser.add_argument(
+        "--train-data-fraction",
+        type=float,
+        help="What fraction of the actual visual data to vectorize.",
+    )
+
+    parser.add_argument(
         "--use-saved",
         action="store_true",
         default=False,
         help="If use previously stored vectors for training.",
+    )
+
+    parser.add_argument(
+        "--quad-data",
+        action="store_true",
+        default=False,
+        help="If cut up heightmaps in four subheightmap to increase the dataste size.",
     )
 
     parser.add_argument(
@@ -671,7 +730,12 @@ def main():
         if not args.use_saved:
             print(f"Building vectors anew!")
             interesting_vectors = build_metric_vectors(
-                directory_interesting, args.chunk_size, args.division_depth, fmt
+                directory_interesting,
+                args.chunk_size,
+                args.division_depth,
+                fmt,
+                args.train_data_fraction if args.train_data_fraction else 1.0,
+                args.quad_data,
             )
             interesting_vectors_pd = pd.DataFrame(interesting_vectors)
             interesting_vectors_pd.to_csv(
@@ -681,7 +745,12 @@ def main():
             )
 
             boring_vectors = build_metric_vectors(
-                directory_boring, args.chunk_size, args.division_depth, fmt
+                directory_boring,
+                args.chunk_size,
+                args.division_depth,
+                fmt,
+                args.train_data_fraction if args.train_data_fraction else 1.0,
+                args.quad_data,
             )
             boring_vectors_pd = pd.DataFrame(boring_vectors)
             boring_vectors_pd.to_csv(
@@ -692,17 +761,17 @@ def main():
             interesting_vectors_pd = pd.read_csv(
                 os.path.join(
                     directory_interesting,
-                    "interesting_metric_vectors_thrsh_05_entrp.csv",
+                    "interesting_metric_vectors.csv",
                 )
             )
             interesting_vectors = interesting_vectors_pd.to_numpy()[:, 1:]
+            interesting_vectors = np.nan_to_num(interesting_vectors)
 
             boring_vectors_pd = pd.read_csv(
-                os.path.join(
-                    directory_boring, "boring_metric_vectors_thrsh_05_entrp.csv"
-                )
+                os.path.join(directory_boring, "boring_metric_vectors.csv")
             )
             boring_vectors = boring_vectors_pd.to_numpy()[:, 1:]
+            boring_vectors = np.nan_to_num(boring_vectors)
 
         train_and_save_models_auto(
             boring_vectors,
@@ -734,8 +803,6 @@ def main():
         )
     else:
         raise ValueError("Wrong script mode")
-
-    # evaluate_separability(interesting_vectors, boring_vectors)
 
 
 if __name__ == "__main__":

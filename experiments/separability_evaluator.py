@@ -10,6 +10,7 @@ from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold
 from sklearn.metrics import accuracy_score, roc_curve, auc
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
+from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 
 import argparse
 import pandas as pd
@@ -29,8 +30,18 @@ def evaluate_separability(
     X,
     y,
     classes_names=["boring", "interesting"],
-    splits=[[0, 1], [2, 3], [4, 5]],
-    splits_names=["geometric", "fractal", "aesthetical"],
+    splits=[
+        [0, 1],
+        [2, 3],
+        [4, 5],
+        # [4, 6]
+    ],
+    splits_names=[
+        "geometric",
+        "fractal",
+        # "aesthetical_composite_png",
+        "aesthetical_composite_lzma",
+    ],
     kmeans_k_list=[2],
     hdbscan_min_cluster_sizes=[20, 50, 100, 150],
     hdbscan_min_samples=[3, 5, 10, 20, 30],
@@ -111,9 +122,13 @@ def evaluate_separability(
         aucs = []
         mean_fpr = np.linspace(0, 1, 200)
 
+        qda_aucs = []
+
         for train_idx, test_idx in skf.split(X_sub, y):
             X_train, X_test = X_sub[train_idx], X_sub[test_idx]
             y_train, y_test = y[train_idx], y[test_idx]
+
+            # SVM
 
             svm_search = RandomizedSearchCV(
                 SVC(probability=True),
@@ -139,12 +154,28 @@ def evaluate_separability(
             interp_tpr[0] = 0.0
             tprs.append(interp_tpr)
 
+            # QDA
+            qda = QuadraticDiscriminantAnalysis(solver="eigen")
+            qda.fit(X_train, y_train)
+
+            qda_probs = qda.predict_proba(X_test)[:, 1]
+
+            fpr, tpr, _ = roc_curve(y_test, qda_probs)
+            roc_auc = auc(fpr, tpr)
+
+            qda_aucs.append(roc_auc)
+
         mean_tpr = np.mean(tprs, axis=0)
         std_tpr = np.std(tprs, axis=0)
         mean_auc = np.mean(aucs)
         std_auc = np.std(aucs)
 
-        print(f"SVM           | ROC-AUC: {mean_auc:.4f} ± {std_auc:.4f}")
+        print(f"SVM           | CV ROC-AUC: {mean_auc:.4f} ± {std_auc:.4f}")
+
+        mean_qda_auc = np.mean(qda_aucs)
+        std_qda_auc = np.std(qda_aucs)
+
+        print(f"QDA           | CV ROC-AUC: {mean_qda_auc:.4f} ± {std_qda_auc:.4f}")
 
         if split_name != "FULL":
             plt.figure(figsize=(7, 6))
@@ -163,7 +194,8 @@ def evaluate_separability(
                 f"Clusterization:\n"
                 f"KMeans  | Accuracy: {best_km_acc:.4f}\n"
                 f"HDBSCAN | Acc: {best_hdb_acc:.4f} | Outliers: {best_hdb_out:.3f}\n"
-                f"SVM     | ROC-AUC: {mean_auc:.4f} ± {std_auc:.4f}",
+                f"SVM     | CV ROC-AUC: {mean_auc:.4f} ± {std_auc:.4f}\n"
+                f"QDA     | CV ROC-AUC: {mean_qda_auc:.4f} ± {std_qda_auc:.4f}",
                 (0.05, 0.07),
                 xycoords="axes fraction",
                 bbox=dict(
@@ -218,7 +250,8 @@ def evaluate_separability(
                 f"Clusterization of unreduced data:\n"
                 f"KMeans  | Accuracy: {best_km_acc:.4f}\n"
                 f"HDBSCAN | Acc: {best_hdb_acc:.4f} | Outliers: {best_hdb_out:.3f}\n"
-                f"SVM     | ROC-AUC: {mean_auc:.4f} ± {std_auc:.4f}",
+                f"SVM     | ROC-AUC: {mean_auc:.4f} ± {std_auc:.4f}\n"
+                f"QDA     | CV ROC-AUC: {mean_qda_auc:.4f} ± {std_qda_auc:.4f}",
                 (0.05, 0.07),
                 xycoords="axes fraction",
                 bbox=dict(
@@ -263,7 +296,8 @@ def evaluate_separability(
                 f"Clusterization of unreduced data:\n"
                 f"KMeans  | Accuracy: {best_km_acc:.4f}\n"
                 f"HDBSCAN | Acc: {best_hdb_acc:.4f} | Outliers: {best_hdb_out:.3f}\n"
-                f"SVM     | ROC-AUC: {mean_auc:.4f} ± {std_auc:.4f}",
+                f"SVM     | ROC-AUC: {mean_auc:.4f} ± {std_auc:.4f}\n"
+                f"QDA     | CV ROC-AUC: {mean_qda_auc:.4f} ± {std_qda_auc:.4f}",
                 (0.05, 0.07),
                 xycoords="axes fraction",
                 bbox=dict(

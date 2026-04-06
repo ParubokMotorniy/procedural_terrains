@@ -10,6 +10,7 @@ import lzma
 import io
 import porespy as pspy
 import matplotlib.pyplot as plt
+import scipy as spy
 
 JPEG_MAX_DIM = 65500
 
@@ -39,13 +40,21 @@ def compressed_size_lzma(arr):
     return len(lzma.compress(arr.tobytes()))
 
 
-# assumes the values are strictly positive
-def quantize_heightmap(heightmap: np.ndarray, max_value_of_population: float, desired_max_value: float = 255.0, type=np.uint8):
-    return np.round(desired_max_value * (heightmap / max_value_of_population)).astype(type)
+# assumes the values are positive
+def quantize_heightmap(
+    heightmap: np.ndarray,
+    max_value_of_population: float,
+    desired_max_value: float = 255.0,
+    type=np.uint8,
+):
+    return np.round(desired_max_value * (heightmap / max_value_of_population)).astype(
+        type
+    )
 
-# assumes the values are strictly positive
+# assumes the values are positive
 def normalize_heightmap(heightmap: np.ndarray, max_value_of_population: float):
-    return heightmap / max_value_of_population
+    assert heightmap.min() >= 0.0
+    return np.clip(heightmap / max_value_of_population, 0.0, 1.0)
 
 
 def shannon_entropy(arr):
@@ -53,9 +62,12 @@ def shannon_entropy(arr):
     probabilities = counts / counts.sum()
     return entropy(probabilities, base=2)
 
+
 # global-local metric that contributes to the final metric basing on how "eroded" the terrain is
-def evaluate_erosion_score(heightmap: np.ndarray, nbins: int = 128):
-    assert heightmap.min() >= 0.0 and heightmap.max() <= 1.0
+def evaluate_erosion_score(heightmap: np.ndarray, nbins: int = 64):
+    assert (
+        heightmap.min() >= 0.0 and heightmap.max() <= 1.0
+    ), f"Actual min: {heightmap.min()}. Actual max: {heightmap.max()}"
 
     min_mean_delta = 1.0e-6  # the actual delta depends on ULPs of the float representation in python, but I stick to a fixed value
     max_std = 1.0  # for normalized heightmaps, the deviation of a single texel from the mean can equal at most 1.0
@@ -98,8 +110,16 @@ def evaluate_erosion_score(heightmap: np.ndarray, nbins: int = 128):
     )
 
     assert erosion_score <= 1.0 and erosion_score >= 0.0
-    
-    delta_entropy = shannon_entropy(quantize_heightmap(np.array(deltas), 1.0, nbins - 1, np.uint8))
+
+    maxEntropy = -(1.0 / nbins) * np.log2(1.0 / nbins) * nbins
+    delta_entropy = 1.0 - (
+        shannon_entropy(quantize_heightmap(np.array(deltas), 1.0, nbins - 1, np.uint8))
+        / maxEntropy
+    )
+
+    assert (
+        delta_entropy >= 0.0 and delta_entropy <= 1.0
+    ), f"Actual delta entropy: {delta_entropy}"
 
     return erosion_score * delta_entropy
 
@@ -152,27 +172,6 @@ def evaluate_gradient_score(heightmap: np.ndarray, subdomainSize: int, nbins: in
             avg_gradient /= np.linalg.norm(avg_gradient) + 1e-12
             average_gradients[linear_idx] = avg_gradient
 
-    # try:
-    #     g = average_gradients.reshape(2, -1).T
-    #     dot_matrix = g @ g.T
-    #     min_dot = np.clip(np.min(dot_matrix), -1.0, 1.0)
-    #     max_global_angle = math.acos(min_dot)
-    # except Exception as e:
-    #     print(f"Exception occurred during gradient score evaluation: {e}")
-    #     print("Doing things in plain-old style.")
-    #     max_global_angle = 0
-    #     for i in tqdm.tqdm(range(len(average_gradients))):
-    #         grad_1 = (average_gradients[i, 0], average_gradients[i, 1])
-    #         for j in range(i, len(average_gradients)):
-    #             grad_2 = (average_gradients[j, 0], average_gradients[j, 1])
-    #             dot = max(
-    #                 -1.0,
-    #                 min(1.0, (grad_1[0] * grad_2[0] + grad_1[1] * grad_2[1])),
-    #             )
-    #             angle = math.acos(dot)
-    #             if angle > max_global_angle:
-    #                 max_global_angle = angle
-
     average_angular_span = np.mean(spans)
     angle_std = np.linalg.norm(np.std(average_gradients, axis=0))
 
@@ -181,14 +180,29 @@ def evaluate_gradient_score(heightmap: np.ndarray, subdomainSize: int, nbins: in
     ) / max_gradient_score
 
     assert gradient_score >= 0.0 and gradient_score <= 1.0
-    
-    gradients_as_angles = np.angle([np.complex64(x, y) for (x,y) in average_gradients], True) + 180
-    gradients_entropy = shannon_entropy(quantize_heightmap(gradients_as_angles, 360.0, nbins - 1, np.uint8))
-    
+
+    maxEntropy = -(1.0 / nbins) * np.log2(1.0 / nbins) * nbins
+
+    gradients_as_angles = (
+        np.angle([np.complex64(x, y) for (x, y) in average_gradients], True) + 180
+    )
+    gradients_entropy = 1.0 - (
+        shannon_entropy(
+            quantize_heightmap(gradients_as_angles, 360.0, nbins - 1, np.uint8)
+        )
+        / maxEntropy
+    )
+
+    assert (
+        gradients_entropy >= 0.0 and gradients_entropy <= 1.0
+    ), f"Actual gradient entropy: {gradients_entropy}"
+
     return gradient_score * gradients_entropy
 
 
-def find_balanced_threshold(heightmap: np.ndarray, max_iter: int = 20, bounds = (0.47, 0.53)):
+def find_balanced_threshold(
+    heightmap: np.ndarray, max_iter: int = 20, bounds=(0.47, 0.53)
+):
     low, high = bounds
 
     best_threshold = 0.5
@@ -210,9 +224,9 @@ def find_balanced_threshold(heightmap: np.ndarray, max_iter: int = 20, bounds = 
             best_threshold = mid
 
         if ratio > 0.5:
-            low = mid  
+            low = mid
         else:
-            high = mid  
+            high = mid
 
     return best_threshold
 
@@ -224,15 +238,29 @@ def evaluate_fractal_score(heightmap: np.ndarray, threshold: float = None):
         threshold = find_balanced_threshold(quantized_heightmap)
 
     binary_heightmap = quantized_heightmap >= threshold
-    
+
     # Image.fromarray(quantized_heightmap >= threshold).save(
     #     f"./{threshold}_{np.mean(heightmap)}_mask.png", format="PNG"
     # )
 
     # --- fractal dimension ---
     data = pspy.metrics.boxcount(binary_heightmap, 15)
-    coeffs = np.polyfit(np.log(data.size), np.log(data.count), 1)
-    fractal_dimension = -coeffs[0]
+    counts = np.array(data.count)
+    sizes = np.array(data.size)
+    non_zero_counts = np.where(counts > 0)[0]
+    if len(non_zero_counts) != 0:
+        coeffs = np.polyfit(
+            np.log(sizes[non_zero_counts]), np.log(counts[non_zero_counts]), 1
+        )
+        fractal_dimension = (
+            2.0
+            if (np.isnan(coeffs[0]) or np.isinf(coeffs[0]))
+            else -coeffs[
+                0
+            ]  # makes the dimension 2 by default -> as if we have a plain square
+        )
+    else:
+        fractal_dimension = 0.0
 
     # --- power spectrum ---
     F = np.fft.fft2(heightmap - np.mean(heightmap))
@@ -259,27 +287,23 @@ def evaluate_fractal_score(heightmap: np.ndarray, threshold: float = None):
 
     return fractal_dimension, beta, mse
 
-def evaluate_global_aesthetic_measure(quantized_heightmap: np.ndarray):
+
+def evaluate_global_aesthetic_measure(quantized_heightmap: np.ndarray, compressors):
     height, width = quantized_heightmap.shape
 
     texel_entropy = shannon_entropy(quantized_heightmap)
     initial_information_content = (height * width) * texel_entropy
 
-    heightmap_png_size = compressed_size_png(quantized_heightmap.reshape(1, -1))
-    heightmap_zlib_size = compressed_size_zlib(quantized_heightmap.reshape(1, -1))
-    heightmap_lzma_size = compressed_size_lzma(quantized_heightmap.reshape(1, -1))
+    global_measures = []
 
-    zurek_png = (
-        initial_information_content - heightmap_png_size
-    ) / initial_information_content
-    zurek_lzma = (
-        initial_information_content - heightmap_lzma_size
-    ) / initial_information_content
-    zurek_zlib = (
-        initial_information_content - heightmap_zlib_size
-    ) / initial_information_content
+    for compressor in compressors:
+        heightmap_compressed = compressor(quantized_heightmap.reshape(1, -1))
+        measure = (
+            initial_information_content - heightmap_compressed
+        ) / initial_information_content
+        global_measures.append(measure)
 
-    return (zurek_png, zurek_lzma, zurek_zlib)
+    return global_measures
 
 
 def mutual_information_from_histograms(h1, h2):
@@ -407,13 +431,22 @@ def partition_heightmap(
 
     return leaves
 
-
 def evaluate_composite_aesthetics_measure(
-    quantized_heightmap: np.ndarray, population_max: int, division_depth: int, compressors
+    quantized_heightmap: np.ndarray,
+    population_max: int,
+    division_depth: int,
+    compressors,
 ):
+    # heightmap_division = partition_heightmap(quantized_heightmap, division_depth, 0.2)
     height, width = quantized_heightmap.shape
+    heightmap_division = []
+    h3 = int(height / division_depth)
+    w3 = int(width / division_depth)
+    for gx in range(division_depth):
+        for gy in range(division_depth):
+            heightmap_division.append((gx * h3, (gx + 1) * h3, gy * w3, (gy + 1) * w3))
 
-    heightmap_division = partition_heightmap(quantized_heightmap, division_depth, 0.2)
+    split_visualization_heightmap = quantized_heightmap.copy()
 
     def compute_ncd(sub1, sub2, compressor):
         flat1 = sub1.ravel()
@@ -426,18 +459,16 @@ def evaluate_composite_aesthetics_measure(
 
         return (cj - min(c1, c2)) / max(c1, c2)
 
-    split_visualization_heightmap = quantized_heightmap.copy()
-
     ncds = {c: [] for c in compressors}
     for i in range(len(heightmap_division)):
         y0, y1, x0, x1 = heightmap_division[i]
+        sub_1 = quantized_heightmap[y0:y1, x0:x1]
 
         split_visualization_heightmap[y0:y1, x0] = population_max
         split_visualization_heightmap[y0:y1, min(x1, width - 1)] = population_max
         split_visualization_heightmap[y0, x0:x1] = population_max
         split_visualization_heightmap[min(y1, height - 1), x0:x1] = population_max
 
-        sub_1 = quantized_heightmap[y0:y1, x0:x1]
         for j in range(i, len(heightmap_division)):
             y0, y1, x0, x1 = heightmap_division[j]
             sub_2 = quantized_heightmap[y0:y1, x0:x1]
@@ -489,7 +520,11 @@ def read_tiff_grayscale(path: str, normalize: bool = False) -> np.ndarray:
 
 
 def get_metric_vector(
-    heightmap: np.ndarray, chunk_size: int, division_depth: int, population_max: float, verbose: bool = False
+    heightmap: np.ndarray,
+    chunk_size: int,
+    division_depth: int,
+    population_max: float,
+    verbose: bool = False,
 ):
     quantized_heightmap = quantize_heightmap(heightmap, population_max, 255.0)
     normalized_heightmap = normalize_heightmap(heightmap, population_max)
@@ -499,11 +534,11 @@ def get_metric_vector(
 
     fractal_dimension, beta, mse = evaluate_fractal_score(heightmap, 0.5)
 
-    zurek_png, zurek_lzma, zurek_zlib = evaluate_global_aesthetic_measure(
-        quantized_heightmap
-    )
+    zurek_lzma = evaluate_global_aesthetic_measure(
+        quantized_heightmap, [compressed_size_lzma]
+    )[0]
 
-    (order_png, order_lzma, order_zlib), split_visualization = (
+    (order_png, order_lzma), split_visualization = (
         evaluate_composite_aesthetics_measure(
             quantized_heightmap,
             population_max,
@@ -511,28 +546,22 @@ def get_metric_vector(
             [
                 compressed_size_png,
                 compressed_size_lzma,
-                compressed_size_zlib,
             ],
         )
     )
-    
+
     # Image.fromarray(split_visualization).save(
     #     f"./{np.mean(heightmap):.3f}_split.png", format="PNG"
     # )
 
-    # TODO: think how MSE can be implemented
     if verbose:
         print("-" * 32)
         print(f"Erosion score: {erosion_score}")
         print(f"Gradient score: {gradient_score}")
         print(f"Fractal dimenison: {fractal_dimension}")
         print(f"Noise beta exponent: {beta}. Fit MSE: {mse}")
-        print(
-            f"GAM:\n  png : ({zurek_png}) \n  zlib : ({zurek_zlib}) \n  lzma : ({zurek_lzma})"
-        )
-        print(
-            f"CAM:\n  png : ({order_png}) \n  zlib : ({order_zlib}) \n  lzma : ({order_lzma})"
-        )
+        print(f"GAM:\n  lzma : ({zurek_lzma})")
+        print(f"CAM:\n  png : ({order_png}) \n  lzma : ({order_lzma})")
         print("+" * 32)
 
     return np.array(
@@ -542,6 +571,7 @@ def get_metric_vector(
             fractal_dimension,
             beta,
             zurek_lzma,
+            # order_png,
             order_lzma,
         ],
         dtype=np.float64,
