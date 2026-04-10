@@ -17,6 +17,12 @@ public class GUIManager : MonoBehaviour
     private Vector2 tunerScroll;
     private Vector2 pipelineScroll;
     private Vector2 logScroll;
+    private bool guiRenderingIsEnabled = true;
+
+    public void SetGUIRenderingEnabled(bool ifEnabled)
+    {
+        guiRenderingIsEnabled = ifEnabled;
+    }
 
     void Start()
     {
@@ -78,6 +84,9 @@ public class GUIManager : MonoBehaviour
 
     void OnGUI()
     {
+        if (!guiRenderingIsEnabled)
+            return;
+
         float height = Screen.height - 2 * MARGIN;
 
         Rect stepsRect = new Rect(

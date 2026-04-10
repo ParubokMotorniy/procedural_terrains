@@ -42,8 +42,8 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
     [Range(0.01f, 10.0f)]
     public float gravity = 0.4f;
 
-    [Range(0.01f, 1.0f)]
-    public float evaporation = 0.02f;
+    [Range(0.0001f, 1.0f)]
+    public float evaporation = 0.01f;
 
     [Range(0.01f, 0.45f)]
     public float waterDeathThreshold = 0.05f;
@@ -561,8 +561,8 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
         GUILayout.Label($"Gravity: {gravity:F3}");
         gravity = GUILayout.HorizontalSlider(gravity, 0.01f, 10.0f);
 
-        GUILayout.Label($"Evaporation: {evaporation:F3}");
-        evaporation = GUILayout.HorizontalSlider(evaporation, 0.01f, 1.0f);
+        GUILayout.Label($"Evaporation: {evaporation:F4}");
+        evaporation = GUILayout.HorizontalSlider(evaporation,0.0001f, 1.0f);
 
         GUILayout.Space(5);
         GUILayout.Label("Sediment");
@@ -627,7 +627,7 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
         deposition = (float)math.max(random.NextDouble(), 0.01);
         erosion = (float)math.max(random.NextDouble(), 0.01);
         gravity = (float)math.max(random.NextDouble() * 10.0, 0.01);
-        evaporation = (float)math.max(random.NextDouble(), 0.01);
+        evaporation = (float)math.max(random.NextDouble(), 0.0001f);
         waterDeathThreshold = math.clamp((float)random.NextDouble(), 0.01f, 0.5f);
     }
 }

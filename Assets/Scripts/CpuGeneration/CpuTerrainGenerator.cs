@@ -298,6 +298,10 @@ namespace CpuGenerationPipeline
                 }
                 foreach (var light in FindObjectsByType<Light>(FindObjectsSortMode.None))
                 { light.enabled = false; }
+                foreach (GUIManager guiManager in FindObjectsByType<GUIManager>(FindObjectsSortMode.None))
+                {
+                    guiManager.SetGUIRenderingEnabled(false);
+                }
             }
 
             Stopwatch cpuProfilingStopwatch = new Stopwatch();
@@ -340,6 +344,10 @@ namespace CpuGenerationPipeline
                 }
                 foreach (var light in FindObjectsByType<Light>(FindObjectsSortMode.None))
                 { light.enabled = true; }
+                foreach (GUIManager guiManager in FindObjectsByType<GUIManager>(FindObjectsSortMode.None))
+                {
+                    guiManager.SetGUIRenderingEnabled(true);
+                }
             }
 
             UltimatePipelineStep.FreeAllResourcesInScene();

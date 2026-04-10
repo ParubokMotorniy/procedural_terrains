@@ -213,6 +213,10 @@ namespace GpuGenerationPipeline
                 }
                 foreach (var light in FindObjectsByType<Light>(FindObjectsSortMode.None))
                 { light.enabled = false; }
+                foreach (GUIManager guiManager in FindObjectsByType<GUIManager>(FindObjectsSortMode.None))
+                {
+                    guiManager.SetGUIRenderingEnabled(false);
+                }
             }
 
             (long gpuFenceTime, long gpuSide)[] result = new (long gpuFenceTime, long gpuSide)[numSamples];
@@ -253,6 +257,10 @@ namespace GpuGenerationPipeline
                 }
                 foreach (var light in FindObjectsByType<Light>(FindObjectsSortMode.None))
                 { light.enabled = true; }
+                foreach (GUIManager guiManager in FindObjectsByType<GUIManager>(FindObjectsSortMode.None))
+                {
+                    guiManager.SetGUIRenderingEnabled(true);
+                }
             }
 
             UltimatePipelineStep.FreeAllResourcesInScene();
@@ -279,6 +287,10 @@ namespace GpuGenerationPipeline
                 }
                 foreach (var light in FindObjectsByType<Light>(FindObjectsSortMode.None))
                 { light.enabled = false; }
+                foreach (GUIManager guiManager in FindObjectsByType<GUIManager>(FindObjectsSortMode.None))
+                {
+                    guiManager.SetGUIRenderingEnabled(false);
+                }
             }
 
             synchronizedResults = new (long cpuSideMs, long cpuSideTicks, long gpuSideNs)[numSamples];
@@ -295,6 +307,10 @@ namespace GpuGenerationPipeline
                 }
                 foreach (var light in FindObjectsByType<Light>(FindObjectsSortMode.None))
                 { light.enabled = true; }
+                foreach (GUIManager guiManager in FindObjectsByType<GUIManager>(FindObjectsSortMode.None))
+                {
+                    guiManager.SetGUIRenderingEnabled(true);
+                }
             };
 
             synchronizedIterationsLeft = numSamples;

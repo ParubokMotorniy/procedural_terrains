@@ -548,7 +548,7 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
         rainSolubilityConstant = GUILayout.HorizontalSlider(rainSolubilityConstant, 0.0001f, 1.0f);
 
         GUILayout.Label($"Rain Noise Frequency: {rainNoiseFrequency:F3}");
-        rainNoiseFrequency = GUILayout.HorizontalSlider(rainNoiseFrequency, 1.0f, 1.0f);
+        rainNoiseFrequency = GUILayout.HorizontalSlider(rainNoiseFrequency, 1.0f, 10.0f);
 
         GUILayout.Space(5);
         GUILayout.Label("Water");

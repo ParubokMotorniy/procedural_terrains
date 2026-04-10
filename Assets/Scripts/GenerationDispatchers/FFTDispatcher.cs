@@ -5,6 +5,7 @@ using System;
 using CpuGenerationPipeline;
 using GpuGenerationPipeline;
 using System.Threading.Tasks;
+using UnityEngine.Rendering;
 using Unity.Collections;
 
 public class FFTDispatcher : UltimatePipelineStep
@@ -12,7 +13,7 @@ public class FFTDispatcher : UltimatePipelineStep
     [SerializeField]
     private ComputeShader shaderToDispatch;
 
-    [Range(4, 8)]
+    [Range(0, 8)]
     public int inverseGroupScaleFactor = 4;
 
     [Range(0.01f, 1.0f)]
@@ -21,8 +22,8 @@ public class FFTDispatcher : UltimatePipelineStep
     [Range(0.01f, 1.0f)]
     public float fracCoefficientsConsidered = 0.01f;
 
-    private const int generationGroupSize = 16;
-    private const int inverseGroupSize = 16;
+    private readonly int[] inverseGroupSizes = new int[] { 16, 8, 4, 2, 1 };
+
 
     //implicitly cleared
     private ComputeBuffer coefficientsBuffer;
@@ -45,10 +46,11 @@ public class FFTDispatcher : UltimatePipelineStep
     public override void ExecuteStepGpu(PipelineContext pipelineContext)
     {
         int textureSize = pipelineContext.GetHeightmapSize();
-        int actualCoefficientsComputed = (int)math.pow(2, (int)math.floor(math.log2(fracCoefficientsConsidered * textureSize)));
 
-        int coefficientsBufferSizeX = math.min(actualCoefficientsComputed, textureSize / 2);
-        int coefficientsBufferSizeY = actualCoefficientsComputed;
+        int actualCoefficientsComputed = (int)math.pow(2, (int)math.floor(math.log2(fracCoefficientsConsidered * textureSize)));
+        int minCoefficientsBufferSize = 32;
+        int coefficientsBufferSizeX = math.max(math.min(actualCoefficientsComputed, textureSize / 2), minCoefficientsBufferSize);
+        int coefficientsBufferSizeY = math.max(actualCoefficientsComputed > (textureSize / 2) ? textureSize : actualCoefficientsComputed, minCoefficientsBufferSize);
 
         int neededBufferSize = coefficientsBufferSizeX * coefficientsBufferSizeY * 2;
         if (coefficientsBuffer is null || !coefficientsBuffer.IsValid() || coefficientsBuffer.count != neededBufferSize)
@@ -58,32 +60,50 @@ public class FFTDispatcher : UltimatePipelineStep
                 return;
         }
 
-        int coefficientGeneratorKernelIdx = shaderToDispatch.FindKernel("CoefficientGenerator");
-        int inverseFFTKernelIdx = shaderToDispatch.FindKernel("InverseFFT");
-
-        // uniforms
-        var (optimalGroupSize, numGenerationGroups) = GenerationUtilities.GetOptimalNumberOfGroups(math.min(coefficientsBufferSizeX, coefficientsBufferSizeY), new int[] { generationGroupSize }, Int32.MaxValue, 1);
+        var (optimalGroupSize, numGenerationGroups) = GenerationUtilities.GetOptimalNumberOfGroups(math.min(coefficientsBufferSizeX, coefficientsBufferSizeY), new int[] { pipelineContext.preferredGlobalGroupSize }, Int32.MaxValue, 1);
         int numLinearThreads = optimalGroupSize * numGenerationGroups;
+
+        int optimalInverseGroupSize = 0;
+        {
+            foreach (int candidateGroupSize in inverseGroupSizes)
+            {
+                if (optimalInverseGroupSize == 0 && actualCoefficientsComputed % candidateGroupSize == 0)
+                {
+                    optimalInverseGroupSize = candidateGroupSize;
+                }
+                var appropriateShaderKeywordToDisable = new LocalKeyword(shaderToDispatch, "INV_GROUP_" + candidateGroupSize);
+                pipelineContext.SetKeyword(shaderToDispatch, ref appropriateShaderKeywordToDisable, false);
+            }
+        }
+
+        int numInverseGroups = (int)math.pow(2, inverseGroupScaleFactor);
+        int invTexelsPerThread = actualCoefficientsComputed / optimalInverseGroupSize;
+        int numTexelsPerInverseGroup = textureSize / numInverseGroups;
+
+        {
+            if (RuntimeAssert.IsTrue(optimalInverseGroupSize != 0 && actualCoefficientsComputed % optimalInverseGroupSize == 0 && textureSize % numInverseGroups == 0 && invTexelsPerThread != 0, "Inverse FFT texels must be distributed among threads evenly! Try adjusting heightmap or threadgroup size."))
+                return;
+
+            var appropriateShaderKeyword = new LocalKeyword(shaderToDispatch, "INV_GROUP_" + optimalInverseGroupSize);
+            pipelineContext.SetKeyword(shaderToDispatch, ref appropriateShaderKeyword, true);
+        }
 
         int texelsPerThreadX = coefficientsBufferSizeX / numLinearThreads;
         int texelsPerThreadY = coefficientsBufferSizeY / numLinearThreads;
 
-        int numInverseGroups = (int)math.pow(2, inverseGroupScaleFactor);
-        int invTexelsPerThread = actualCoefficientsComputed / inverseGroupSize;
-        int numTexelsPerInverseGroup = textureSize / numInverseGroups;
-
-        if (RuntimeAssert.IsTrue(coefficientsBufferSizeX % numLinearThreads == 0 && coefficientsBufferSizeX % numLinearThreads == 0 && texelsPerThreadX != 0 && texelsPerThreadY != 0, "Generation texels must be distributed among threads evenly! Try adjusting heightmap or threadgroup size."))
-            return;
-        if (RuntimeAssert.IsTrue(actualCoefficientsComputed % inverseGroupSize == 0 && textureSize % numInverseGroups == 0 && invTexelsPerThread != 0, "Inverse FFT texels must be distributed among threads evenly! Try adjusting heightmap or threadgroup size."))
+        if (RuntimeAssert.IsTrue(optimalGroupSize != -1 && coefficientsBufferSizeX % numLinearThreads == 0 && coefficientsBufferSizeY % numLinearThreads == 0 && texelsPerThreadX != 0 && texelsPerThreadY != 0, "Coefficients texels must be distributed among threads evenly! Try adjusting heightmap or threadgroup size."))
             return;
 
-        //kernels 
+        // kernels 
+        int coefficientGeneratorKernelIdx = shaderToDispatch.FindKernel("CoefficientGenerator");
+        int inverseFFTKernelIdx = shaderToDispatch.FindKernel("InverseFFT");
         int[] kernels =
         {
             coefficientGeneratorKernelIdx,
             inverseFFTKernelIdx,
         };
 
+        // uniforms
         foreach (int kernelIdx in kernels)
         {
             pipelineContext.BindTexture(shaderToDispatch, kernelIdx, PID_resultHeightmap, pipelineContext.intermediateHeightmap);
@@ -102,6 +122,7 @@ public class FFTDispatcher : UltimatePipelineStep
             pipelineContext.SetRandomInts(shaderToDispatch, PID_randomSeeds);
         }
 
+        // dispatch
         pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, coefficientGeneratorKernelIdx, new Vector3(numGenerationGroups, numGenerationGroups, 1));
 
         for (int dX = 0; dX < numTexelsPerInverseGroup; ++dX)
@@ -185,11 +206,8 @@ public class FFTDispatcher : UltimatePipelineStep
         }
     }
 
-    void InverseFFT(float2[,] coefficients, CpuPipelineContext.CpuIntermediateHeightmap intermediateHeightmap)
+    void InverseFFT(float2[,] coefficients, CpuPipelineContext.CpuIntermediateHeightmap intermediateHeightmap, int effectiveCoefficientsComputed)
     {
-        int coeffSizeX = coefficients.GetLength(0);
-        int coeffSizeY = coefficients.GetLength(1);
-
         float2 invSize = 1.0f / (float2)intermediateHeightmap.heightmapDimensions;
 
         for (uint hX = 0; hX < intermediateHeightmap.heightmapDimensions.x; ++hX)
@@ -202,10 +220,10 @@ public class FFTDispatcher : UltimatePipelineStep
                 float localErrorOut = 0.0f;
                 float localError = 0.0f;
 
-                for (uint x = 0; x < coeffSizeX; ++x)
+                for (uint x = 0; x < effectiveCoefficientsComputed; ++x)
                 {
                     float fx = x;
-                    for (uint y = 0; y < coeffSizeY; ++y)
+                    for (uint y = 0; y < effectiveCoefficientsComputed; ++y)
                     {
                         float fy = y;
 
@@ -234,7 +252,7 @@ public class FFTDispatcher : UltimatePipelineStep
 
         int actualCoefficientsComputed = (int)math.pow(2, (int)math.floor(math.log2(fracCoefficientsConsidered * textureSize)));
         int coefficientsBufferSizeX = math.min(actualCoefficientsComputed, textureSize / 2);
-        int coefficientsBufferSizeY = actualCoefficientsComputed;
+        int coefficientsBufferSizeY = actualCoefficientsComputed > (textureSize / 2) ? textureSize : actualCoefficientsComputed;
 
         if (cpuCoefficientsBuffer is null || cpuCoefficientsBuffer.GetLength(0) != coefficientsBufferSizeX || cpuCoefficientsBuffer.GetLength(1) != coefficientsBufferSizeY)
         {
@@ -243,7 +261,7 @@ public class FFTDispatcher : UltimatePipelineStep
 
         CoefficientGenerator(cpuCoefficientsBuffer, pipelineContext);
 
-        InverseFFT(cpuCoefficientsBuffer, pipelineContext.GetCpuIntemediateHeightmap());
+        InverseFFT(cpuCoefficientsBuffer, pipelineContext.GetCpuIntemediateHeightmap(), actualCoefficientsComputed);
 
         return Task.CompletedTask;
     }
@@ -259,7 +277,7 @@ public class FFTDispatcher : UltimatePipelineStep
     public override void RenderParametersTuningGUI()
     {
         GUILayout.Label($"Inverse Group Scale Factor: {inverseGroupScaleFactor}");
-        float igsf = GUILayout.HorizontalSlider(inverseGroupScaleFactor, 4f, 8f);
+        float igsf = GUILayout.HorizontalSlider(inverseGroupScaleFactor, 0f, 8f);
         inverseGroupScaleFactor = Mathf.RoundToInt(igsf);
 
         GUILayout.Label($"Fractal Dimension: {H:F3}");

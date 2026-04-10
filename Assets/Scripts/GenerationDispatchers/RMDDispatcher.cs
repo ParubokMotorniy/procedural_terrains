@@ -60,7 +60,7 @@ public class RMDDispatcher : UltimatePipelineStep
         int groupSize = 0;
         foreach (int candidateGroupSize in groupSizes)
         {
-            if (numLinearThreads % candidateGroupSize == 0)
+            if (groupSize == 0 && numLinearThreads % candidateGroupSize == 0)
             {
                 numGroups = numLinearThreads / candidateGroupSize;
                 groupSize = candidateGroupSize;
