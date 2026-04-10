@@ -64,7 +64,7 @@ def shannon_entropy(arr):
 
 
 # global-local metric that contributes to the final metric basing on how "eroded" the terrain is
-def evaluate_erosion_score(heightmap: np.ndarray, nbins: int = 64):
+def evaluate_erosion_score(heightmap: np.ndarray, nbins: int = 256):
     assert (
         heightmap.min() >= 0.0 and heightmap.max() <= 1.0
     ), f"Actual min: {heightmap.min()}. Actual max: {heightmap.max()}"
@@ -125,7 +125,7 @@ def evaluate_erosion_score(heightmap: np.ndarray, nbins: int = 64):
 
 
 # TODO: think how the magnitude can be included
-def evaluate_gradient_score(heightmap: np.ndarray, subdomainSize: int, nbins: int = 16):
+def evaluate_gradient_score(heightmap: np.ndarray, subdomainSize: int, nbins: int = 32):
     assert heightmap.min() >= 0.0 and heightmap.max() <= 1.0
     min_mean_gradient_span = 1.0e-6
     max_gradient_std = math.sqrt(8)
@@ -260,7 +260,7 @@ def evaluate_fractal_score(heightmap: np.ndarray, threshold: float = None):
             ]  # makes the dimension 2 by default -> as if we have a plain square
         )
     else:
-        fractal_dimension = 0.0
+        fractal_dimension = 2.0
 
     # --- power spectrum ---
     F = np.fft.fft2(heightmap - np.mean(heightmap))
@@ -469,7 +469,7 @@ def evaluate_composite_aesthetics_measure(
         split_visualization_heightmap[y0, x0:x1] = population_max
         split_visualization_heightmap[min(y1, height - 1), x0:x1] = population_max
 
-        for j in range(i, len(heightmap_division)):
+        for j in range(i+1, len(heightmap_division)):
             y0, y1, x0, x1 = heightmap_division[j]
             sub_2 = quantized_heightmap[y0:y1, x0:x1]
             for compressor in compressors:

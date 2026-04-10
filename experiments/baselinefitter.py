@@ -21,10 +21,11 @@ from sklearn.model_selection import StratifiedKFold
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import RandomizedSearchCV
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
-family_weights_glob = {"mlp": 0.55, "svm": 0.45}
+family_weights_glob = {"mlp": 0.45, "svm": 0.55}
 subsets_glob = [[0, 1], [2, 3], [4, 5]]
-subset_weights_glob = [0.15, 0.5, 0.35]
+subset_weights_glob = [0.35, 0.35, 0.3]
 
 svm_param_dist = {
     "C": np.logspace(-3, 3, 40),
@@ -77,7 +78,13 @@ def cross_validated_roc(model, X, y, n_splits=5):
 
 
 def train_data_ensemble_models(
-    X, y, train_func, class_separation_idx, n_models=7, fraction=0.7, random_state=42
+    X,
+    y,
+    train_func,
+    class_separation_idx,
+    n_models=5,
+    fraction=0.75,
+    random_state=57835,
 ):
     rng = np.random.RandomState(random_state)
     models = []
@@ -113,8 +120,9 @@ def train_and_save_models_auto(
     model_prefix="model",
     n_iter=100,
     use_data_ensemble=False,
-    ensemble_fraction=0.7,
-    n_ensemble_models=7,
+    ensemble_fraction=0.75,
+    n_ensemble_models=5,
+    components_to_try=[2, 3, 4],
 ):
     X = np.vstack([class0, class1])
     y = np.array([0] * len(class0) + [1] * len(class1))
@@ -155,126 +163,154 @@ def train_and_save_models_auto(
         mlp_search.fit(X, y)
         return mlp_search.best_estimator_
 
-    if use_data_ensemble:
-        svm_models = train_data_ensemble_models(
-            X,
-            y,
-            train_svm,
-            len(class0),
-            n_models=n_ensemble_models,
-            fraction=ensemble_fraction,
-        )
-        mlp_models = train_data_ensemble_models(
-            X,
-            y,
-            train_mlp,
-            len(class0),
-            n_models=n_ensemble_models,
-            fraction=ensemble_fraction,
-        )
+    def do_fit(
+        actual_x: np.ndarray, y: np.ndarray, differentiation_tag: str, subtitle: str
+    ):
+        if use_data_ensemble:
+            svm_models = train_data_ensemble_models(
+                actual_x,
+                y,
+                train_svm,
+                len(class0),
+                n_models=n_ensemble_models,
+                fraction=ensemble_fraction,
+            )
+            mlp_models = train_data_ensemble_models(
+                actual_x,
+                y,
+                train_mlp,
+                len(class0),
+                n_models=n_ensemble_models,
+                fraction=ensemble_fraction,
+            )
 
-        joblib.dump(svm_models, f"{model_prefix}_svm_ensemble.joblib")
-        joblib.dump(mlp_models, f"{model_prefix}_mlp_ensemble.joblib")
+            joblib.dump(
+                svm_models,
+                f"{model_prefix}_{differentiation_tag}_svm_ensemble.joblib",
+            )
+            joblib.dump(
+                mlp_models,
+                f"{model_prefix}_{differentiation_tag}_mlp_ensemble.joblib",
+            )
 
-    else:
-        best_svm = train_svm(X, y)
-        best_mlp = train_mlp(X, y)
+        else:
+            best_svm = train_svm(actual_x, y)
+            best_mlp = train_mlp(actual_x, y)
 
-        joblib.dump(best_svm, f"{model_prefix}_svm.joblib")
-        joblib.dump(best_mlp, f"{model_prefix}_mlp.joblib")
+            joblib.dump(best_svm, f"{model_prefix}_{differentiation_tag}_svm.joblib")
+            joblib.dump(best_mlp, f"{model_prefix}_{differentiation_tag}_mlp.joblib")
 
-    if not use_data_ensemble:
-        fpr_svm, tpr_svm, std_svm, auc_svm, std_auc_svm = cross_validated_roc(
-            best_svm, X, y
-        )
-        fpr_mlp, tpr_mlp, std_mlp, auc_mlp, std_auc_mlp = cross_validated_roc(
-            best_mlp, X, y
-        )
+        if not use_data_ensemble:
+            fpr_svm, tpr_svm, std_svm, auc_svm, std_auc_svm = cross_validated_roc(
+                best_svm, actual_x, y
+            )
+            fpr_mlp, tpr_mlp, std_mlp, auc_mlp, std_auc_mlp = cross_validated_roc(
+                best_mlp, actual_x, y
+            )
 
-        plt.figure()
-
-        plt.plot(fpr_svm, tpr_svm, label=f"SVM (AUC={auc_svm:.3f}±{std_auc_svm:.3f})")
-        plt.fill_between(
-            fpr_svm,
-            np.maximum(tpr_svm - std_svm, 0),
-            np.minimum(tpr_svm + std_svm, 1),
-            alpha=0.2,
-        )
-
-        plt.plot(fpr_mlp, tpr_mlp, label=f"MLP (AUC={auc_mlp:.3f}±{std_auc_mlp:.3f})")
-        plt.fill_between(
-            fpr_mlp,
-            np.maximum(tpr_mlp - std_mlp, 0),
-            np.minimum(tpr_mlp + std_mlp, 1),
-            alpha=0.2,
-        )
-
-        plt.plot([0, 1], [0, 1], "--", color="gray")
-
-        plt.legend()
-        plt.grid(True)
-        plt.title("Cross-Validated ROC for individual classifiers")
-        plt.savefig(f"{model_prefix}_cv_roc.png")
-        plt.cla()
-        plt.close()
-    else:
-        skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=763487356)
-
-        mean_fpr = np.linspace(0, 1, 200)
-        tprs = {"svm": [], "mlp": []}
-        aucs = {"svm": [], "mlp": []}
-
-        for train_idx, test_idx in skf.split(X, y):
-            X_train, X_test = X[train_idx], X[test_idx]
-            y_train, y_test = y[train_idx], y[test_idx]
-
-            def predict_proba_ensemble(models, X):
-                probs = np.zeros(len(X))
-                for m in models:
-                    probs += m.predict_proba(X)[:, 1]
-                print(len(models), len(X), probs.shape)
-                return probs / len(models)
-
-            for model_key, models in [("svm", svm_models), ("mlp", mlp_models)]:
-
-                probs = predict_proba_ensemble(models, X_test)
-                # mlp_probs = predict_proba_ensemble(mlp_models, X_test)
-
-                fpr, tpr, _ = roc_curve(y_test, probs)
-                roc_auc = auc(fpr, tpr)
-
-                aucs[model_key].append(roc_auc)
-
-                interp_tpr = np.interp(mean_fpr, fpr, tpr)
-                interp_tpr[0] = 0.0
-                tprs[model_key].append(interp_tpr)
-
-        plt.figure()
-        for model_key in ["svm", "mlp"]:
-            mean_tpr = np.mean(tprs[model_key], axis=0)
-            std_tpr = np.std(tprs[model_key], axis=0)
+            plt.figure()
 
             plt.plot(
-                mean_fpr,
-                mean_tpr,
-                label=f"Ensemble of `{model_key.upper()}`s (AUC={np.mean(aucs[model_key]):.3f})",
+                fpr_svm, tpr_svm, label=f"SVM (AUC={auc_svm:.3f}±{std_auc_svm:.3f})"
             )
             plt.fill_between(
-                mean_fpr,
-                np.maximum(mean_tpr - std_tpr, 0),
-                np.minimum(mean_tpr + std_tpr, 1),
+                fpr_svm,
+                np.maximum(tpr_svm - std_svm, 0),
+                np.minimum(tpr_svm + std_svm, 1),
                 alpha=0.2,
             )
 
-        plt.plot([0, 1], [0, 1], "--", color="gray")
-        plt.title(
-            f"Fold-wise ROC for ensembled classifiers\n({ensemble_fraction*100}% data seen;{n_ensemble_models} models in ensemble)"
-        )
-        plt.legend()
-        plt.grid(True)
-        plt.savefig(f"{model_prefix}_cv_roc_ens.png")
-        plt.cla()
-        plt.close()
+            plt.plot(
+                fpr_mlp, tpr_mlp, label=f"MLP (AUC={auc_mlp:.3f}±{std_auc_mlp:.3f})"
+            )
+            plt.fill_between(
+                fpr_mlp,
+                np.maximum(tpr_mlp - std_mlp, 0),
+                np.minimum(tpr_mlp + std_mlp, 1),
+                alpha=0.2,
+            )
+
+            plt.plot([0, 1], [0, 1], "--", color="gray")
+
+            plt.legend()
+            plt.grid(True)
+            plt.title(f"Cross-Validated ROC for individual classifiers{subtitle}")
+            plt.savefig(f"{model_prefix}_{differentiation_tag}_cv_roc.png")
+            plt.cla()
+            plt.close()
+        else:
+            skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=763487356)
+
+            mean_fpr = np.linspace(0, 1, 200)
+            tprs = {"svm": [], "mlp": []}
+            aucs = {"svm": [], "mlp": []}
+
+            for train_idx, test_idx in skf.split(actual_x, y):
+                X_train, X_test = actual_x[train_idx], actual_x[test_idx]
+                y_train, y_test = y[train_idx], y[test_idx]
+
+                def predict_proba_ensemble(models, X):
+                    probs = np.zeros(len(X))
+                    for m in models:
+                        probs += m.predict_proba(X)[:, 1]
+                    print(len(models), len(X), probs.shape)
+                    return probs / len(models)
+
+                for model_key, models in [("svm", svm_models), ("mlp", mlp_models)]:
+
+                    probs = predict_proba_ensemble(models, X_test)
+                    # mlp_probs = predict_proba_ensemble(mlp_models, X_test)
+
+                    fpr, tpr, _ = roc_curve(y_test, probs)
+                    roc_auc = auc(fpr, tpr)
+
+                    aucs[model_key].append(roc_auc)
+
+                    interp_tpr = np.interp(mean_fpr, fpr, tpr)
+                    interp_tpr[0] = 0.0
+                    tprs[model_key].append(interp_tpr)
+
+            plt.figure()
+            for model_key in ["svm", "mlp"]:
+                mean_tpr = np.mean(tprs[model_key], axis=0)
+                std_tpr = np.std(tprs[model_key], axis=0)
+
+                plt.plot(
+                    mean_fpr,
+                    mean_tpr,
+                    label=f"Ensemble of `{model_key.upper()}`s (AUC={np.mean(aucs[model_key]):.3f})",
+                )
+                plt.fill_between(
+                    mean_fpr,
+                    np.maximum(mean_tpr - std_tpr, 0),
+                    np.minimum(mean_tpr + std_tpr, 1),
+                    alpha=0.2,
+                )
+
+            plt.plot([0, 1], [0, 1], "--", color="gray")
+            plt.title(
+                f"Fold-wise ROC for {n_ensemble_models} ensembled classifiers\n({ensemble_fraction*100}% data seen){subtitle}"
+            )
+            plt.legend()
+            plt.grid(True)
+            plt.savefig(f"{model_prefix}_{differentiation_tag}_cv_roc_ens.png")
+            plt.cla()
+            plt.close()
+
+    for n_components in components_to_try:
+        transformers = [
+            (PCA(n_components), "PCA"),
+            # (LinearDiscriminantAnalysis("eigen", n_components=n_components), "LDA"),
+        ]
+        for transformer, name_transformer in transformers:
+            actual_x = transformer.fit_transform(X, y)
+            do_fit(
+                actual_x,
+                y,
+                f"{name_transformer}_{n_components}",
+                f"\nNum. PCA components : {n_components}; explained var. : {np.sum(transformer.explained_variance_ratio_)}",
+            )
+    do_fit(X, y, "full", "")
 
 
 def train_subset_ensemble_auto(
@@ -286,8 +322,8 @@ def train_subset_ensemble_auto(
     model_prefix="ensemble",
     n_iter=100,
     use_data_ensemble=False,
-    ensemble_fraction=0.7,
-    n_ensemble_models=7,
+    ensemble_fraction=0.75,
+    n_ensemble_models=5,
 ):
     X = np.vstack([class0, class1])
     y = np.array([0] * len(class0) + [1] * len(class1))
@@ -585,12 +621,14 @@ def build_metric_vectors(
 
     possible_extensions, file_reader, population_max = extensions[fmt]
 
-    files = sorted(
-        f
-        for f in os.listdir(directory)
-        if any(f.lower().strip().endswith(ext) for ext in possible_extensions)
+    files = np.array(
+        sorted(
+            f
+            for f in os.listdir(directory)
+            if any(f.lower().strip().endswith(ext) for ext in possible_extensions)
+        )
     )
-    files = files[: int(data_fraction * len(files))]
+    files = files[np.random.randint(0, len(files), int(data_fraction * len(files)))]
 
     print(f"Total heightmaps to evaluate: {len(files)}")
 
@@ -719,6 +757,13 @@ def main():
         help="If train ensembles of models on different subsets of data.",
     )
 
+    parser.add_argument(
+        "--only-embed",
+        action="store_true",
+        default=False,
+        help="If only compute vector embeddings of heightmaps.",
+    )
+
     args = parser.parse_args()
 
     fmt = args.format.lower().strip()
@@ -761,32 +806,34 @@ def main():
             interesting_vectors_pd = pd.read_csv(
                 os.path.join(
                     directory_interesting,
-                    "interesting_metric_vectors.csv",
+                    "interesting_metric_vectors_new.csv",
                 )
             )
             interesting_vectors = interesting_vectors_pd.to_numpy()[:, 1:]
             interesting_vectors = np.nan_to_num(interesting_vectors)
 
             boring_vectors_pd = pd.read_csv(
-                os.path.join(directory_boring, "boring_metric_vectors.csv")
+                os.path.join(directory_boring, "boring_metric_vectors_new.csv")
             )
             boring_vectors = boring_vectors_pd.to_numpy()[:, 1:]
             boring_vectors = np.nan_to_num(boring_vectors)
 
-        train_and_save_models_auto(
-            boring_vectors,
-            interesting_vectors,
-            None,
-            "test_model",
-            20,
-            use_data_ensemble=args.train_ensemble,
-        )
-        train_subset_ensemble_auto(
-            boring_vectors,
-            interesting_vectors,
-            use_data_ensemble=args.train_ensemble,
-            model_prefix="test_ensemble",
-        )
+        if not args.only_embed:
+            train_and_save_models_auto(
+                boring_vectors,
+                interesting_vectors,
+                None,
+                "test_model",
+                25,
+                use_data_ensemble=args.train_ensemble,
+            )
+            train_subset_ensemble_auto(
+                boring_vectors,
+                interesting_vectors,
+                use_data_ensemble=args.train_ensemble,
+                model_prefix="test_ensemble",
+                n_iter=25,
+            )
     elif args.mode == "classify":
         vectors_to_classify = build_metric_vectors(
             args.directory_classify, args.chunk_size, args.division_depth, fmt
