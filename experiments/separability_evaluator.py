@@ -42,6 +42,7 @@ def evaluate_separability(
         # "aesthetical_composite_png",
         "aesthetical",
     ],
+    legend_pos=[(0.35, 0.07), (0.05, 0.07), (0.05, 0.8)],
     axes_names=[
         (r"$m_\text{erosion}$", r"$m_\text{gradient}$"),
         (r"$D$", r"$\beta$"),
@@ -59,8 +60,8 @@ def evaluate_separability(
 
     roc_data = {}
 
-    for split, split_name, (ax1_name, ax2_name) in zip(
-        all_splits, splits_names + ["FULL"], all_axes_names
+    for split, split_name, (ax1_name, ax2_name), plot_legend_pos in zip(
+        all_splits, splits_names + ["FULL"], all_axes_names, legend_pos + [(None, None)]
     ):
         X_sub = X_scaled[:, split]
 
@@ -192,7 +193,7 @@ def evaluate_separability(
                     X_sub[idx, 0],
                     X_sub[idx, 1],
                     label=f"Terrain class: {classes_names[label]}",
-                    alpha=0.7,
+                    alpha=0.5,
                 )
 
             plt.title(
@@ -208,7 +209,7 @@ def evaluate_separability(
             )
             plt.annotate(
                 text,
-                (0.05, 0.07),
+                plot_legend_pos,
                 xycoords="axes fraction",
                 bbox=dict(
                     boxstyle="round",
@@ -251,7 +252,7 @@ def evaluate_separability(
                     X_pca[idx, 0],
                     X_pca[idx, 1],
                     label=f"Terrain class: {classes_names[label]}",
-                    alpha=0.7,
+                    alpha=0.5,
                 )
 
             plt.title(
@@ -268,7 +269,7 @@ def evaluate_separability(
             )
             plt.annotate(
                 text,
-                (0.05, 0.07),
+                (0.35, 0.07),
                 xycoords="axes fraction",
                 bbox=dict(
                     boxstyle="round",
@@ -303,7 +304,7 @@ def evaluate_separability(
                     X_umap[idx, 0],
                     X_umap[idx, 1],
                     label=f"Terrain class: {classes_names[label]}",
-                    alpha=0.7,
+                    alpha=0.5,
                 )
 
             plt.title("UMAP Projection")
@@ -392,11 +393,11 @@ def main():
 
     interesting_vectors_pd = pd.read_csv(args.vectors_interesting)
     interesting_vectors = interesting_vectors_pd.to_numpy()[:, 1:7]
-    interesting_vectors = np.nan_to_num(interesting_vectors, nan=0.0)
+    # interesting_vectors = interesting_vectors[interesting_vectors[:, 2] != 2.0]
 
     boring_vectors_pd = pd.read_csv(args.vectors_boring)
     boring_vectors = boring_vectors_pd.to_numpy()[:, 1:7]
-    boring_vectors = np.nan_to_num(boring_vectors, nan=0.0)
+    # boring_vectors = boring_vectors[boring_vectors[:, 2] != 2.0]
 
     all_features = np.vstack([boring_vectors, interesting_vectors])
     all_labels = np.array([0] * len(boring_vectors) + [1] * len(interesting_vectors))

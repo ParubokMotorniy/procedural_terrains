@@ -11,8 +11,11 @@ import io
 import porespy as pspy
 import matplotlib.pyplot as plt
 import scipy as spy
+import os
+import tqdm
 
 JPEG_MAX_DIM = 65500
+
 
 def compressed_size_png(arr):
     img = Image.fromarray(arr)
@@ -50,6 +53,7 @@ def quantize_heightmap(
     return np.round(desired_max_value * (heightmap / max_value_of_population)).astype(
         type
     )
+
 
 # assumes the values are positive
 def normalize_heightmap(heightmap: np.ndarray, max_value_of_population: float):
@@ -282,7 +286,7 @@ def evaluate_fractal_score(heightmap: np.ndarray, threshold: float = None):
 
     slope, residuals = np.polyfit(np.log(freqs), np.log(psd), deg=1, full=True)[0]
 
-    beta = -slope
+    beta = 0.0 if (np.isnan(slope) or np.isinf(slope)) else -slope
     mse = residuals / len(freqs)
 
     return fractal_dimension, beta, mse
@@ -301,7 +305,9 @@ def evaluate_global_aesthetic_measure(quantized_heightmap: np.ndarray, compresso
         measure = (
             initial_information_content - heightmap_compressed
         ) / initial_information_content
-        global_measures.append(measure)
+        global_measures.append(
+            1.0 if (np.isneginf(measure) or np.isinf(measure)) else measure
+        )
 
     return global_measures
 
@@ -431,6 +437,7 @@ def partition_heightmap(
 
     return leaves
 
+
 def evaluate_composite_aesthetics_measure(
     quantized_heightmap: np.ndarray,
     population_max: int,
@@ -469,7 +476,7 @@ def evaluate_composite_aesthetics_measure(
         split_visualization_heightmap[y0, x0:x1] = population_max
         split_visualization_heightmap[min(y1, height - 1), x0:x1] = population_max
 
-        for j in range(i+1, len(heightmap_division)):
+        for j in range(i + 1, len(heightmap_division)):
             y0, y1, x0, x1 = heightmap_division[j]
             sub_2 = quantized_heightmap[y0:y1, x0:x1]
             for compressor in compressors:
@@ -576,3 +583,98 @@ def get_metric_vector(
         ],
         dtype=np.float64,
     )
+
+
+def build_metric_vectors(
+    directory: str,
+    chunk_size: int,
+    division_depth: int,
+    fmt: str,
+    data_fraction: float = 1.0,
+    if_quad_data: bool = False,
+):
+    if not os.path.isdir(directory):
+        raise ValueError(f"{directory} is not a valid directory")
+
+    extensions = {
+        "exr": ([".exr"], read_exr_grayscale, 1.0),
+        "jpg": ([".jpg", ".jpeg"], read_jpg_grayscale, 255.0),
+        "jpeg": ([".jpg", ".jpeg"], read_jpg_grayscale, 255.0),
+        # "tif": ([".tif", ".tiff"],  read_tiff_grayscale),
+        # "tiff": ([".tif", ".tiff"], read_tiff_grayscale),
+    }
+
+    if fmt not in extensions:
+        raise ValueError("Unsupported format")
+
+    possible_extensions, file_reader, population_max = extensions[fmt]
+
+    files = np.array(
+        sorted(
+            f
+            for f in os.listdir(directory)
+            if any(f.lower().strip().endswith(ext) for ext in possible_extensions)
+        )
+    )
+    files = files[np.random.randint(0, len(files), int(data_fraction * len(files)))]
+
+    print(f"Total heightmaps to evaluate: {len(files)}")
+
+    metric_vectors = []
+
+    if if_quad_data:
+        for filename in tqdm.tqdm(files):
+            path = os.path.join(directory, filename)
+            heightmap = file_reader(path)
+            half_side_len = int(len(heightmap) / 2)
+
+            print(f"\nProcessing heightmap: {filename}")
+
+            for sx in range(2):
+                for sy in range(2):
+                    subterrain = heightmap[
+                        sx * half_side_len : (sx + 1) * half_side_len,
+                        sy * half_side_len : (sy + 1) * half_side_len,
+                    ]
+
+                    height_max = subterrain.max()
+                    if (
+                        np.isnan(height_max)
+                        or np.isnan(subterrain.min())
+                        or np.isclose(height_max, 0.0)
+                    ):
+                        print("Skipping tile! Invalid values")
+                        continue
+
+                    if np.mean(subterrain > (population_max * 0.05)) <= 0.6:
+                        print("Skipping tile! Too much water")
+                        continue
+
+                    print(f"Terrain split: {sx * 2 + sy}")
+                    metric_vector = get_metric_vector(
+                        subterrain, chunk_size, division_depth, subterrain.max(), True
+                    )
+
+                    metric_vectors.append(metric_vector)
+
+            del heightmap
+    else:
+        for filename in tqdm.tqdm(files):
+            path = os.path.join(directory, filename)
+            heightmap = file_reader(path)
+
+            print(f"\nProcessing heightmap: {filename}")
+
+            if np.mean(heightmap > (population_max * 0.05)) <= 0.6:
+                print("Skipping terrain! Too much water")
+                continue
+
+            metric_vector = get_metric_vector(
+                heightmap, chunk_size, division_depth, population_max, True
+            )
+
+            metric_vectors.append(metric_vector)
+
+            del heightmap
+
+    return np.array(metric_vectors)

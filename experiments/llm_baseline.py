@@ -1,4 +1,4 @@
-import os
+import numpy as np
 import csv
 import time
 import argparse
@@ -14,12 +14,11 @@ except ImportError:
     print("Please install the SDK: pip install google-genai pillow")
     exit()
 
-# CONFIGURATION
-API_KEY = "nah, bro. You ain't getting it..."
+API_KEY = ""
 GEN_MODEL = "gemini-2.5-flash-image"
 CLASS_MODEL = "gemini-2.5-flash-lite"
 
-GEN_RPM = 150
+GEN_RPM = 250
 CLASS_RPM = 150
 
 
@@ -74,12 +73,19 @@ def generate_routine(
 
 
 def classification_routine(
-    image_paths,
+    images_dir,
     csv_output,
-    class_prompt="The attached image is a grayscale terrain heightmap. If you were the player of a videogame that uses this heightmap, would you find this terrain INTERESTING and APPEALING? Reply with a single word: yes or no",
+    class_prompt="The provided image is a grayscale terrain heightmap. If you were the player of a videogame that uses this heightmap as a place of action, would you find this terrain INTERESTING and APPEALING? Rate this heightmap on a linear scale from 0 to 1, where 0 represents BORING and UNAPPEALING and 1 represents INTERESTING and APPEALING. Give answer as a single float value with up to three decimal places.",
 ):
+    image_paths = [
+        str(p)
+        for p in Path(images_dir).glob("*")
+        if p.suffix.strip().lower() in [".png", ".jpg", ".jpeg"]
+    ]
+
     client = get_client()
     results = []
+    raw_classification = []
 
     print(f"Classifying {len(image_paths)} images...")
 
@@ -100,8 +106,9 @@ def classification_routine(
                 ],
             )
 
-            result_text = response.text.strip()
+            result_text = float(response.text.strip())
             results.append([path.name, result_text])
+            raw_classification.append(result_text)
             print(f"Classified {path.name}: {result_text}")
 
             # Respect RPM Limit (60s / 15 requests = 4s delay)
@@ -119,6 +126,8 @@ def classification_routine(
         writer.writerow(["Image Name", "Classification"])
         writer.writerows(results)
     print(f"Results dumped to {csv_output}")
+
+    return np.array(raw_classification, dtype=np.float32)
 
 
 if __name__ == "__main__":
@@ -144,10 +153,4 @@ if __name__ == "__main__":
     if args.mode == "gen":
         generate_routine(args.count, args.dir, args.prompt)
     elif args.mode == "class":
-        # Get all images in the directory
-        images = [
-            str(p)
-            for p in Path(args.dir).glob("*")
-            if p.suffix.strip().lower() in [".png", ".jpg", ".jpeg"]
-        ]
-        classification_routine(images, args.csv, args.prompt)
+        classification_routine(args.dir, args.csv, args.prompt)

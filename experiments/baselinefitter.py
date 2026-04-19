@@ -23,9 +23,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
-family_weights_glob = {"mlp": 0.45, "svm": 0.55}
-subsets_glob = [[0, 1], [2, 3], [4, 5]]
-subset_weights_glob = [0.35, 0.35, 0.3]
+import classificationlib as classlib
 
 svm_param_dist = {
     "C": np.logspace(-3, 3, 40),
@@ -316,9 +314,9 @@ def train_and_save_models_auto(
 def train_subset_ensemble_auto(
     class0,
     class1,
-    subsets=subsets_glob,
-    subset_weights=subset_weights_glob,
-    family_weights=family_weights_glob,
+    subsets=classlib.subsets_glob,
+    subset_weights=classlib.subset_weights_glob,
+    family_weights=classlib.family_weights_glob,
     model_prefix="ensemble",
     n_iter=100,
     use_data_ensemble=False,
@@ -515,179 +513,6 @@ def train_subset_ensemble_auto(
     plt.close()
 
 
-def classify_with_saved_models(X, model_prefix="model", use_data_ensemble=False):
-    if use_data_ensemble:
-        svm_models = joblib.load(f"{model_prefix}_svm_ensemble.joblib")
-        mlp_models = joblib.load(f"{model_prefix}_mlp_ensemble.joblib")
-
-        def predict(models):
-            p = np.zeros(len(X))
-            for m in models:
-                p += m.predict_proba(X)[:, 1]
-            return p / len(models)
-
-        svm_p = predict(svm_models)
-        mlp_p = predict(mlp_models)
-
-    else:
-        svm = joblib.load(f"{model_prefix}_svm.joblib")
-        mlp = joblib.load(f"{model_prefix}_mlp.joblib")
-
-        svm_p = svm.predict_proba(X)[:, 1]
-        mlp_p = mlp.predict_proba(X)[:, 1]
-
-    df = pd.DataFrame({"svm_prob": svm_p, "mlp_prob": mlp_p})
-
-    df.to_csv(f"{model_prefix}_predictions.csv", index=False)
-    print(df)
-
-
-def classify_with_ensemble(
-    X,
-    subsets=subsets_glob,
-    subset_weights=subset_weights_glob,
-    family_weights=family_weights_glob,
-    model_prefix="ensemble",
-    use_data_ensemble=False,
-):
-    scaler = joblib.load(f"{model_prefix}_scaler.joblib")
-    X = scaler.transform(X)
-
-    svm_models = []
-    mlp_models = []
-
-    for i in range(len(subsets)):
-        if use_data_ensemble:
-            svm_models.append(joblib.load(f"{model_prefix}_svm_{i}_ensemble.joblib"))
-            mlp_models.append(joblib.load(f"{model_prefix}_mlp_{i}_ensemble.joblib"))
-        else:
-            svm_models.append(joblib.load(f"{model_prefix}_svm_{i}.joblib"))
-            mlp_models.append(joblib.load(f"{model_prefix}_mlp_{i}.joblib"))
-
-    def predict_family(models, X_sub):
-        if isinstance(models, list):
-            probs = np.zeros(len(X_sub))
-            for m in models:
-                probs += m.predict_proba(X_sub)[:, 1]
-            return probs / len(models)
-        else:
-            return models.predict_proba(X_sub)[:, 1]
-
-    svm_probs = np.zeros(len(X))
-    mlp_probs = np.zeros(len(X))
-
-    for i, subset in enumerate(subsets):
-        w = subset_weights[i]
-
-        X_sub = X[:, subset]
-
-        svm_probs += w * predict_family(svm_models[i], X_sub)
-        mlp_probs += w * predict_family(mlp_models[i], X_sub)
-
-    svm_probs /= sum(subset_weights)
-    mlp_probs /= sum(subset_weights)
-
-    final = (family_weights["mlp"] * mlp_probs + family_weights["svm"] * svm_probs) / (
-        family_weights["mlp"] + family_weights["svm"]
-    )
-
-    df = pd.DataFrame({"ensemble_prob": final})
-    df.to_csv(f"{model_prefix}_predictions.csv", index=False)
-
-    print(df)
-
-
-def build_metric_vectors(
-    directory: str,
-    chunk_size: int,
-    division_depth: int,
-    fmt: str,
-    data_fraction: float = 1.0,
-    if_quad_data: bool = False,
-):
-    if not os.path.isdir(directory):
-        raise ValueError(f"{directory} is not a valid directory")
-
-    extensions = {
-        "exr": ([".exr"], elib.read_exr_grayscale, 1.0),
-        "jpg": ([".jpg", ".jpeg"], elib.read_jpg_grayscale, 255.0),
-        "jpeg": ([".jpg", ".jpeg"], elib.read_jpg_grayscale, 255.0),
-        # "tif": ([".tif", ".tiff"], elib.read_tiff_grayscale),
-        # "tiff": ([".tif", ".tiff"], elib.read_tiff_grayscale),
-    }
-
-    if fmt not in extensions:
-        raise ValueError("Unsupported format")
-
-    possible_extensions, file_reader, population_max = extensions[fmt]
-
-    files = np.array(
-        sorted(
-            f
-            for f in os.listdir(directory)
-            if any(f.lower().strip().endswith(ext) for ext in possible_extensions)
-        )
-    )
-    files = files[np.random.randint(0, len(files), int(data_fraction * len(files)))]
-
-    print(f"Total heightmaps to evaluate: {len(files)}")
-
-    metric_vectors = []
-
-    if if_quad_data:
-        for filename in tqdm.tqdm(files):
-            path = os.path.join(directory, filename)
-            heightmap = file_reader(path)
-            half_side_len = int(len(heightmap) / 2)
-
-            print(f"\nProcessing heightmap: {filename}")
-
-            for sx in range(2):
-                for sy in range(2):
-                    subterrain = heightmap[
-                        sx * half_side_len : (sx + 1) * half_side_len,
-                        sy * half_side_len : (sy + 1) * half_side_len,
-                    ]
-
-                    height_max = subterrain.max()
-                    if (
-                        np.isnan(height_max)
-                        or np.isnan(subterrain.min())
-                        or np.isclose(height_max, 0.0)
-                    ):
-                        print("Skipping tile! Invalid values")
-                        continue
-
-                    if np.mean(subterrain > (255.0 * 0.05)) <= 0.6:
-                        print("Skipping tile! Too much water")
-                        continue
-
-                    print(f"Terrain split: {sx * 2 + sy}")
-                    metric_vector = elib.get_metric_vector(
-                        subterrain, chunk_size, division_depth, subterrain.max(), True
-                    )
-
-                    metric_vectors.append(metric_vector)
-
-            del heightmap
-        else:
-            for filename in tqdm.tqdm(files):
-                path = os.path.join(directory, filename)
-                heightmap = file_reader(path)
-
-                print(f"\nProcessing heightmap: {filename}")
-
-                metric_vector = elib.get_metric_vector(
-                    heightmap, chunk_size, division_depth, population_max, True
-                )
-
-                metric_vectors.append(metric_vector)
-
-                del heightmap
-
-    return np.array(metric_vectors)
-
-
 def main():
     parser = argparse.ArgumentParser(description="Evaluate metrics for the heightmaps.")
 
@@ -727,7 +552,7 @@ def main():
     parser.add_argument(
         "--division-depth",
         type=int,
-        help="The depth of the order-analyzing tree",
+        help="How many divisions to make along heightmap side for composite aes metric.",
     )
 
     parser.add_argument(
@@ -774,7 +599,7 @@ def main():
     if args.mode == "train":
         if not args.use_saved:
             print(f"Building vectors anew!")
-            interesting_vectors = build_metric_vectors(
+            interesting_vectors = elib.build_metric_vectors(
                 directory_interesting,
                 args.chunk_size,
                 args.division_depth,
@@ -789,7 +614,7 @@ def main():
                 )
             )
 
-            boring_vectors = build_metric_vectors(
+            boring_vectors = elib.build_metric_vectors(
                 directory_boring,
                 args.chunk_size,
                 args.division_depth,
@@ -806,17 +631,17 @@ def main():
             interesting_vectors_pd = pd.read_csv(
                 os.path.join(
                     directory_interesting,
-                    "interesting_metric_vectors_new.csv",
+                    "interesting_metric_vectors_4x4.csv",
                 )
             )
             interesting_vectors = interesting_vectors_pd.to_numpy()[:, 1:]
-            interesting_vectors = np.nan_to_num(interesting_vectors)
+            # interesting_vectors = interesting_vectors[interesting_vectors[:, 2] != 2.0]
 
             boring_vectors_pd = pd.read_csv(
-                os.path.join(directory_boring, "boring_metric_vectors_new.csv")
+                os.path.join(directory_boring, "boring_metric_vectors_4x4.csv")
             )
             boring_vectors = boring_vectors_pd.to_numpy()[:, 1:]
-            boring_vectors = np.nan_to_num(boring_vectors)
+            # boring_vectors = boring_vectors[boring_vectors[:, 2] != 2.0]
 
         if not args.only_embed:
             train_and_save_models_auto(
@@ -835,15 +660,15 @@ def main():
                 n_iter=25,
             )
     elif args.mode == "classify":
-        vectors_to_classify = build_metric_vectors(
+        vectors_to_classify = elib.build_metric_vectors(
             args.directory_classify, args.chunk_size, args.division_depth, fmt
         )
-        classify_with_saved_models(
+        classlib.classify_with_saved_models(
             vectors_to_classify,
             model_prefix="test_model",
             use_data_ensemble=args.train_ensemble,
         )
-        classify_with_ensemble(
+        classlib.classify_with_ensemble(
             vectors_to_classify,
             model_prefix="test_ensemble",
             use_data_ensemble=args.train_ensemble,
