@@ -34,12 +34,10 @@ def evaluate_separability(
         [0, 1],
         [2, 3],
         [4, 5],
-        # [4, 6]
     ],
     splits_names=[
         "geometric",
         "fractal",
-        # "aesthetical_composite_png",
         "aesthetical",
     ],
     legend_pos=[(0.35, 0.07), (0.05, 0.07), (0.05, 0.8)],
@@ -146,6 +144,7 @@ def evaluate_separability(
                 cv=3,
                 n_jobs=8,
                 verbose=2,
+                random_state=456,
             )
 
             svm_search.fit(X_train, y_train)
@@ -269,7 +268,7 @@ def evaluate_separability(
             )
             plt.annotate(
                 text,
-                (0.35, 0.07),
+                (0.35, 0.7),
                 xycoords="axes fraction",
                 bbox=dict(
                     boxstyle="round",
@@ -393,7 +392,7 @@ def main():
 
     interesting_vectors_pd = pd.read_csv(args.vectors_interesting)
     interesting_vectors = interesting_vectors_pd.to_numpy()[:, 1:7]
-    # interesting_vectors = interesting_vectors[interesting_vectors[:, 2] != 2.0]
+    interesting_vectors = interesting_vectors[interesting_vectors[:, 2] != 2.0]
 
     boring_vectors_pd = pd.read_csv(args.vectors_boring)
     boring_vectors = boring_vectors_pd.to_numpy()[:, 1:7]

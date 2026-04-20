@@ -121,6 +121,8 @@ def train_and_save_models_auto(
     ensemble_fraction=0.75,
     n_ensemble_models=5,
     components_to_try=[2, 3, 4],
+    state_mlp=4565387,
+    state_svm=8574554,
 ):
     X = np.vstack([class0, class1])
     y = np.array([0] * len(class0) + [1] * len(class1))
@@ -137,26 +139,28 @@ def train_and_save_models_auto(
 
     def train_svm(X, y):
         svm_search = RandomizedSearchCV(
-            SVC(probability=True),
+            SVC(probability=True, random_state=state_svm),
             svm_param_dist,
             n_iter=n_iter,
             scoring="roc_auc",
             cv=5,
             verbose=2,
             n_jobs=8,
+            random_state=state_svm,
         )
         svm_search.fit(X, y)
         return svm_search.best_estimator_
 
     def train_mlp(X, y):
         mlp_search = RandomizedSearchCV(
-            MLPClassifier(max_iter=500, early_stopping=True),
+            MLPClassifier(max_iter=500, early_stopping=True, random_state=state_mlp),
             mlp_param_dist,
             n_iter=n_iter,
             scoring="roc_auc",
             cv=5,
             verbose=2,
             n_jobs=8,
+            random_state=state_mlp,
         )
         mlp_search.fit(X, y)
         return mlp_search.best_estimator_
@@ -322,6 +326,8 @@ def train_subset_ensemble_auto(
     use_data_ensemble=False,
     ensemble_fraction=0.75,
     n_ensemble_models=5,
+    state_mlp=4565387,
+    state_svm=8574554,
 ):
     X = np.vstack([class0, class1])
     y = np.array([0] * len(class0) + [1] * len(class1))
@@ -346,6 +352,7 @@ def train_subset_ensemble_auto(
                 cv=5,
                 n_jobs=8,
                 verbose=2,
+                random_state=state_svm,
             )
             .fit(X, y)
             .best_estimator_
@@ -361,6 +368,7 @@ def train_subset_ensemble_auto(
                 cv=5,
                 n_jobs=8,
                 verbose=2,
+                random_state=state_mlp,
             )
             .fit(X, y)
             .best_estimator_
@@ -635,12 +643,16 @@ def main():
                 )
             )
             interesting_vectors = interesting_vectors_pd.to_numpy()[:, 1:]
-            # interesting_vectors = interesting_vectors[interesting_vectors[:, 2] != 2.0]
+            # print(np.where(np.isnan(interesting_vectors)), np.where(np.isinf(interesting_vectors)))
+            # interesting_vectors = np.nan_to_num(interesting_vectors)
+            interesting_vectors = interesting_vectors[interesting_vectors[:, 2] != 2.0]
 
             boring_vectors_pd = pd.read_csv(
                 os.path.join(directory_boring, "boring_metric_vectors_4x4.csv")
             )
             boring_vectors = boring_vectors_pd.to_numpy()[:, 1:]
+            # print(np.where(np.isnan(boring_vectors)), np.where(np.isinf(boring_vectors)))
+            # boring_vectors = np.nan_to_num(boring_vectors)
             # boring_vectors = boring_vectors[boring_vectors[:, 2] != 2.0]
 
         if not args.only_embed:
@@ -649,8 +661,10 @@ def main():
                 interesting_vectors,
                 None,
                 "test_model",
-                25,
+                35,
                 use_data_ensemble=args.train_ensemble,
+                state_mlp=295,
+                state_svm=447,
             )
             train_subset_ensemble_auto(
                 boring_vectors,
@@ -658,6 +672,8 @@ def main():
                 use_data_ensemble=args.train_ensemble,
                 model_prefix="test_ensemble",
                 n_iter=25,
+                state_mlp=447,
+                state_svm=447,
             )
     elif args.mode == "classify":
         vectors_to_classify = elib.build_metric_vectors(
