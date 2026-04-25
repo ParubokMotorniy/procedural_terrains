@@ -7,8 +7,6 @@ using Random = System.Random;
 
 namespace GpuGenerationPipeline
 {
-    // TODO: maybe, implement chained static constructor
-    //TODO: add callbacks for the stages to use
     public class PipelineContext
     {
         public RenderTexture intermediateHeightmap

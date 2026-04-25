@@ -19,10 +19,7 @@ uniform uint threadSubdomainsY;
 uniform float octaveAmplitude;
 uniform int2 noiseDisplacement;
 uniform float worleyFrequency;
-// uniform float noiseFrequency;
-// uniform float perlinFrequency;
 
-// TODO: can I employ gradients of noise here?
 
 float sampleGaussianNoise(float2 noiseTextureIdx)
 {

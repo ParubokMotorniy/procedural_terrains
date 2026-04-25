@@ -590,7 +590,7 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
         depositionConstant = math.max((float)random.NextDouble(), 0.001f);
         rainSolubilityConstant = math.max((float)random.NextDouble(), 0.001f);
         maxWaterDepth = (float)math.max(0.01, random.NextDouble() * 10.0);
-        // erosionIterationLimit = math.max(5, random.Next() % 150);
+        // erosionIterationLimit -> ignored;
         //rainNoiseFrequency -> ignored
     }
 }

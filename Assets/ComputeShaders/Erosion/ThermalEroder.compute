@@ -156,7 +156,6 @@ void applyKernel(int2 processedTexel)
         int y = (int)(permutedIdx % (uint)innerSide);
 
         int2 processedTexel = topLeftCorner + int2(x, y);
-        // resultHeightmap[topLeftCorner + int2((int)(idx / (uint)innerSide), (int)(idx % (uint)innerSide))] = permutedIdx;
         applyKernel(processedTexel);
         AllMemoryBarrier();
     }
@@ -192,7 +191,6 @@ void applyKernel(int2 processedTexel)
             int y = ((int)permutedIdx + (permutedIdx / texelsPerThread) * stepMultiplier) % 2;
             int2 processedTexel = topLeftCorner + int2(x, y);
 
-            // resultHeightmap[topLeftCorner + int2((int)(idx / (uint)texelsPerThread), ((int)idx + (idx / texelsPerThread) * stepMultiplier) % 2)] = permutedIdx;
             applyKernel(processedTexel);
             AllMemoryBarrier();
         }
@@ -214,7 +212,6 @@ void applyKernel(int2 processedTexel)
 
             int2 processedTexel = topLeftCorner + int2(x, y) + int2(0, 2);
 
-            // resultHeightmap[topLeftCorner + int2((int)(idx % (uint)truncatedTexelsPerThread), (idx + (permutedIdx / truncatedTexelsPerThread) * stepMultiplier) % 2)] = permutedIdx;
             applyKernel(processedTexel);
             AllMemoryBarrier();
         }

@@ -163,7 +163,6 @@ float coastlineComputer(float2 texelCoord)
         {
             uint2 texelCoord = topLeftCorner + uint2(x, y);
             inputTexture[index2dTo1d(uint2(bufferSideLength, bufferSideLength), texelCoord)] = coastlineComputer(texelCoord);
-            // outputTexture[texelCoord]  = coastlineComputer(texelCoord);
         }
     }
 }

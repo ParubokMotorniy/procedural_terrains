@@ -10,7 +10,7 @@ Shader "Custom/TerrainShader"
     SubShader
     {
         Tags { "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" "Queue" = "Geometry" }
-        //TODO: add runtime wiremesh rendering. Probably with geometry shaders for I don't want to waste bandwidht of GPU passing extra vertex attributes around.
+        //TODO: add runtime wiremesh rendering. Probably with geometry shaders for I don't want to waste bandwidht passing extra vertex attributes around.
 
         Pass
         {

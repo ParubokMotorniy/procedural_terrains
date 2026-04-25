@@ -144,7 +144,6 @@ public class SDFDispatcher : UltimatePipelineStep
         Vector3 dispatchGroups = new Vector3(numLinearGroups, numLinearGroups, 1);
 
         pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, coastlineGeneratorKernel, dispatchGroups);
-        //TODO: instead of clamping the height, I may want to normalize it
         pipelineContext.AppendDispatchToCommandBuffer(shaderToDispatch, maskToSeedBufferKernelIdx, dispatchGroups);
 
         while (currentFloodStep > 1)

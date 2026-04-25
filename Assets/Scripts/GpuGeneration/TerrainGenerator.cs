@@ -8,7 +8,6 @@ using UnityEngine.Rendering;
 using UnityEditor;
 using System.IO;
 using System.Text;
-using UnityEngine.Experimental.GlobalIllumination;
 
 namespace GpuGenerationPipeline
 {
@@ -235,7 +234,6 @@ namespace GpuGenerationPipeline
                 Console.WriteLine("Finished GPU (async) iteration: " + s);
             }
 
-            //TODO: I might want to make first barrier optional and instead measure time from the moment of dispatch
             {
                 string path = Path.Combine(Application.persistentDataPath, "async_gpu_performance_evaluation.txt");
                 var sb = new StringBuilder();
