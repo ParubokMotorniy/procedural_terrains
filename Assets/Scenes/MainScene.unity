@@ -618,6 +618,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CameraOverride
   controller: {fileID: 330585550}
+  cineCamera: {fileID: 330585549}
 --- !u!114 &330585553
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1531,6 +1532,7 @@ MonoBehaviour:
   generatorsToRender:
   - {fileID: 385078006}
   - {fileID: 252387138}
+  mainCamera: {fileID: 330585552}
 --- !u!4 &1690684114
 Transform:
   m_ObjectHideFlags: 0

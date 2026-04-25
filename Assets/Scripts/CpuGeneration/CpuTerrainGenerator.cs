@@ -280,7 +280,7 @@ namespace CpuGenerationPipeline
             }
         }
 
-        public override string getPipelineName() => "CPU pipeline constructor";
+        public override string getPipelineName() => "CPU";
 
         [ContextMenu("Collect statistics")]
         async void CollectStatistics()

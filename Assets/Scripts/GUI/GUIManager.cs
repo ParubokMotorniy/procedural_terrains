@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using UnityEngine;
 
 public class GUIManager : MonoBehaviour
@@ -12,13 +13,18 @@ public class GUIManager : MonoBehaviour
     [SerializeField]
     List<TunableGenerator> generatorsToRender;
 
-    private const float PANEL_WIDTH = 350f;
+    [SerializeField]
+    public CameraOverride mainCamera;
+
+    private const float PANEL_WIDTH = 300f;
     private const float MARGIN = 10f;
-    private const float LOG_WINDOW_HEIGHT = 150f;
+    private const float LOG_WINDOW_HEIGHT = 100f;
+    private const float FOCUS_WINDOW_HEIGHT = 50f;
     private Vector2 tunerScroll;
     private Vector2 pipelineScroll;
     private Vector2 logScroll;
     private bool guiRenderingIsEnabled = true;
+    private int currentFocus = 0;
 
     public void SetGUIRenderingEnabled(bool ifEnabled)
     {
@@ -33,6 +39,7 @@ public class GUIManager : MonoBehaviour
 
         LogCollector.Init();
         UnityEngine.Debug.Log(Stopwatch.Frequency);
+        // mainCamera.swapTarget(generatorsToRender[currentFocus].transform);
 
     }
 
@@ -113,6 +120,13 @@ public class GUIManager : MonoBehaviour
             LOG_WINDOW_HEIGHT
         );
 
+        Rect focusWindowRect = new Rect(
+            MARGIN + PANEL_WIDTH,
+            logWindowRect.y - FOCUS_WINDOW_HEIGHT,
+            Screen.width - 2 * (PANEL_WIDTH + MARGIN),
+            FOCUS_WINDOW_HEIGHT
+        );
+
         {
             GUILayout.BeginArea(stepsRect, GUI.skin.box);
             GUILayout.Label("Tuners");
@@ -140,6 +154,19 @@ public class GUIManager : MonoBehaviour
         }
 
         DrawLogWindow(logWindowRect);
+        DrawFocusWindow(focusWindowRect);
+    }
+
+    private void DrawFocusWindow(Rect focusWindowRect)
+    {
+        GUILayout.BeginArea(focusWindowRect, GUI.skin.box);
+
+        GUILayout.Label("Camera focus");
+
+        currentFocus = GUILayout.Toolbar(currentFocus, generatorsToRender.Select(x => x.getPipelineName()).ToArray());
+        mainCamera.swapTarget(generatorsToRender[currentFocus].transform);
+
+        GUILayout.EndArea();
     }
 
     public static void DrawPipelineList(
@@ -147,7 +174,7 @@ public class GUIManager : MonoBehaviour
     )
     {
         if (GUILayout.Button(
-                (generator.pipelineFoldout ? "▼ " : "▶ ") + generator.getPipelineName(),
+                (generator.pipelineFoldout ? "▼ " : "▶ ") + generator.getPipelineName() + " pipeline constructor",
                 GUI.skin.label))
         {
             generator.pipelineFoldout = !generator.pipelineFoldout;

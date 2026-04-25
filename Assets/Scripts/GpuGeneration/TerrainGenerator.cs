@@ -481,6 +481,6 @@ namespace GpuGenerationPipeline
             }
         }
 
-        public override string getPipelineName() => "GPU pipeline constructor";
+        public override string getPipelineName() => "GPU";
     }
 }
