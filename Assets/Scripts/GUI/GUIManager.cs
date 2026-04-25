@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.TextCore;
 
 public class GUIManager : MonoBehaviour
 {
@@ -38,9 +39,8 @@ public class GUIManager : MonoBehaviour
             foldouts.Add(false);
 
         LogCollector.Init();
-        UnityEngine.Debug.Log(Stopwatch.Frequency);
-        // mainCamera.swapTarget(generatorsToRender[currentFocus].transform);
-
+        mainCamera.swapTarget(generatorsToRender[currentFocus].transform);
+        generatorsToRender[currentFocus + 1].gameObject.SetActive(false);
     }
 
     void DrawTunerSection(int index, TunableObject section)
@@ -163,7 +163,9 @@ public class GUIManager : MonoBehaviour
 
         GUILayout.Label("Camera focus");
 
+        generatorsToRender[currentFocus].gameObject.SetActive(false);
         currentFocus = GUILayout.Toolbar(currentFocus, generatorsToRender.Select(x => x.getPipelineName()).ToArray());
+        generatorsToRender[currentFocus].gameObject.SetActive(true);
         mainCamera.swapTarget(generatorsToRender[currentFocus].transform);
 
         GUILayout.EndArea();
@@ -190,7 +192,7 @@ public class GUIManager : MonoBehaviour
         if (GUILayout.Button("+", GUILayout.Width(30)))
         {
             generator.pipeline.Add(
-                generator.pipeline.Count > 0 ? generator.pipeline[^1] : default
+                generator.pipeline.Count > 0 ? CommonDefines.AvailablePipelineSteps.HE : CommonDefines.AvailablePipelineSteps.UN
             );
         }
 
@@ -224,10 +226,12 @@ public class GUIManager : MonoBehaviour
 
             GUILayout.Label($"Step {i}");
 
-            int current = Convert.ToInt32(generator.pipeline[i]);
+            int offset = i == 0 ? 0 : generatorsNames.Length;
+
+            int current = Convert.ToInt32(generator.pipeline[i] - offset);
             int selected = GUILayout.Toolbar(current, i == 0 ? generatorsNames : erodersNames);
 
-            generator.pipeline[i] = (CommonDefines.AvailablePipelineSteps)Enum.ToObject(typeof(CommonDefines.AvailablePipelineSteps), selected);
+            generator.pipeline[i] = (CommonDefines.AvailablePipelineSteps)Enum.ToObject(typeof(CommonDefines.AvailablePipelineSteps), selected + offset);
 
             GUILayout.EndVertical();
         }

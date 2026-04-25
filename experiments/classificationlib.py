@@ -2,9 +2,9 @@ import joblib
 import numpy as np
 import pandas as pd
 
-family_weights_glob = {"mlp": 0.48, "svm": 0.51}
+family_weights_glob = {"mlp": 0.5, "svm": 0.5}
 subsets_glob = [[0, 1], [2, 3], [4, 5]]
-subset_weights_glob = [0.36, 0.34, 0.28]
+subset_weights_glob = [0.36, 0.36, 0.28]
 
 
 def classify_with_ensemble(

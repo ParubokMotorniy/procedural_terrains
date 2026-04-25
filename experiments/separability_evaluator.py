@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
 from sklearn.svm import SVC
 from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold
-from sklearn.metrics import accuracy_score, roc_curve, auc
+from sklearn.metrics import accuracy_score, roc_curve, auc, f1_score
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
@@ -40,7 +40,7 @@ def evaluate_separability(
         "fractal",
         "aesthetical",
     ],
-    legend_pos=[(0.35, 0.07), (0.05, 0.07), (0.05, 0.8)],
+    legend_pos=[(0.27, 0.05), (0.05, 0.05), (0.25, 0.7)],
     axes_names=[
         (r"$m_\text{erosion}$", r"$m_\text{gradient}$"),
         (r"$D$", r"$\beta$"),
@@ -84,7 +84,7 @@ def evaluate_separability(
         print(f"KMeans        | Best k={best_k} | Accuracy: {best_km_acc:.4f}")
 
         # ======================
-        # HDBSCAN (SEARCH)
+        # HDBSCAN
         # ======================
         best_hdb_acc = 0
         best_hdb_out = 1.0
@@ -127,9 +127,11 @@ def evaluate_separability(
 
         tprs = []
         aucs = []
+        svm_f1 = []
         mean_fpr = np.linspace(0, 1, 200)
 
         qda_aucs = []
+        qda_f1 = []
 
         for train_idx, test_idx in skf.split(X_sub, y):
             X_train, X_test = X_sub[train_idx], X_sub[test_idx]
@@ -158,8 +160,17 @@ def evaluate_separability(
             aucs.append(roc_auc)
 
             interp_tpr = np.interp(mean_fpr, fpr, tpr)
+
             interp_tpr[0] = 0.0
             tprs.append(interp_tpr)
+            svm_f1.append(
+                (
+                    # boring f1
+                    f1_score(y_test, (probs > 0.5).astype(int), pos_label=0),
+                    # interesting f1
+                    f1_score(y_test, (probs > 0.5).astype(int), pos_label=1),
+                )
+            )
 
             # QDA
             qda = QuadraticDiscriminantAnalysis(solver="eigen")
@@ -171,16 +182,28 @@ def evaluate_separability(
             roc_auc = auc(fpr, tpr)
 
             qda_aucs.append(roc_auc)
+            qda_f1.append(
+                (
+                    # boring f1
+                    f1_score(y_test, (qda_probs > 0.5).astype(int), pos_label=0),
+                    # interesting f1
+                    f1_score(y_test, (qda_probs > 0.5).astype(int), pos_label=1),
+                )
+            )
 
         mean_tpr = np.mean(tprs, axis=0)
         std_tpr = np.std(tprs, axis=0)
         mean_auc = np.mean(aucs)
         std_auc = np.std(aucs)
+        mean_f1 = np.sum([f1_1 + f1_2 for f1_1, f1_2 in svm_f1]) / (2.0 * len(svm_f1))
 
         print(f"SVM           | CV ROC-AUC: {mean_auc:.4f} ± {std_auc:.4f}")
 
         mean_qda_auc = np.mean(qda_aucs)
         std_qda_auc = np.std(qda_aucs)
+        mean_qda_f1 = np.sum([f1_1 + f1_2 for f1_1, f1_2 in qda_f1]) / (
+            2.0 * len(qda_f1)
+        )
 
         print(f"QDA           | CV ROC-AUC: {mean_qda_auc:.4f} ± {std_qda_auc:.4f}")
 
@@ -203,8 +226,8 @@ def evaluate_separability(
                 "Clusterization:\n"
                 f"{'KMeans':8} | {'Accuracy':8} : {best_km_acc:.4f}\n"
                 f"{'HDBSCAN':8} | {'Acc':8} : {best_hdb_acc:.4f} | Out: {best_hdb_out:.3f}\n"
-                f"{'SVM':8} | {'ROC-AUC':8} : {mean_auc:.4f} ± {std_auc:.4f}\n"
-                f"{'QDA':8} | {'ROC-AUC':8} : {mean_qda_auc:.4f} ± {std_qda_auc:.4f}"
+                f"{'SVM':8} | {'ROC-AUC':8} : {mean_auc:.4f} ± {std_auc:.4f} | $\overline{{F1}}$ : {mean_f1:.2f}\n"
+                f"{'QDA':8} | {'ROC-AUC':8} : {mean_qda_auc:.4f} ± {std_qda_auc:.4f} | $\overline{{F1}}$ : {mean_qda_f1:.2f}"
             )
             plt.annotate(
                 text,
@@ -233,6 +256,7 @@ def evaluate_separability(
                 "std_tpr": std_tpr,
                 "mean_auc": mean_auc,
                 "std_auc": std_auc,
+                "avg_f1": mean_f1,
             }
 
             # ======================
@@ -263,12 +287,12 @@ def evaluate_separability(
                 "Clusterization:\n"
                 f"{'KMeans':8} | {'Accuracy':8} : {best_km_acc:.4f}\n"
                 f"{'HDBSCAN':8} | {'Acc':8} : {best_hdb_acc:.4f} | Out: {best_hdb_out:.3f}\n"
-                f"{'SVM':8} | {'ROC-AUC':8} : {mean_auc:.4f} ± {std_auc:.4f}\n"
-                f"{'QDA':8} | {'ROC-AUC':8} : {mean_qda_auc:.4f} ± {std_qda_auc:.4f}"
+                f"{'SVM':8} | {'ROC-AUC':8} : {mean_auc:.4f} ± {std_auc:.4f} | $\overline{{F1}}$ : {mean_f1:.2f}\n"
+                f"{'QDA':8} | {'ROC-AUC':8} : {mean_qda_auc:.4f} ± {std_qda_auc:.4f} | $\overline{{F1}}$ : {mean_qda_f1:.2f}"
             )
             plt.annotate(
                 text,
-                (0.35, 0.7),
+                (0.05, 0.7),
                 xycoords="axes fraction",
                 bbox=dict(
                     boxstyle="round",
@@ -313,12 +337,12 @@ def evaluate_separability(
                 "Clusterization:\n"
                 f"{'KMeans':8} | {'Accuracy':8} : {best_km_acc:.4f}\n"
                 f"{'HDBSCAN':8} | {'Acc':8} : {best_hdb_acc:.4f} | Out: {best_hdb_out:.3f}\n"
-                f"{'SVM':8} | {'ROC-AUC':8} : {mean_auc:.4f} ± {std_auc:.4f}\n"
-                f"{'QDA':8} | {'ROC-AUC':8} : {mean_qda_auc:.4f} ± {std_qda_auc:.4f}"
+                f"{'SVM':8} | {'ROC-AUC':8} : {mean_auc:.4f} ± {std_auc:.4f} | $\overline{{F1}}$ : {mean_f1:.2f}\n"
+                f"{'QDA':8} | {'ROC-AUC':8} : {mean_qda_auc:.4f} ± {std_qda_auc:.4f} | $\overline{{F1}}$ : {mean_qda_f1:.2f}"
             )
             plt.annotate(
                 text,
-                (0.05, 0.07),
+                (0.05, 0.05),
                 xycoords="axes fraction",
                 bbox=dict(
                     boxstyle="round",
@@ -345,7 +369,7 @@ def evaluate_separability(
     plt.plot(
         roc_data["mean_fpr"],
         roc_data["mean_tpr"],
-        label=f"SVM (AUC = {roc_data['mean_auc']:.3f} ± {roc_data['std_auc']:.3f})",
+        label=f"SVM (AUC = {roc_data['mean_auc']:.3f} ± {roc_data['std_auc']:.3f}, $\overline{{F1}}$ = {roc_data["avg_f1"]:.2f})",
         linewidth=2,
     )
 

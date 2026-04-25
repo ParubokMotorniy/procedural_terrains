@@ -28,13 +28,12 @@ def plot_boxplots(classification_results, algos_names, title, subtitle, save_pat
 
     df = pd.DataFrame(data)
 
-    plt.figure(figsize=(5, 4.5))
-
-    sns.boxplot(
+    plt.figure(figsize=(5, 5))
+    ax = sns.boxplot(
         x="Algorithm",
         y="Score",
         data=df,
-        width=0.6,
+        width=0.45,
         whis=[0, 100],
         palette="pastel",
         showfliers=False,
@@ -50,7 +49,80 @@ def plot_boxplots(classification_results, algos_names, title, subtitle, save_pat
         jitter=True,
     )
 
-    plt.ylim(0, 1.0)
+    # ======================
+    # Annotations
+    # ======================
+    for i, algo_name in enumerate(algos_names):
+        values = np.array(classification_results[i])
+
+        q0 = np.percentile(values, 0)
+        q1 = np.percentile(values, 25)
+        median = np.percentile(values, 50)
+        q3 = np.percentile(values, 75)
+        q4 = np.percentile(values, 100)
+
+        x = i
+
+        x_offset = 0.25
+
+        # Median annotation
+        ax.text(
+            x + x_offset,
+            median,
+            f"{median:.2f}",
+            va="center",
+            ha="left",
+            fontsize=8,
+            color="black",
+        )
+
+        # Q1 annotation
+        if np.abs(median - q1) >= 0.035:
+            ax.text(
+                x + x_offset,
+                q1,
+                f"{q1:.2f}",
+                va="center",
+                ha="left",
+                fontsize=7,
+                color="gray",
+            )
+
+        # Q3 annotation
+        if np.abs(median - q3) >= 0.035:
+            ax.text(
+                x + x_offset,
+                q3,
+                f"{q3:.2f}",
+                va="center",
+                ha="left",
+                fontsize=7,
+                color="gray",
+            )
+
+        # Q0 annotation
+        ax.text(
+            x + x_offset,
+            q0,
+            f"{q0:.2f}",
+            va="center",
+            ha="left",
+            fontsize=7,
+            color="lightgray",
+        )
+
+        # Q4 annotation
+        ax.text(
+            x + x_offset,
+            q4,
+            f"{q4:.2f}",
+            va="center",
+            ha="left",
+            fontsize=7,
+            color="lightgray",
+        )
+
+    plt.ylim(0.0, 1.0)
     plt.ylabel("Classification score")
     plt.title(f"{title}\n{subtitle}")
     plt.grid(True, linestyle="--", alpha=0.4)
@@ -71,7 +143,8 @@ def classify_and_plot_heightmaps(
         classification_results = []
         for dir_path in feature_dirs:
 
-            feature_vector_file_name = f"{Path(dir_path).name}_feature_vectors_new.csv"
+            feature_vector_file_name = f"{Path(dir_path).name}_feature_vectors_new{"_".join(sub_title.lower().replace(":", "_").split())
+            + "_".join(custom_title.lower().replace(":", "_").split())}.csv"
             if Path.exists(Path(feature_vector_file_name)):
                 print("Loading precomputed feature vectors!")
                 algo_feature_vectors_pd = pd.read_csv(feature_vector_file_name)
@@ -118,9 +191,20 @@ def classify_and_plot_heightmaps(
     elif classfication_mode == "llm":
         classification_results = []
         for dir_path in [args.fft_dir, args.rmd_dir, args.sdf_dir, args.un_dir]:
-            algo_classification_results = llmlib.classification_routine(
-                dir_path, "class_res"
-            )
+            llm_class_file_name = f"{Path(dir_path).name}_llm_rate{"_".join(sub_title.lower().replace(":", "_").split())
+            + "_".join(custom_title.lower().replace(":", "_").split())}.csv"
+            if Path.exists(Path(llm_class_file_name)):
+                print("Loading precomputed LLM rating!")
+                algo_classification_results = pd.read_csv(
+                    llm_class_file_name
+                ).to_numpy()[:, 1:]
+            else:
+                print(f"Rerating {Path(dir_path).name} with LLM!")
+                algo_classification_results = llmlib.classification_routine(
+                    dir_path, f"class_res_{Path(dir_path).name}"
+                )
+
+                pd.DataFrame(algo_classification_results).to_csv(llm_class_file_name)
 
             classification_results.append(algo_classification_results.ravel())
 
