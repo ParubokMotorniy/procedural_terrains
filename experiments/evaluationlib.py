@@ -128,7 +128,6 @@ def evaluate_erosion_score(heightmap: np.ndarray, nbins: int = 256):
     return erosion_score * delta_entropy
 
 
-# TODO: think how the magnitude can be included
 def evaluate_gradient_score(heightmap: np.ndarray, subdomainSize: int, nbins: int = 32):
     assert heightmap.min() >= 0.0 and heightmap.max() <= 1.0
     min_mean_gradient_span = 1.0e-6
@@ -242,10 +241,6 @@ def evaluate_fractal_score(heightmap: np.ndarray, threshold: float = None):
         threshold = find_balanced_threshold(quantized_heightmap)
 
     binary_heightmap = quantized_heightmap >= threshold
-
-    # Image.fromarray(quantized_heightmap >= threshold).save(
-    #     f"./{threshold}_{np.mean(heightmap)}_mask.png", format="PNG"
-    # )
 
     # --- fractal dimension ---
     data = pspy.metrics.boxcount(binary_heightmap, 15)
@@ -557,10 +552,6 @@ def get_metric_vector(
         )
     )
 
-    # Image.fromarray(split_visualization).save(
-    #     f"./{np.mean(heightmap):.3f}_split.png", format="PNG"
-    # )
-
     if verbose:
         print("-" * 32)
         print(f"Erosion score: {erosion_score}")
@@ -600,8 +591,6 @@ def build_metric_vectors(
         "exr": ([".exr"], read_exr_grayscale, 1.0),
         "jpg": ([".jpg", ".jpeg"], read_jpg_grayscale, 255.0),
         "jpeg": ([".jpg", ".jpeg"], read_jpg_grayscale, 255.0),
-        # "tif": ([".tif", ".tiff"],  read_tiff_grayscale),
-        # "tiff": ([".tif", ".tiff"], read_tiff_grayscale),
     }
 
     if fmt not in extensions:

@@ -111,7 +111,6 @@ def classification_routine(
             raw_classification.append(result_text)
             print(f"Classified {path.name}: {result_text}")
 
-            # Respect RPM Limit (60s / 15 requests = 4s delay)
             time.sleep(60 / CLASS_RPM)
 
         except Exception as e:

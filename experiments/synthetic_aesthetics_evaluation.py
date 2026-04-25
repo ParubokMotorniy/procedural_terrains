@@ -222,16 +222,16 @@ def classify_and_plot_heightmaps(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Aesthetics evaluation script")
     parser.add_argument(
-        "--fft-dir", type=str, required=True, help="The path to FFT data."
+        "--fft-dir", type=str, required=True, help="The path to FFT heightmap data."
     )
     parser.add_argument(
-        "--rmd-dir", type=str, required=True, help="The path to RMD data."
+        "--rmd-dir", type=str, required=True, help="The path to RMD heightmap data."
     )
     parser.add_argument(
-        "--sdf-dir", type=str, required=True, help="The path to SDF data."
+        "--sdf-dir", type=str, required=True, help="The path to SDF heightmap data."
     )
     parser.add_argument(
-        "--un-dir", type=str, required=True, help="The path to UN data."
+        "--un-dir", type=str, required=True, help="The path to UN heightmap data."
     )
     parser.add_argument(
         "--class-mode",
@@ -267,7 +267,7 @@ if __name__ == "__main__":
         "--sub-title",
         type=str,
         required=True,
-        help="The title to add.",
+        help="The subtitle to add.",
     )
 
     args = parser.parse_args()

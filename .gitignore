@@ -102,3 +102,5 @@ InitTestScene*.unity*
 *.meta
 /[Aa]ssets/_Recovery/*
 *.exr
+
+*__pycache__*

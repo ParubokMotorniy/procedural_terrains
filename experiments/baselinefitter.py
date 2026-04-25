@@ -85,21 +85,6 @@ def cross_validated_roc(model, X, y, n_splits=5):
 
     report_df = pd.DataFrame(avg_report)
 
-    # # Add ROC-AUC summary as separate row
-    # report_df.loc["roc_auc"] = {
-    #     "precision": np.nan,
-    #     "recall": np.nan,
-    #     "f1-score": mean_auc,
-    #     "support": np.nan,
-    # }
-
-    # report_df.loc["roc_auc_std"] = {
-    #     "precision": np.nan,
-    #     "recall": np.nan,
-    #     "f1-score": std_auc,
-    #     "support": np.nan,
-    # }
-
     return mean_fpr, mean_tpr, std_tpr, mean_auc, std_auc, report_df
 
 
@@ -504,28 +489,24 @@ def main():
                 )
             )
             interesting_vectors = interesting_vectors_pd.to_numpy()[:, 1:]
-            # print(np.where(np.isnan(interesting_vectors)), np.where(np.isinf(interesting_vectors)))
-            # interesting_vectors = np.nan_to_num(interesting_vectors)
             interesting_vectors = interesting_vectors[interesting_vectors[:, 2] != 2.0]
 
             boring_vectors_pd = pd.read_csv(
                 os.path.join(directory_boring, "boring_metric_vectors_4x4.csv")
             )
             boring_vectors = boring_vectors_pd.to_numpy()[:, 1:]
-            # print(np.where(np.isnan(boring_vectors)), np.where(np.isinf(boring_vectors)))
-            # boring_vectors = np.nan_to_num(boring_vectors)
             # boring_vectors = boring_vectors[boring_vectors[:, 2] != 2.0]
 
         if not args.only_embed:
-            # train_and_save_models_auto(
-            #     boring_vectors,
-            #     interesting_vectors,
-            #     None,
-            #     "test_model",
-            #     35,
-            #     state_mlp=295,
-            #     state_svm=447,
-            # )
+            train_and_save_models_auto(
+                boring_vectors,
+                interesting_vectors,
+                None,
+                "test_model",
+                35,
+                state_mlp=295,
+                state_svm=447,
+            )
             train_subset_ensemble_auto(
                 boring_vectors,
                 interesting_vectors,

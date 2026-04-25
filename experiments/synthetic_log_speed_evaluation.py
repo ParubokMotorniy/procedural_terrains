@@ -4,10 +4,6 @@
 
 import argparse
 
-import classificationlib as classlib
-import evaluationlib as elib
-import llm_baseline as llmlib
-import os
 from pathlib import Path
 
 import numpy as np
@@ -34,13 +30,12 @@ def plot_cpu_gpu_speedup(
     if x_values is None:
         x_values = np.arange(len(cpu_mean))
 
-    # Speedup = CPU / GPU
     speedup = cpu_mean / gpu_mean
 
-    fig, ax1 = plt.subplots(figsize=(5.5, 3.5))  # LaTeX-friendly
+    fig, ax1 = plt.subplots(figsize=(5.5, 3.5))
 
     # ======================
-    # LEFT AXIS → RUNTIME
+    # LEFT AXIS
     # ======================
     ax1.plot(x_values, cpu_mean, label="CPU Mean Runtime", linestyle="solid")
     ax1.fill_between(
@@ -64,9 +59,6 @@ def plot_cpu_gpu_speedup(
     ax1.set_yscale("log")
     ax1.grid(True, linestyle="dotted", alpha=0.4)
 
-    # ======================
-    # RIGHT AXIS → SPEEDUP
-    # ======================
     ax2 = ax1.twinx()
 
     ax2.plot(
@@ -79,7 +71,7 @@ def plot_cpu_gpu_speedup(
     ax2.set_ylabel("Speedup (× faster)")
 
     # ======================
-    # LEGEND (combined)
+    # LEGEND
     # ======================
     lines_1, labels_1 = ax1.get_legend_handles_labels()
     lines_2, labels_2 = ax2.get_legend_handles_labels()
