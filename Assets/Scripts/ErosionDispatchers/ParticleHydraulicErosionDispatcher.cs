@@ -12,7 +12,7 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
     [SerializeField]
     public ComputeShader erosionComputeShader;
 
-    [Range(7, 32)]
+    [Range(6, 32)]
     public int numSimultaneousParticles = 10;
 
     [Range(1, 3)]
@@ -27,7 +27,7 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
     [Range(0.01f, 1.0f)]
     public float inertia = 0.1f;
 
-    [Range(0.01f, 64.0f)]
+    [Range(0.01f, 32.0f)]
     public float capacity = 2.0f;
 
     [Range(0.0001f, 1.0f)]
@@ -42,7 +42,7 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
     [Range(0.01f, 10.0f)]
     public float gravity = 0.4f;
 
-    [Range(0.0001f, 1.0f)]
+    [Range(0.0001f, 0.5f)]
     public float evaporation = 0.01f;
 
     [Range(0.01f, 0.45f)]
@@ -157,6 +157,10 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
         if (RuntimeAssert.IsTrue(textureSize % (numResolveGroups * preferredGroupSize) == 0, "Texels must be distributed among threads evenly! Try adjusting heightmap or threadgroup size."))
             return;
 
+        uint garbageCollectorRunPeriod = (uint)math.floor(math.log2(waterDeathThreshold) / math.log2(1.0f - evaporation));
+        RuntimeAssert.IsTrue(math.abs(evaporation) >= 1.0e-7 && math.abs(waterDeathThreshold - 0.5) >= 1.0e-7, "Broken particle reinitialization period. Try adjusting the water level threshold.");
+        garbageCollectorRunPeriod = (uint)(garbageCollectorRunPeriod == 0 ? numSimulationSteps : math.min(garbageCollectorRunPeriod, numSimulationSteps));
+
         var integrateDispatchGroups = new Vector3(numIntegrationGroups, 1, 1);
         var resolveDispatchGroups = new Vector3(numResolveGroups, numResolveGroups, 1);
 
@@ -186,10 +190,6 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
                     return;
             }
         }
-
-        int garbageCollectorRunPeriod = (int)math.floor(math.log2(2 * waterDeathThreshold) / math.log2(1.0f - evaporation));
-        if (RuntimeAssert.IsTrue(math.abs(evaporation) >= 1.0e-5 && math.abs(waterDeathThreshold - 0.5) >= 1.0e-5, "Broken particle reinitialization period. Try adjusting the water level threshold."))
-            return;
 
         foreach (int kernelIdx in new[] { pipesInitializerKernelIdx, particlesInitializerKernelIdx, integratorKernelIdx, garbageCollectorKernelIdx, changeResolverKernelIdx })
         {
@@ -232,7 +232,7 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
                         {
                             pipelineContext.SetRandomInts(erosionComputeShader, PID_randomInts);
                             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, garbageCollectorKernelIdx, integrateDispatchGroups);
-                            gcRunInsertionPeriod = s / garbageCollectorRunPeriod;
+                            gcRunInsertionPeriod = (int)(s / garbageCollectorRunPeriod);
                         }
                     }
                 }
@@ -465,9 +465,9 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
         if (RuntimeAssert.IsTrue(erosionNeighborhood <= pipeMapCenterCoord, ""))
             return Task.CompletedTask;
 
-        int garbageCollectorRunPeriod = (int)math.floor(math.log2(2 * waterDeathThreshold) / math.log2(1.0f - evaporation));
-        if (RuntimeAssert.IsTrue(math.abs(evaporation) >= 1.0e-5 && math.abs(waterDeathThreshold - 0.5) >= 1.0e-5, "Broken particle reinitialization period. Try adjusting the water level threshold."))
-            return Task.CompletedTask;
+        uint garbageCollectorRunPeriod = (uint)math.floor(math.log2(waterDeathThreshold) / math.log2(1.0f - evaporation));
+        RuntimeAssert.IsTrue(math.abs(evaporation) >= 1.0e-7 && math.abs(waterDeathThreshold - 0.5) >= 1.0e-7, "Broken particle reinitialization period. Try adjusting the water level threshold.");
+        garbageCollectorRunPeriod = (uint)(garbageCollectorRunPeriod == 0 ? numSimulationSteps : math.min(garbageCollectorRunPeriod, numSimulationSteps));
 
         {
             if (particlesBuffer is null || particlesBuffer.Length != numActualParticles)
@@ -516,7 +516,7 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
                         if (s / garbageCollectorRunPeriod != gcRunInsertionPeriod)
                         {
                             GarbageCollector(intermediateHeightmap.heightmapDimensions, particlesBuffer, pipelineContext);
-                            gcRunInsertionPeriod = s / garbageCollectorRunPeriod;
+                            gcRunInsertionPeriod = (int)(s / garbageCollectorRunPeriod);
                         }
                     }
                 }
@@ -539,7 +539,7 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
 
         GUILayout.Label($"Particles: {numSimultaneousParticles}");
         numSimultaneousParticles = Mathf.RoundToInt(
-            GUILayout.HorizontalSlider(numSimultaneousParticles, 7f, 32f)
+            GUILayout.HorizontalSlider(numSimultaneousParticles, 6f, 32f)
         );
 
         GUILayout.Label($"Steps: {numSimulationSteps}");
@@ -562,13 +562,13 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
         gravity = GUILayout.HorizontalSlider(gravity, 0.01f, 10.0f);
 
         GUILayout.Label($"Evaporation: {evaporation:F4}");
-        evaporation = GUILayout.HorizontalSlider(evaporation,0.0001f, 1.0f);
+        evaporation = GUILayout.HorizontalSlider(evaporation, 0.0001f, 0.5f);
 
         GUILayout.Space(5);
         GUILayout.Label("Sediment");
 
         GUILayout.Label($"Capacity: {capacity:F2}");
-        capacity = GUILayout.HorizontalSlider(capacity, 0.01f, 64.0f);
+        capacity = GUILayout.HorizontalSlider(capacity, 0.01f, 32.0f);
 
         GUILayout.Label($"Min Slope: {minSlope:F4}");
         minSlope = GUILayout.HorizontalSlider(minSlope, 0.0001f, 1.0f);
@@ -622,12 +622,12 @@ public class ParticleHydraulicErosionDispatcher : UltimatePipelineStep
         // rainNoiseFrequency
 
         inertia = (float)math.max(random.NextDouble(), 0.01);
-        capacity = (float)math.max(random.NextDouble() * 64.0, 0.01);
+        capacity = (float)math.max(random.NextDouble() * 32.0, 0.01);
         minSlope = (float)math.max(random.NextDouble(), 0.01);
         deposition = (float)math.max(random.NextDouble(), 0.01);
         erosion = (float)math.max(random.NextDouble(), 0.01);
         gravity = (float)math.max(random.NextDouble() * 10.0, 0.01);
-        evaporation = (float)math.max(random.NextDouble(), 0.0001f);
-        waterDeathThreshold = math.clamp((float)random.NextDouble(), 0.01f, 0.5f);
+        evaporation = math.max((float)random.NextDouble() * 0.5f, 0.0001f);
+        waterDeathThreshold = math.max((float)random.NextDouble() * 0.5f, 0.01f);
     }
 }

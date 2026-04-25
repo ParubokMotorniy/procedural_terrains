@@ -20,7 +20,7 @@ namespace GpuGenerationPipeline
         [Range(5, 12)]
         public int terrainSize = 5;
 
-        [Range(3, 6)]
+        [Range(3, 5)]
         public int preferredGroupSizePower = 5;
 
         [Range(0.001f, 32.0f)]
@@ -231,7 +231,8 @@ namespace GpuGenerationPipeline
                     continue;
                 await newContext.ExecuteBuffer();
                 result[s] = (newContext.gpuFenceMilliseconds, newContext.gpuFrameTime);
-                RenderTextureDumper.SaveRFloatToJpg(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples_gpu/async_gpu_terrain_" + s + ".jpg"));
+                RenderTextureDumper.SaveRFloatToJpg(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples_gpu/" + (int)math.pow(2, terrainSize) + "async_gpu_terrain_" + s + ".jpg"));
+                Console.WriteLine("Finished GPU (async) iteration: " + s);
             }
 
             //TODO: I might want to make first barrier optional and instead measure time from the moment of dispatch
@@ -334,9 +335,10 @@ namespace GpuGenerationPipeline
                 await newContext.ExecuteBuffer();
 
                 synchronizedResults[myIteration] = (newContext.gpuFenceMilliseconds, newContext.gpuFenceTicks, newContext.gpuFrameTime);
-
                 RenderTextureDumper.SaveRFloatToJpg(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples_gpu/sync_gpu_terrain_" + myIteration + ".jpg"), false);
                 previousReadPending = false;
+
+                Console.WriteLine("Finished GPU (sync) iteration: " + synchronizedIterationsLeft);
 
                 if (myIteration == 0)
                 {
@@ -411,7 +413,7 @@ namespace GpuGenerationPipeline
 
             GUILayout.Label($"Group Size Power: {preferredGroupSizePower}");
             preferredGroupSizePower = Mathf.RoundToInt(
-                GUILayout.HorizontalSlider(preferredGroupSizePower, 3f, 6f)
+                GUILayout.HorizontalSlider(preferredGroupSizePower, 3f, 5f)
             );
 
             GUILayout.Label($"Terrain Scale: {terrainScale:F3}");

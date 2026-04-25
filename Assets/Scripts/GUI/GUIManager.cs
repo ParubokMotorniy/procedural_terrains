@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using UnityEngine;
 
 public class GUIManager : MonoBehaviour
@@ -31,6 +32,8 @@ public class GUIManager : MonoBehaviour
             foldouts.Add(false);
 
         LogCollector.Init();
+        UnityEngine.Debug.Log(Stopwatch.Frequency);
+
     }
 
     void DrawTunerSection(int index, TunableObject section)
@@ -185,6 +188,8 @@ public class GUIManager : MonoBehaviour
         generator.scroll = GUILayout.BeginScrollView(generator.scroll);
 
         string[] names = Enum.GetNames(typeof(CommonDefines.AvailablePipelineSteps));
+        string[] generatorsNames = new string[4] { names[0], names[1], names[2], names[3] };
+        string[] erodersNames = new string[3] { names[4], names[5], names[6] };
 
         for (int i = 0; i < generator.pipeline.Count; i++)
         {
@@ -193,7 +198,7 @@ public class GUIManager : MonoBehaviour
             GUILayout.Label($"Step {i}");
 
             int current = Convert.ToInt32(generator.pipeline[i]);
-            int selected = GUILayout.Toolbar(current, names);
+            int selected = GUILayout.Toolbar(current, i == 0 ? generatorsNames : erodersNames);
 
             generator.pipeline[i] = (CommonDefines.AvailablePipelineSteps)Enum.ToObject(typeof(CommonDefines.AvailablePipelineSteps), selected);
 

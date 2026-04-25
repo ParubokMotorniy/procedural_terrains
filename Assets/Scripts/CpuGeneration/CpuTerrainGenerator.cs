@@ -319,8 +319,10 @@ namespace CpuGenerationPipeline
                     await currentPipeline.RunPipelineRandomized(randomSeedGenerator.Next());
                 else
                     await currentPipeline.RunPipeline();
+
+                Console.WriteLine("Finished CPU iteration: " + s);
                 runtimeResults[s] = (cpuProfilingStopwatch.ElapsedMilliseconds, cpuProfilingStopwatch.ElapsedTicks);
-                RenderTextureDumper.SaveRFloatToJpg(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples_cpu/cpu_terrain_" + s + ".jpg"));
+                RenderTextureDumper.SaveRFloatToJpg(finalHeightmap, Path.Combine(Application.persistentDataPath, "./samples_cpu/" + (int)math.pow(2, terrainSize) + "cpu_terrain_" + s + ".jpg"));
             }
             {
                 string path = Path.Combine(Application.persistentDataPath, "cpu_performance_evaluation.txt");

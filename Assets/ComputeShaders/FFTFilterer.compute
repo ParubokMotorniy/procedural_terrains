@@ -15,6 +15,9 @@ uniform float H;
 
 uniform int2 randomSeeds;
 
+#pragma multi_compile_local INV_GROUP_1 INV_GROUP_2 INV_GROUP_4 INV_GROUP_8 INV_GROUP_16
+#pragma multi_compile GLOBAL_GROUP_8 GLOBAL_GROUP_16 GLOBAL_GROUP_32 GLOBAL_GROUP_64
+
 float2 computeUniformRandomCoordinates(uint2 targetTextureCoordinates, int passId)
 {
     uint seed = seedFromXYPass(targetTextureCoordinates.x, targetTextureCoordinates.y, passId);
@@ -51,7 +54,14 @@ float2 getEffectiveCoefficient(uint2 mathematicalCoordinates)
 }
 
 #pragma kernel CoefficientGenerator
-[numthreads(16, 16, 1)] void CoefficientGenerator(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
+#if GLOBAL_GROUP_8
+[numthreads(8, 8, 1)]
+#elif GLOBAL_GROUP_16
+[numthreads(16, 16, 1)]
+#elif GLOBAL_GROUP_32
+[numthreads(32, 32, 1)]
+#endif 
+void CoefficientGenerator(uint3 localId : SV_GroupThreadID, uint3 globalId : SV_DispatchThreadID, uint3 groupId : SV_GroupID)
 {
     uint2 threadTopLeftCorner = globalId.xy * texelsPerThread;
     float exponent = -(H + 1.0) * 0.5;
@@ -90,9 +100,21 @@ float2 getEffectiveCoefficient(uint2 mathematicalCoordinates)
 
 // in general, this thing wouldn't need multiple dispatches to complete. However, that would require thread barrier in a loop, which I find quite restrictive currently.
 #pragma kernel InverseFFT
+#if INV_GROUP_1
+#define INV_GROUP_SIZE 1
+#elif INV_GROUP_2
+#define INV_GROUP_SIZE 2
+#elif INV_GROUP_4
+#define INV_GROUP_SIZE 4
+#elif INV_GROUP_8
+#define INV_GROUP_SIZE 8
+#elif INV_GROUP_16
 #define INV_GROUP_SIZE 16
+#endif
+
 groupshared float localHeightContributions[INV_GROUP_SIZE][INV_GROUP_SIZE];
-[numthreads(INV_GROUP_SIZE, INV_GROUP_SIZE, 1)] void InverseFFT(uint3 localId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+[numthreads(INV_GROUP_SIZE, INV_GROUP_SIZE, 1)]
+void InverseFFT(uint3 localId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
 {
     uint2 threadTopLeftCorner = localId.xy * invTexelsPerThread;   // gives the top left corner in the coefficient map space
     uint2 groupTopLeftCorner = groupId.xy * texelsPerInverseGroup; // gives the top left corner in the textures space, prtocessed by a group

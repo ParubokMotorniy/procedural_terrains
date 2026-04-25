@@ -4,10 +4,12 @@ public static class CommonDefines
 {
     public enum AvailablePipelineSteps
     {
+        //generators
         UN,
         RMD,
         FFT,
         SDF,
+        //eroders
         HE,
         TE,
         PE

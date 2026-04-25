@@ -25,7 +25,7 @@ static const uint MAX_UINT = 0xFFFFFFFFu;
 static const uint2 MAX_COORD = uint2(MAX_UINT, MAX_UINT);
 
 #pragma multi_compile GLOBAL_GROUP_8 GLOBAL_GROUP_16 GLOBAL_GROUP_32 GLOBAL_GROUP_64
-#pragma multi_compile USE_MASK NOT_USE_MASK
+#pragma multi_compile_local USE_MASK NOT_USE_MASK
 
 uint2 readFromBuffer(uint2 targetCoord)
 {

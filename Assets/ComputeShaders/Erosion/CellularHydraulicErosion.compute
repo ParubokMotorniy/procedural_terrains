@@ -301,7 +301,7 @@ float computeLargerVelocity(int2 processedTexel, out int2 flowDirection)
     float vR = 0.5 * (pipesBuffer[neighborTopRight].inWaterPipes[2][0] + pipesBuffer[centerLin].inWaterPipes[2][0] - pipesBuffer[neighborBottomLeft].inWaterPipes[0][2] - pipesBuffer[centerLin].inWaterPipes[0][2]);
 
     float2 velocityVector = float2(1, 0) * vX + float2(0, 1) * vY + float2(1, 1) * vL + float2(1, -1) * vR;
-    flowDirection = round(normalize(velocityVector));
+    flowDirection = abs(velocityVector) < EPS ? int2(0, 0) : round(normalize(velocityVector));
 
     return sqrt(dot(velocityVector, velocityVector));
 }
@@ -347,6 +347,7 @@ float computeLargerVelocity(int2 processedTexel, out int2 flowDirection)
                 {
                     // sediment amount is increased
                     float localSoftness = computeSoftnessCoefficient(heightGradientAtTexel, terrainHeightAtTexel, 0.1);
+                    
                     // we can't dissolve more than height
                     sedimentAdjustment = min(localSoftness * (localSedimentCapacity - sedimentLevelAtTexel) * solubilityConstant, terrainHeightAtTexel);
                 }
@@ -360,7 +361,8 @@ float computeLargerVelocity(int2 processedTexel, out int2 flowDirection)
             float waterLostAtTexel = abs(pipesBuffer[centerLin].inWaterPipes[1][1]);
             float intermediateSedimentLevel = sedimentLevelAtTexel + sedimentAdjustment;
             float sedimentLostDueToFlow = intermediateSedimentLevel * (waterLostAtTexel / waterLevelAtTexel);
-
+            
+            if(transportationDirection.x != 0 || transportationDirection.y != 0)
             {
                 int2 processedNeighbor = terrainWrap(processedTexel + transportationDirection, heightmapDimensions);
                 int nLin = index2dTo1d(heightmapDimensions, processedNeighbor);

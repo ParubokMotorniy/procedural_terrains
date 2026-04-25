@@ -13,8 +13,11 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
 {
     [SerializeField]
     public ComputeShader erosionComputeShader;
-    [Range(5, 150)]
+    [Range(5, 1000)]
     public int erosionIterationLimit = 25;
+
+    [Range(1, 100)]
+    public int rainfallPeriod = 10;
 
     [Range(0.0001f, 1.0f)]
     public float solubilityConstant;
@@ -171,7 +174,7 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
             pipelineContext.SetUniformInt(erosionComputeShader, PID_iterationIdx, d + 1);
 
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, pipePlumberKernelIdx, dispatchGroups);
-            if (d % 5 == 0)
+            if (d % rainfallPeriod == 0)
                 pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, rainDropKernelIdx, dispatchGroups);
 
             pipelineContext.AppendDispatchToCommandBuffer(erosionComputeShader, waterDistributorKernelIdx, dispatchGroups);
@@ -346,7 +349,7 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
         float vR = (float)(0.5 * (pipesBuffer[neighborTopRight.x, neighborTopRight.y].inWaterPipes[2, 0] + pipesBuffer[processedTexel.x, processedTexel.y].inWaterPipes[2, 0] - pipesBuffer[neighborBottomLeft.x, neighborBottomLeft.y].inWaterPipes[0, 2] - pipesBuffer[processedTexel.x, processedTexel.y].inWaterPipes[0, 2]));
 
         float2 velocityVector = new float2(1, 0) * vX + new float2(0, 1) * vY + new float2(1, 1) * vL + new float2(1, -1) * vR;
-        flowDirection = (int2)math.round(math.normalize(velocityVector));
+        flowDirection = (math.abs(velocityVector).x < CpuComputeUtilities.EPS) && (math.abs(velocityVector).y < CpuComputeUtilities.EPS) ? new int2(0, 0) : (int2)math.round(math.normalize(velocityVector));
 
         return math.sqrt(math.dot(velocityVector, velocityVector));
     }
@@ -414,6 +417,7 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
 
                 float sedimentLostDueToFlow = intermediateSedimentLevel * (waterLostAtTexel / waterLevelAtTexel);
 
+                if (flowDirection.x != 0 || flowDirection.y != 0)
                 {
                     int2 processedNeighbor = CpuComputeUtilities.terrainWrap(processedTexel + flowDirection, signedHeightmapDimension);
                     uint2 targetInPipe = pipeMap[flowDirection.x + 1, flowDirection.y + 1];
@@ -499,7 +503,7 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
                     Array.Clear(texelPipes[x, y].inWaterPipes, 0, 9);
                     Array.Clear(texelPipes[x, y].inSedimentPipes, 0, 9);
                 }
-            if (d % 5 == 0)
+            if (d % rainfallPeriod == 0)
                 RainDropper(intermediateHeightmap, actualTexelParameters, pipelineContext.GetRandomFloats(), cpuGradientsBuffer);
             WaterDistributor(intermediateHeightmap, actualTexelParameters, texelPipes);
             SedimentDistributor(intermediateHeightmap, actualTexelParameters, texelPipes, cpuGradientsBuffer);
@@ -523,7 +527,12 @@ public class CellularHydraulicErosionDispatcher : UltimatePipelineStep
 
         GUILayout.Label($"Erosion Iteration Limit: {erosionIterationLimit}");
         erosionIterationLimit = Mathf.RoundToInt(
-            GUILayout.HorizontalSlider(erosionIterationLimit, 5f, 100f)
+            GUILayout.HorizontalSlider(erosionIterationLimit, 5f, 1000f)
+        );
+
+        GUILayout.Label($"Rainfall period: {rainfallPeriod}");
+        rainfallPeriod = Mathf.RoundToInt(
+            GUILayout.HorizontalSlider(rainfallPeriod, 1f, 100f)
         );
 
         GUILayout.Space(5);
