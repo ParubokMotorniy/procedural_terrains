@@ -402,14 +402,14 @@ def main():
         "--vectors-interesting",
         type=str,
         required=True,
-        help="The path to features of 'interesting' terrains",
+        help="The path to csv with metric vectors of 'interesting' terrains",
     )
 
     parser.add_argument(
         "--vectors-boring",
         type=str,
         required=True,
-        help="The path to features of 'boring' terrains",
+        help="The path to csv with metric vectors of 'boring' terrains",
     )
 
     args = parser.parse_args()

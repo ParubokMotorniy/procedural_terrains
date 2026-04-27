@@ -264,12 +264,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GenerationControllerr
   shaderToDispatch: {fileID: 7200000, guid: 960e83aac4f822fd1b16e9e8930df0bb, type: 3}
-  noiseFrequency: 0.0015
-  H: 0.215
-  sharpness: 0.2792
+  noiseFrequency: 0.0011
+  H: 0.65
+  sharpness: 0.2
   numOctaves: 3
   slopeErosion: 0.005
-  perturbationStrength: 0.13
+  perturbationStrength: 0.11
 --- !u!4 &280840672
 Transform:
   m_ObjectHideFlags: 0
@@ -818,7 +818,7 @@ MonoBehaviour:
   generatorSeed: 9042026
   numSamples: 100
   randomizeParameters: 0
-  dumpTextures: 0
+  dumpTextures: 1
   useTestTexture: 0
   testTexture: {fileID: 2800000, guid: 14fa032c7256704c8a0ead7b71566301, type: 3}
   pipelineSteps: []
@@ -1029,6 +1029,43 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!84 &674373138
+RenderTexture:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: 
+  m_ImageContentsHash:
+    serializedVersion: 2
+    Hash: 00000000000000000000000000000000
+  m_IsAlphaChannelOptional: 0
+  serializedVersion: 6
+  m_Width: 512
+  m_Height: 512
+  m_AntiAliasing: 1
+  m_MipCount: -1
+  m_DepthStencilFormat: 0
+  m_ColorFormat: 21
+  m_MipMap: 0
+  m_GenerateMips: 1
+  m_SRGB: 1
+  m_UseDynamicScale: 0
+  m_UseDynamicScaleExplicit: 0
+  m_BindMS: 0
+  m_EnableCompatibleFormat: 1
+  m_EnableRandomWrite: 1
+  m_TextureSettings:
+    serializedVersion: 2
+    m_FilterMode: 1
+    m_Aniso: 1
+    m_MipBias: 0
+    m_WrapU: 1
+    m_WrapV: 1
+    m_WrapW: 1
+  m_Dimension: 2
+  m_VolumeDepth: 1
+  m_ShadowSamplingMode: 2
 --- !u!21 &812907298
 Material:
   serializedVersion: 8
@@ -1078,7 +1115,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _HeightMap:
-        m_Texture: {fileID: 1507843556}
+        m_Texture: {fileID: 674373138}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _Heightmap:
@@ -1389,7 +1426,7 @@ MonoBehaviour:
   erosionComputeShader: {fileID: 7200000, guid: fd1160cbc396f5665a006dc6a2d9b936, type: 3}
   distributionCoefficient: 0.75
   talusThreshold: 0.02
-  erosionIterationLimit: 50
+  erosionIterationLimit: 30
 --- !u!4 &1412956748
 Transform:
   m_ObjectHideFlags: 0
@@ -1405,43 +1442,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 471226916}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!84 &1507843556
-RenderTexture:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: 
-  m_ImageContentsHash:
-    serializedVersion: 2
-    Hash: 00000000000000000000000000000000
-  m_IsAlphaChannelOptional: 0
-  serializedVersion: 6
-  m_Width: 512
-  m_Height: 512
-  m_AntiAliasing: 1
-  m_MipCount: -1
-  m_DepthStencilFormat: 0
-  m_ColorFormat: 21
-  m_MipMap: 0
-  m_GenerateMips: 1
-  m_SRGB: 1
-  m_UseDynamicScale: 0
-  m_UseDynamicScaleExplicit: 0
-  m_BindMS: 0
-  m_EnableCompatibleFormat: 1
-  m_EnableRandomWrite: 1
-  m_TextureSettings:
-    serializedVersion: 2
-    m_FilterMode: 1
-    m_Aniso: 1
-    m_MipBias: 0
-    m_WrapU: 1
-    m_WrapV: 1
-    m_WrapW: 1
-  m_Dimension: 2
-  m_VolumeDepth: 1
-  m_ShadowSamplingMode: 2
 --- !u!1 &1592727439
 GameObject:
   m_ObjectHideFlags: 0
@@ -1578,7 +1578,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CellularHydraulicErosionDispatcher
   erosionComputeShader: {fileID: 7200000, guid: 4ed1628a5a942d083b9081ea5e46e44b, type: 3}
-  erosionIterationLimit: 150
+  erosionIterationLimit: 200
   rainfallPeriod: 25
   solubilityConstant: 0.75
   evaporationConstant: 0.02
@@ -1586,7 +1586,7 @@ MonoBehaviour:
   rainSolubilityConstant: 0.0005
   maxWaterDepth: 2
   depositionConstant: 0.2
-  rainNoiseFrequency: 2
+  rainNoiseFrequency: 1.5
 --- !u!4 &1778127574
 Transform:
   m_ObjectHideFlags: 0
@@ -1647,19 +1647,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ParticleHydraulicErosionDispatcher
   erosionComputeShader: {fileID: 7200000, guid: 9225322c08a776a9f920190d22c7f260, type: 3}
-  numSimultaneousParticles: 8
+  numSimultaneousParticles: 9
   erosionNeighborhood: 1
   numSimulationSteps: 504
   numSimulationWaves: 7
-  inertia: 0.2
+  inertia: 0.5
   capacity: 25
   minSlope: 0.1
-  deposition: 0.303
+  deposition: 0.15
   erosion: 0.756
   gravity: 1.059
   evaporation: 0.005
   waterDeathThreshold: 0.1
-  rainNoiseFrequency: 2
+  rainNoiseFrequency: 1.5
 --- !u!21 &2146269790
 Material:
   serializedVersion: 8

@@ -221,8 +221,15 @@ namespace CpuGenerationPipeline
                 GUILayout.HorizontalSlider(terrainSize, 5f, 12f)
             );
 
-            GUILayout.Label($"Terrain Scale: {terrainScale:F3}");
-            terrainScale = GUILayout.HorizontalSlider(terrainScale, 0.001f, 32.0f);
+            {
+                GUILayout.Label($"Terrain Scale: {terrainScale:F3}");
+                var oldScale = terrainScale;
+                terrainScale = GUILayout.HorizontalSlider(terrainScale, 0.001f, 32.0f);
+                if (oldScale != terrainScale)
+                {
+                    GetComponent<Renderer>().sharedMaterial.SetFloat("_HeightScale", terrainScale);
+                }
+            }
 
             GUILayout.Space(5);
             GUILayout.Label("Sampling");

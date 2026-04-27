@@ -375,7 +375,7 @@ def train_subset_ensemble_auto(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Evaluate metrics for the heightmaps.")
+    parser = argparse.ArgumentParser(description="Evaluate metrics for the heightmaps and train classification models.")
 
     parser.add_argument("--mode", type=str, help="<train|classify>", required=True)
 

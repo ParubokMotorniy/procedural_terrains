@@ -168,7 +168,6 @@ namespace GpuGenerationPipeline
                     step.ExecuteStepGpu(currentContext);
                 }
             }
-
             return currentContext;
         }
 
@@ -414,9 +413,15 @@ namespace GpuGenerationPipeline
                 GUILayout.HorizontalSlider(preferredGroupSizePower, 3f, 5f)
             );
 
-            GUILayout.Label($"Terrain Scale: {terrainScale:F3}");
-            terrainScale = GUILayout.HorizontalSlider(terrainScale, 0.001f, 32.0f);
-
+            {
+                GUILayout.Label($"Terrain Scale: {terrainScale:F3}");
+                var oldScale = terrainScale;
+                terrainScale = GUILayout.HorizontalSlider(terrainScale, 0.001f, 32.0f);
+                if (terrainScale != oldScale)
+                {
+                    GetComponent<Renderer>().sharedMaterial.SetFloat("_HeightScale", terrainScale);
+                }
+            }
             GUILayout.Space(5);
             GUILayout.Label("Sampling");
 
