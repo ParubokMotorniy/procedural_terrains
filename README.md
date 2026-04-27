@@ -1,4 +1,4 @@
-**Terrain generation sandbox**
+# Terrain generation sandbox
 
 
 This sandbox allows one to build simple terrain generation pipelines, run them and behold the results.   
@@ -13,13 +13,15 @@ In case you want to open the project in Unity engine, please, note that it was d
 
 ## Important directories  
 
-- *datasets* - this directory contains the datasets used in the thesis work that this sandbox has been devloped for in the first place.
+- *datasets* - this directory contains the datasets used in the thesis work that this sandbox has been devloped for in the first place. The set of synthetic terrains that whose appeal was studied in the thesis resides on a [separate drive](https://drive.google.com/file/d/1u9Mp_Yw-hP3CTShxq1P4Y_k4i2jL40bN/view?usp=sharing) due to its size. 
 - *experiments* - this directory contains the python scripts used for the processing of data. If you ever decide to run any of them, the package dependencies for `pip` are listed in `requirements.txt`. The names of the scripts are quite self-descriptive and the key ones feature a command-line interface.
+- *experiments/models* - includes the models used for rating of visual appeal of terrains in the thesis. They should be used with `synthetic_aesthetics_evaluation.py`. 
+- *experiments/precomputed_metric_vectors* - this directory's children contain `csv` files listing precomputed metric vectors for LLM-generated and real-world terrains (whose corresponging heightmaps reside in *datasets*). If you want to retrain the rating models (seeds reamined the same from the period of experimentation) - you can make the task easier by passing these directories to `model_trainer_and_bulk_metric_computer.py` script.
 
 
 ## Bit of theory
 
-There are two classes of steps that can be put into a pipeline:
+There are two classes of steps that can be slotted into a pipeline:
 - *Generators*: these steps generate the base geometry of the terrain by running one of the following algorithms: Uber noise (UN), spectral synthesis (FFT), random midpoint displacement (RMD) or signed distance function-based (SDF). There can only be one generator in a pipeline.      
   Here is an example of what results you might expect from the generators:
   |      |     |
@@ -49,5 +51,5 @@ The pipelines can be assembled separately for CPU and GPU. To switch between cor
 To rotate the heightmap, keep the right mouse buttow down while moving the mouse. Use the wheel to zoom in/out.
 
 
-Now you are ready to go nuts with the sandbox.
+### Now you are ready to go nuts with the sandbox.
      

@@ -14,7 +14,7 @@ except ImportError:
     print("Please install the SDK: pip install google-genai pillow")
     exit()
 
-API_KEY = "AIzaSyC1Vn3SawCqPPOIewmxQRNulvOwwT2fKDg"
+API_KEY = "nah, you ain't getting it"
 GEN_MODEL = "gemini-2.5-flash-image"
 CLASS_MODEL = "gemini-2.5-flash-lite"
 

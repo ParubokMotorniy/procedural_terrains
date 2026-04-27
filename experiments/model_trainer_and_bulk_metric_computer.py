@@ -375,7 +375,9 @@ def train_subset_ensemble_auto(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Evaluate metrics for the heightmaps and train classification models.")
+    parser = argparse.ArgumentParser(
+        description="Evaluate metrics for the heightmaps and train classification models."
+    )
 
     parser.add_argument("--mode", type=str, help="<train|classify>", required=True)
 
@@ -407,13 +409,13 @@ def main():
     parser.add_argument(
         "--chunk-size",
         type=int,
-        help="Should such a need arise, the heightmap will be split into chunks of size NxN",
+        help="The size of the tile to compute the gradient metric.",
     )
 
     parser.add_argument(
         "--division-depth",
         type=int,
-        help="How many divisions to make along heightmap side for composite aes metric.",
+        help="How many divisions to make along heightmap side for composite aesthetics metric.",
     )
 
     parser.add_argument(
@@ -440,7 +442,7 @@ def main():
         "--only-embed",
         action="store_true",
         default=False,
-        help="If only compute vector embeddings of heightmaps.",
+        help="If only compute vector embeddings of heightmaps. If False, trains models as well.",
     )
 
     args = parser.parse_args()
