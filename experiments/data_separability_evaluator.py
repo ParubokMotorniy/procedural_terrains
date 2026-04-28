@@ -29,6 +29,7 @@ def _best_cluster_accuracy(y_true, y_pred):
 def evaluate_separability(
     X,
     y,
+    filename_tag: str,
     classes_names=["boring", "interesting"],
     splits=[
         [0, 1],
@@ -245,7 +246,7 @@ def evaluate_separability(
             plt.legend()
             plt.grid(True)
             plt.tight_layout()
-            plt.savefig(f"split_{split_name}_scatter.png", dpi=300)
+            plt.savefig(f"split_{split_name}_scatter_{filename_tag}.png", dpi=300)
             plt.show()
             plt.cla()
             plt.close()
@@ -306,7 +307,7 @@ def evaluate_separability(
             plt.grid(True)
 
             plt.tight_layout()
-            plt.savefig("pca_projection.png", dpi=300)
+            plt.savefig(f"pca_projection_{filename_tag}.png", dpi=300)
             plt.show()
             plt.cla()
             plt.close()
@@ -356,7 +357,7 @@ def evaluate_separability(
             plt.grid(True)
 
             plt.tight_layout()
-            plt.savefig("umap_projection.png", dpi=300)
+            plt.savefig(f"umap_projection_{filename_tag}.png", dpi=300)
             plt.show()
             plt.cla()
             plt.close()
@@ -389,7 +390,7 @@ def evaluate_separability(
     plt.grid(True)
 
     plt.tight_layout()
-    plt.savefig("roc_curve.png", dpi=300)
+    plt.savefig(f"roc_curve_{filename_tag}.png", dpi=300)
     plt.show()
     plt.cla()
     plt.close()
@@ -412,6 +413,13 @@ def main():
         help="The path to csv with metric vectors of 'boring' terrains",
     )
 
+    parser.add_argument(
+        "--filename-tag",
+        type=str,
+        required=True,
+        help="A tag that is attached to the filenames of artifacts of this script (for differentiation).",
+    )
+
     args = parser.parse_args()
 
     interesting_vectors_pd = pd.read_csv(args.vectors_interesting)
@@ -425,7 +433,7 @@ def main():
     all_features = np.vstack([boring_vectors, interesting_vectors])
     all_labels = np.array([0] * len(boring_vectors) + [1] * len(interesting_vectors))
 
-    evaluate_separability(all_features, all_labels)
+    evaluate_separability(all_features, all_labels, args.filename_tag)
 
 
 if __name__ == "__main__":

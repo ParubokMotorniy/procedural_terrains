@@ -38,9 +38,10 @@ def plot_cpu_gpu_comparison(
         # ======================
         # CPU
         # ======================
+        min_cpu_len = min(len(x_values), len(cpu_mean))
         (line_cpu,) = ax_cpu.plot(
-            x_values,
-            cpu_mean,
+            x_values[:min_cpu_len],
+            cpu_mean[:min_cpu_len],
             linestyle="solid",
             color=color,
         )
@@ -55,9 +56,10 @@ def plot_cpu_gpu_comparison(
         # ======================
         # GPU
         # ======================
+        min_gpu_len = min(len(x_values), len(gpu_mean))
         (line_gpu,) = ax_gpu.plot(
-            x_values,
-            gpu_mean,
+            x_values[:min_gpu_len],
+            gpu_mean[:min_gpu_len],
             linestyle="dashed",
             color=color,
         )
@@ -110,7 +112,7 @@ def plot_cpu_gpu_comparison(
     )
 
     ax_cpu.add_artist(algo_legend)
-    
+
     ax_cpu.set_yscale("log")
     ax_gpu.set_yscale("log")
 

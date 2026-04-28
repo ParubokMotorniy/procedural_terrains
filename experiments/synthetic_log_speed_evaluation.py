@@ -95,7 +95,7 @@ def collect_data(
     column_to_agg: int,
     resolutions: list = [32, 64, 128, 256, 512],
     stopwatch_freq: int = 10000000,
-    discard_first: bool = False
+    discard_first: bool = False,
 ):
     mean_runtimes = []
     std_runtimes = []
@@ -137,13 +137,16 @@ if __name__ == "__main__":
         required=True,
         help="The title to add.",
     )
+    
+    parser.add_argument(
+        "--resolutions",
+        type=str,
+        default="32 64 128 256 512",
+        help="The resolutions to add to x axis (and map data to)."
+    )
 
     args = parser.parse_args()
-    resolutions = [
-        32,
-        64, 128, 256, 512
-        #1024
-        ]
+    resolutions = [int(tick) for tick in args.resolutions.split()]
 
     cpu_runtime_mean, cpu_runtime_std = collect_data(
         args.data_dir,
@@ -158,14 +161,16 @@ if __name__ == "__main__":
         1,
         resolutions,
         args.stopwatch_freq,
-        True
+        True,
     )
 
+    min_data_length = min(len(cpu_runtime_mean), len(gpu_runtime_mean))
+
     plot_cpu_gpu_speedup(
-        cpu_runtime_mean,
-        cpu_runtime_mean,
-        gpu_runtime_mean,
-        gpu_runtime_std,
+        cpu_runtime_mean[:min_data_length],
+        cpu_runtime_mean[:min_data_length],
+        gpu_runtime_mean[:min_data_length],
+        gpu_runtime_std[:min_data_length],
         title=args.plot_title,
-        x_values=resolutions,
+        x_values=resolutions[:min_data_length],
     )

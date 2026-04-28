@@ -9,7 +9,7 @@ import argparse
 
 import classificationlib as classlib
 import evaluationlib as elib
-import experiments.llm_baseline_provider as llmlib
+import llm_baseline_provider as llmlib
 
 import numpy as np
 import pandas as pd

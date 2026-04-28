@@ -391,13 +391,13 @@ def main():
     parser.add_argument(
         "--directory-interesting",
         type=str,
-        help="Directory containing interesting heightmaps",
+        help="Directory containing interesting heightmaps (and the metric vectors computed from them).",
     )
 
     parser.add_argument(
         "--directory-boring",
         type=str,
-        help="Directory containing boring heightmaps",
+        help="Directory containing boring heightmaps (and the metric vectors computed from them).",
     )
 
     parser.add_argument(
