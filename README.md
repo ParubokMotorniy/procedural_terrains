@@ -13,7 +13,7 @@ Pre-built Windows and Linux binaries are available from the repository's **Relea
 - Windows: `GenerationSandbox.exe`
 - Linux: `GenerationSandbox.x86_64`
 
-To open the project in Unity, use **Unity 6000.3.2f1**. Earlier Unity versions may not import or run the project correctly.   
+To open the project in Unity, use **Unity 6000.3.2f1**. Earlier Unity versions may not import or run the project correctly. Remeber to clone with `git clone --recursive` to make sure all submodules end up on your local machine.
 
 ### Hardware requirements
 
