@@ -2,7 +2,7 @@
 
 A Unity sandbox for building, tuning, and comparing procedural terrain generation pipelines.
 
-The project combines several terrain generators with erosion passes, lets you run the same pipeline on CPU and GPU backends, and can export generated heightmaps and performance measurements for further analysis.
+The project combines several terrain generators with erosion passes, lets you run the same pipeline on CPU and compute-based GPU backends, and can export generated heightmaps and performance measurements for further analysis.
 
 ![Sandbox demo](./data/sandbox_demo.png)
 
